@@ -1,0 +1,22 @@
+{
+  "name": "Lista - AI List Organizer",
+  "short_name": "Lista",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAFA",
+  "theme_color": "#6366F1",
+  "orientation": "portrait-primary",
+  "description": "Transform your chaotic thoughts into beautifully organized lists instantly using AI.",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/4474/4474375.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/4474/4474375.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
