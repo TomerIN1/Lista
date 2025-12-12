@@ -11,7 +11,7 @@
   "dependencies": {
     "react": "^19.2.2",
     "react-dom": "^19.2.2",
-    "@google/genai": "^1.33.0",
+    "openai": "^4.72.0",
     "lucide-react": "^0.560.0",
     "firebase": "^12.6.0"
   },
