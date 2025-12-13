@@ -77,10 +77,14 @@ The application supports both authenticated users (via Google Sign-In) and guest
 - Import/export functionality
 
 ### 🤝 Collaboration
-- Share lists with other users via email
-- Real-time updates for shared lists
-- Member management
-- Permission-based access control
+- **Shareable Links**: Copy and share lists with a single link that includes full list content + join URL
+- **Email Invitations**: Share lists with other users via email
+- **Category Assignment**: Assign specific categories to different team members to split responsibilities
+- **Real-time Synchronization**: Updates appear instantly for all members
+- **Auto-Join via Share Links**: New users can click a share link, register, and automatically join the list
+- **Multi-language Share Messages**: Share text respects user's language (English/Hebrew)
+- **Member Management**: See all list members with avatar indicators
+- **Permission-based Access Control**: Owners can delete, members can edit
 
 ### ♿ Accessibility
 - Font size adjustment (80%-150%)
@@ -490,19 +494,48 @@ Manages all Firestore database operations.
 - Calls callback with updated lists on any change
 - Returns unsubscribe function for cleanup
 
-**Firestore Security Rules**:
+**`joinSharedList(listId, userEmail)`**
+- Adds a user to a shared list via share link
+- Attempts direct update without reading first (for better security rule compatibility)
+- Uses `arrayUnion` to prevent duplicates
+- Throws specific errors for "not-found" and "permission-denied" cases
+- Returns listId on success
+
+**Firestore Security Rules** (Configure in Firebase Console):
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /lists/{listId} {
-      allow read, write: if request.auth != null &&
-        request.auth.token.email in resource.data.memberEmails;
+      // Allow read if user is a member
+      allow read: if request.auth != null &&
+                     request.auth.token.email in resource.data.memberEmails;
+
+      // Allow create if user is authenticated
       allow create: if request.auth != null;
+
+      // Allow update if user is a member OR adding themselves to memberEmails
+      allow update: if request.auth != null && (
+        // Already a member - can update
+        request.auth.token.email in resource.data.memberEmails ||
+        // OR user is adding themselves (share link join)
+        (request.auth.token.email in request.resource.data.memberEmails &&
+         !(request.auth.token.email in resource.data.memberEmails))
+      );
+
+      // Allow delete if user is the owner
+      allow delete: if request.auth != null &&
+                       request.auth.uid == resource.data.ownerId;
     }
   }
 }
 ```
+
+**Important**: These security rules are essential for:
+- ✅ Share link functionality (allows users to add themselves)
+- ✅ Real-time collaboration (members can update lists)
+- ✅ Owner-only delete permissions
+- ✅ Privacy (only members can read lists)
 
 ---
 
@@ -598,8 +631,11 @@ interface CategoryGroup {
   category: string;        // Category name (e.g., "Fruits")
   items: Item[];          // Array of items in category
   imageUrl?: string;      // DALL-E 3 generated icon (optional)
+  assignedTo?: string;    // Email of assigned member (optional)
 }
 ```
+
+**Note**: `assignedTo` field allows list members to assign specific categories to different team members, enabling task splitting and responsibility tracking.
 
 #### ListDocument
 ```typescript
@@ -659,11 +695,32 @@ type Language = 'en' | 'he';
    - Or select existing list from sidebar
    - Enter items and organize with AI
 5. **Collaboration**:
-   - Click "Share" button
-   - Enter collaborator's email
-   - They get real-time access
-6. **Sync**: Changes sync automatically across all devices
-7. **Persistence**: All lists saved to Firestore permanently
+   - Click member avatars or "Share" button to open share modal
+   - **Option A - Email Invite**: Enter collaborator's email and click "Invite"
+   - **Option B - Share Link**: Copy shareable link with "Copy Link" button
+   - Share link includes full list content + join URL for WhatsApp/messaging
+6. **Category Assignment**:
+   - Hover over any category card
+   - Click the UserCheck icon
+   - Assign categories to specific team members
+   - Visual indicator shows who's responsible for each category
+7. **Sync**: Changes sync automatically across all devices
+8. **Persistence**: All lists saved to Firestore permanently
+
+### Share Link Flow (New User)
+1. **Receive Link**: User receives share message via WhatsApp/messaging with:
+   - Full list content (readable immediately)
+   - Share link URL (e.g., `https://lista-six-psi.vercel.app/share/abc123`)
+2. **Click Link**: Opens Lista app at `/share/:listId` route
+3. **Authentication**:
+   - If not logged in: See login page
+   - Click "Sign in with Google"
+   - Complete OAuth flow
+4. **Auto-Join**: After authentication:
+   - App automatically adds user to list's memberEmails
+   - List appears in user's sidebar
+   - User gets full edit access
+5. **Collaboration**: User can now view, edit, and collaborate on the shared list
 
 ### List Organization Flow
 1. **Input Text**: "apples, milk, bread, shampoo, cheese, bananas"
@@ -881,7 +938,29 @@ service cloud.firestore {
 
 **Note**: Vercel provides a unique domain. Find it in Vercel dashboard under "Domains".
 
-### Step 4: Redeploy
+### Step 4: Configure SPA Routing (vercel.json)
+
+The project includes a `vercel.json` file that handles Single Page Application routing:
+
+```json
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+```
+
+This configuration is **essential** for:
+- ✅ Share links to work correctly (`/share/:listId` routes)
+- ✅ Direct URL navigation (e.g., bookmarks, external links)
+- ✅ Browser refresh on any route
+
+Without this, routes like `/share/abc123` will return 404 errors.
+
+### Step 5: Redeploy
 
 1. Go to **"Deployments"** tab in Vercel
 2. Click **"Redeploy"** on the latest deployment
