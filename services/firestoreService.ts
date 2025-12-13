@@ -58,6 +58,29 @@ export const shareList = async (listId: string, email: string) => {
   }
 };
 
+export const joinSharedList = async (listId: string, userEmail: string) => {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+  const listSnap = await getDoc(listRef);
+
+  if (!listSnap.exists()) {
+    throw new Error('List not found');
+  }
+
+  const listData = listSnap.data() as ListDocument;
+
+  // Check if user is already a member
+  if (listData.memberEmails.includes(userEmail)) {
+    return listId; // Already a member
+  }
+
+  // Add user to the list
+  await updateDoc(listRef, {
+    memberEmails: arrayUnion(userEmail)
+  });
+
+  return listId;
+};
+
 export const deleteList = async (listId: string) => {
   await deleteDoc(doc(db, COLLECTION_NAME, listId));
 };

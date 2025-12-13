@@ -1,25 +1,30 @@
 import React, { useState } from 'react';
 import { CategoryGroup, Item } from '../types';
 import CategoryItem from './CategoryItem';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, UserCheck } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface CategoryCardProps {
   group: CategoryGroup;
+  members: string[];
   onDeleteCategory: () => void;
   onAddItem: (name: string) => void;
   onUpdateItem: (itemId: string, changes: Partial<Item>) => void;
   onDeleteItem: (itemId: string) => void;
+  onAssignCategory: (assignedTo: string | undefined) => void;
 }
 
-const CategoryCard: React.FC<CategoryCardProps> = ({ 
-  group, 
-  onDeleteCategory, 
+const CategoryCard: React.FC<CategoryCardProps> = ({
+  group,
+  members,
+  onDeleteCategory,
   onAddItem,
   onUpdateItem,
-  onDeleteItem 
+  onDeleteItem,
+  onAssignCategory
 }) => {
   const [newItemName, setNewItemName] = useState('');
+  const [showAssignMenu, setShowAssignMenu] = useState(false);
   const { t } = useLanguage();
 
   const handleAddItemSubmit = (e: React.FormEvent) => {
@@ -34,12 +39,12 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
     <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgb(0,0,0,0.03)] hover:shadow-[0_8px_24px_rgb(0,0,0,0.06)] hover:border-indigo-100 transition-all duration-300 overflow-hidden group/card">
       {/* Card Header */}
       <div className="p-5 flex items-center justify-between bg-gradient-to-b from-slate-50/50 to-transparent">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-1 min-w-0">
           <div className="relative w-14 h-14 flex-shrink-0 bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden flex items-center justify-center group-hover/card:scale-105 transition-transform duration-500">
              {group.imageUrl ? (
-               <img 
-                 src={group.imageUrl} 
-                 alt={group.category} 
+               <img
+                 src={group.imageUrl}
+                 alt={group.category}
                  className="w-full h-full object-cover animate-in fade-in duration-700"
                />
              ) : (
@@ -48,21 +53,91 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
                </span>
              )}
           </div>
-          <div>
-            <h3 className="font-bold text-lg text-slate-800 leading-tight font-display">{group.category}</h3>
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
-            </span>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-lg text-slate-800 leading-tight font-display truncate">{group.category}</h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+              </span>
+              {group.assignedTo && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <div className="flex items-center gap-1 text-xs text-indigo-600">
+                    <UserCheck className="w-3 h-3" />
+                    <span className="font-medium truncate max-w-[120px]">{group.assignedTo}</span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
-        
-        <button
-          onClick={onDeleteCategory}
-          className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors opacity-0 group-hover/card:opacity-100 focus:opacity-100"
-          title="Delete Category"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Assignment Button */}
+          {members.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowAssignMenu(!showAssignMenu)}
+                className={`p-2 rounded-xl transition-colors ${
+                  group.assignedTo
+                    ? 'text-indigo-600 bg-indigo-50'
+                    : 'text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover/card:opacity-100 focus:opacity-100'
+                }`}
+                title="Assign to member"
+              >
+                <UserCheck className="w-4 h-4" />
+              </button>
+
+              {showAssignMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowAssignMenu(false)}
+                  />
+                  <div className="absolute right-0 rtl:right-auto rtl:left-0 top-full mt-2 z-20 bg-white rounded-xl shadow-lg border border-slate-100 py-1 min-w-[200px]">
+                    <button
+                      onClick={() => {
+                        onAssignCategory(undefined);
+                        setShowAssignMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      Unassign
+                    </button>
+                    <div className="border-t border-slate-100 my-1" />
+                    {members.map((member) => (
+                      <button
+                        key={member}
+                        onClick={() => {
+                          onAssignCategory(member);
+                          setShowAssignMenu(false);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm transition-colors flex items-center gap-2 ${
+                          group.assignedTo === member
+                            ? 'bg-indigo-50 text-indigo-700 font-medium'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700">
+                          {member.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="truncate">{member}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={onDeleteCategory}
+            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors opacity-0 group-hover/card:opacity-100 focus:opacity-100"
+            title="Delete Category"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Items List */}

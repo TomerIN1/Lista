@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument } from './types';
 import { organizeList, generateCategoryImage } from './services/geminiService';
-import { createList, subscribeToLists, updateListGroups, updateListTitle, shareList, deleteList } from './services/firestoreService';
+import { createList, subscribeToLists, updateListGroups, updateListTitle, shareList, deleteList, joinSharedList } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
 
 import Header from './components/Header';
@@ -20,6 +20,7 @@ const App: React.FC = () => {
   // Auth State
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [pendingShareListId, setPendingShareListId] = useState<string | null>(null);
 
   // App State
   const [status, setStatus] = useState<OrganizeStatus>('idle');
@@ -41,6 +42,16 @@ const App: React.FC = () => {
 
   // Language Context
   const { language, t } = useLanguage();
+
+  // Check for share link on mount
+  useEffect(() => {
+    const path = window.location.pathname;
+    const shareMatch = path.match(/^\/share\/(.+)$/);
+    if (shareMatch) {
+      const listId = shareMatch[1];
+      setPendingShareListId(listId);
+    }
+  }, []);
 
   // Auth Subscription
   useEffect(() => {
@@ -72,6 +83,28 @@ const App: React.FC = () => {
     });
     return () => unsubscribe();
   }, [user]);
+
+  // Handle pending share list after user logs in
+  useEffect(() => {
+    const handlePendingShare = async () => {
+      if (user && user.email && pendingShareListId) {
+        try {
+          await joinSharedList(pendingShareListId, user.email);
+          setActiveListId(pendingShareListId);
+          setPendingShareListId(null);
+          // Clear the URL path
+          window.history.replaceState({}, '', '/');
+        } catch (err) {
+          console.error('Failed to join shared list:', err);
+          setError('Failed to access shared list. It may not exist or you may not have permission.');
+          setPendingShareListId(null);
+          window.history.replaceState({}, '', '/');
+        }
+      }
+    };
+
+    handlePendingShare();
+  }, [user, pendingShareListId]);
 
   // Sync active list change when selection changes or lists update
   useEffect(() => {
@@ -376,11 +409,12 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <ShareModal 
+      <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         onShare={handleShare}
         members={activeList?.memberEmails || []}
+        listId={activeListId || 'guest-list'}
       />
       
       <LegalModal />

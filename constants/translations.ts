@@ -27,7 +27,9 @@ export const TRANSLATIONS = {
       emptyCategory: "Empty category",
       addItemPlaceholder: "Add an item...",
       loginToCopy: "Sign in to Copy",
-      loginToShare: "Sign in to Share"
+      loginToShare: "Sign in to Share",
+      createdBy: "This list created by Lista",
+      openSharedList: "Open shared list:"
     },
     sidebar: {
       myLists: "My Lists",
@@ -106,7 +108,9 @@ export const TRANSLATIONS = {
       emptyCategory: "קטגוריה ריקה",
       addItemPlaceholder: "הוסף פריט...",
       loginToCopy: "התחבר כדי להעתיק",
-      loginToShare: "התחבר כדי לשתף"
+      loginToShare: "התחבר כדי לשתף",
+      createdBy: "רשימה זו נוצרה ע״י Lista",
+      openSharedList: "פתח רשימה משותפת:"
     },
     sidebar: {
       myLists: "הרשימות שלי",

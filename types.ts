@@ -14,6 +14,7 @@ export interface CategoryGroup {
   category: string;
   items: Item[];
   imageUrl?: string;
+  assignedTo?: string; // email of the assigned member
 }
 
 export type OrganizeStatus = 'idle' | 'loading' | 'success' | 'error';

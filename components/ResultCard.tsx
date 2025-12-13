@@ -17,30 +17,39 @@ interface ResultCardProps {
   onLoginRequest: () => void;
 }
 
-const ResultCard: React.FC<ResultCardProps> = ({ 
-  groups, 
-  setGroups, 
-  title, 
+const ResultCard: React.FC<ResultCardProps> = ({
+  groups,
+  setGroups,
+  title,
   listId,
-  members, 
-  onShareClick, 
-  onUpdateList, 
+  members,
+  onShareClick,
+  onUpdateList,
   onDeleteList,
   isGuest,
   onLoginRequest
 }) => {
   const [copied, setCopied] = useState(false);
-  const { t } = useLanguage();
+  const { t, tUnit } = useLanguage();
 
   const handleCopy = () => {
     if (isGuest) {
       onLoginRequest();
       return;
     }
+
+    // Format the list content with translated units
     const header = title ? `${title}\n\n` : '';
-    const text = header + groups
-      .map(g => `${g.category}:\n${g.items.map(i => `• ${i.name} (${i.amount} ${i.unit})`).join('\n')}`)
+    const listContent = groups
+      .map(g => `${g.category}:\n${g.items.map(i => `• ${i.name} (${i.amount} ${tUnit(i.unit)})`).join('\n')}`)
       .join('\n\n');
+
+    // Create share link
+    const shareLink = `${window.location.origin}/share/${listId}`;
+
+    // Combine everything with messaging-friendly format
+    const text = `${header}${listContent}\n\n━━━━━━━━━━━━━━━━\n${t('result.createdBy')}\n\n${t('result.openSharedList')}\n${shareLink}`;
+
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -56,6 +65,17 @@ const ResultCard: React.FC<ResultCardProps> = ({
 
   const handleDeleteCategory = (groupId: string) => {
     const newGroups = groups.filter(g => g.id !== groupId);
+    setGroups(newGroups);
+    onUpdateList(newGroups);
+  };
+
+  const handleAssignCategory = (groupId: string, assignedTo: string | undefined) => {
+    const newGroups = groups.map(g => {
+      if (g.id === groupId) {
+        return { ...g, assignedTo };
+      }
+      return g;
+    });
     setGroups(newGroups);
     onUpdateList(newGroups);
   };
@@ -183,10 +203,12 @@ const ResultCard: React.FC<ResultCardProps> = ({
           <CategoryCard
             key={group.id}
             group={group}
+            members={members}
             onDeleteCategory={() => handleDeleteCategory(group.id)}
             onAddItem={(name) => handleAddItem(group.id, name)}
             onUpdateItem={(itemId, changes) => handleUpdateItem(group.id, itemId, changes)}
             onDeleteItem={(itemId) => handleDeleteItem(group.id, itemId)}
+            onAssignCategory={(assignedTo) => handleAssignCategory(group.id, assignedTo)}
           />
         ))}
       </div>
