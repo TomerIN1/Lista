@@ -89,14 +89,22 @@ const App: React.FC = () => {
     const handlePendingShare = async () => {
       if (user && user.email && pendingShareListId) {
         try {
+          console.log('Attempting to join list:', pendingShareListId, 'with email:', user.email);
+
+          // Small delay to ensure user is fully authenticated
+          await new Promise(resolve => setTimeout(resolve, 500));
+
           await joinSharedList(pendingShareListId, user.email);
+          console.log('Successfully joined list:', pendingShareListId);
+
           setActiveListId(pendingShareListId);
           setPendingShareListId(null);
           // Clear the URL path
           window.history.replaceState({}, '', '/');
-        } catch (err) {
+        } catch (err: any) {
           console.error('Failed to join shared list:', err);
-          setError('Failed to access shared list. It may not exist or you may not have permission.');
+          console.error('Error details:', err.message, err.code);
+          setError(`Failed to access shared list: ${err.message || 'Unknown error'}`);
           setPendingShareListId(null);
           window.history.replaceState({}, '', '/');
         }

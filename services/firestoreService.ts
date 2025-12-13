@@ -60,25 +60,27 @@ export const shareList = async (listId: string, email: string) => {
 
 export const joinSharedList = async (listId: string, userEmail: string) => {
   const listRef = doc(db, COLLECTION_NAME, listId);
-  const listSnap = await getDoc(listRef);
 
-  if (!listSnap.exists()) {
-    throw new Error('List not found');
+  try {
+    // Try to add user directly without reading first
+    // This works if the list exists and Firestore rules allow arrayUnion
+    await updateDoc(listRef, {
+      memberEmails: arrayUnion(userEmail)
+    });
+
+    return listId;
+  } catch (error: any) {
+    // If update fails, the list might not exist or user doesn't have permission
+    console.error('Failed to join list:', error);
+
+    if (error.code === 'not-found') {
+      throw new Error('List not found. The share link may be invalid.');
+    } else if (error.code === 'permission-denied') {
+      throw new Error('Permission denied. Please check Firestore security rules.');
+    } else {
+      throw new Error('Failed to join list: ' + error.message);
+    }
   }
-
-  const listData = listSnap.data() as ListDocument;
-
-  // Check if user is already a member
-  if (listData.memberEmails.includes(userEmail)) {
-    return listId; // Already a member
-  }
-
-  // Add user to the list
-  await updateDoc(listRef, {
-    memberEmails: arrayUnion(userEmail)
-  });
-
-  return listId;
 };
 
 export const deleteList = async (listId: string) => {
