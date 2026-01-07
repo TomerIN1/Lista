@@ -377,6 +377,17 @@ const App: React.FC = () => {
 
   const handleTitleUpdate = async (newTitle: string) => {
     if (!activeListId || !user) return;
+
+    // Update local state immediately for instant UI feedback
+    setLists(prevLists =>
+      prevLists.map(list =>
+        list.id === activeListId
+          ? { ...list, title: newTitle }
+          : list
+      )
+    );
+
+    // Update Firestore (will sync across devices)
     await updateListTitle(activeListId, newTitle);
   };
 
