@@ -9,9 +9,10 @@ interface HeaderProps {
   user: UserProfile | null;
   onLogin: () => void;
   onLogout: () => void;
+  sidebarOpen?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ user, onLogin, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ user, onLogin, onLogout, sidebarOpen = false }) => {
   const { language, setLanguage, t } = useLanguage();
 
   return (
@@ -25,15 +26,15 @@ const Header: React.FC<HeaderProps> = ({ user, onLogin, onLogout }) => {
         </div>
 
         <div className="flex items-center flex-wrap justify-center gap-3">
-          <button 
+          <button
             onClick={() => setLanguage(language === 'en' ? 'he' : 'en')}
             className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all text-sm font-medium shadow-sm"
           >
             <Globe className="w-4 h-4" />
             <span>{language === 'en' ? 'English' : 'עברית'}</span>
           </button>
-          
-          <AccessibilityMenu />
+
+          {!sidebarOpen && <AccessibilityMenu />}
 
           {/* Auth Button */}
           {user ? (

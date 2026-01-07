@@ -411,10 +411,11 @@ const App: React.FC = () => {
         </div>
 
         <div className="max-w-5xl w-full mx-auto px-4 py-8 sm:px-6 sm:py-16 flex flex-col min-h-full">
-          <Header 
-            user={user} 
-            onLogin={handleLogin} 
-            onLogout={handleLogout} 
+          <Header
+            user={user}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+            sidebarOpen={sidebarOpen}
           />
 
           <div className="flex-1">
