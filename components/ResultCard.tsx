@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CategoryGroup, Item, Recipe, InputMode } from '../types';
 import CategoryCard from './CategoryCard';
-import { Check, Copy, Trash2, Lock, ChefHat } from 'lucide-react';
+import { Check, Copy, Trash2, Lock, ChefHat, Pencil } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface ResultCardProps {
@@ -13,6 +13,7 @@ interface ResultCardProps {
   onShareClick: () => void;
   onUpdateList: (newGroups: CategoryGroup[]) => void;
   onDeleteList: (id: string) => void;
+  onTitleUpdate: (newTitle: string) => void;
   isGuest: boolean;
   onLoginRequest: () => void;
   recipes?: Recipe[];
@@ -28,12 +29,15 @@ const ResultCard: React.FC<ResultCardProps> = ({
   onShareClick,
   onUpdateList,
   onDeleteList,
+  onTitleUpdate,
   isGuest,
   onLoginRequest,
   recipes = [],
   inputMode = 'items'
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(title || '');
   const { t, tUnit } = useLanguage();
 
   const handleCopy = () => {
@@ -156,6 +160,32 @@ const ResultCard: React.FC<ResultCardProps> = ({
     }
   };
 
+  const handleTitleEdit = () => {
+    if (isGuest) {
+      onLoginRequest();
+      return;
+    }
+    setEditedTitle(title || '');
+    setIsEditingTitle(true);
+  };
+
+  const handleTitleSave = () => {
+    const newTitle = editedTitle.trim();
+    if (newTitle && newTitle !== title) {
+      onTitleUpdate(newTitle);
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleTitleSave();
+    } else if (e.key === 'Escape') {
+      setIsEditingTitle(false);
+      setEditedTitle(title || '');
+    }
+  };
+
   if (groups.length === 0) return null;
 
   return (
@@ -172,9 +202,32 @@ const ResultCard: React.FC<ResultCardProps> = ({
              </div>
            )}
            {title && <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1 block">{t('result.listNameLabel')}</span>}
-           <h2 className="text-3xl font-bold text-slate-800 font-display">
-            {title ? title : t('result.defaultTitle')}
-           </h2>
+           {isEditingTitle ? (
+             <input
+               type="text"
+               value={editedTitle}
+               onChange={(e) => setEditedTitle(e.target.value)}
+               onKeyDown={handleTitleKeyDown}
+               onBlur={handleTitleSave}
+               autoFocus
+               className="text-3xl font-bold text-slate-800 font-display bg-transparent border-b-2 border-indigo-500 focus:outline-none w-full max-w-md"
+             />
+           ) : (
+             <div className="flex items-center gap-2 group">
+               <h2 className="text-3xl font-bold text-slate-800 font-display">
+                 {title ? title : t('result.defaultTitle')}
+               </h2>
+               {!isGuest && (
+                 <button
+                   onClick={handleTitleEdit}
+                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 rounded-lg"
+                   title="Rename list"
+                 >
+                   <Pencil className="w-4 h-4 text-slate-400 hover:text-indigo-600" />
+                 </button>
+               )}
+             </div>
+           )}
         </div>
         
         <div className="flex items-center gap-2">

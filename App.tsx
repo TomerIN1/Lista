@@ -375,6 +375,11 @@ const App: React.FC = () => {
     await shareList(activeListId, email);
   };
 
+  const handleTitleUpdate = async (newTitle: string) => {
+    if (!activeListId || !user) return;
+    await updateListTitle(activeListId, newTitle);
+  };
+
   const LegalModal = () => (
     <InfoModal 
       isOpen={!!activeLegalDoc}
@@ -481,6 +486,7 @@ const App: React.FC = () => {
                     onShareClick={() => setIsShareModalOpen(true)}
                     onUpdateList={handleListUpdate}
                     onDeleteList={handleDeleteList}
+                    onTitleUpdate={handleTitleUpdate}
                     isGuest={!user}
                     onLoginRequest={handleLogin}
                     recipes={recipes}
