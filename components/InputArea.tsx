@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight, Sparkles, Trash2, PlusCircle, PenLine, ListPlus, RefreshCw, ArrowLeft } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { InputMode, Recipe } from '../types';
@@ -13,6 +13,7 @@ interface InputAreaProps {
   isLoading: boolean;
   hasResults: boolean;
   currentMode?: InputMode;
+  currentRecipes?: Recipe[];
 }
 
 const InputArea: React.FC<InputAreaProps> = ({
@@ -23,7 +24,8 @@ const InputArea: React.FC<InputAreaProps> = ({
   onReset,
   isLoading,
   hasResults,
-  currentMode = 'items'
+  currentMode = 'items',
+  currentRecipes = []
 }) => {
   const [text, setText] = useState('');
   const [name, setName] = useState('');
@@ -32,6 +34,21 @@ const InputArea: React.FC<InputAreaProps> = ({
     { id: crypto.randomUUID(), name: '', ingredients: '' }
   ]);
   const { t, isRTL } = useLanguage();
+
+  // Sync recipes from props when currentRecipes change (e.g., when reopening a list)
+  useEffect(() => {
+    if (currentRecipes.length > 0) {
+      setRecipes(currentRecipes);
+    } else {
+      // Reset to empty recipe if no current recipes
+      setRecipes([{ id: crypto.randomUUID(), name: '', ingredients: '' }]);
+    }
+  }, [currentRecipes]);
+
+  // Sync mode from props
+  useEffect(() => {
+    setMode(currentMode);
+  }, [currentMode]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

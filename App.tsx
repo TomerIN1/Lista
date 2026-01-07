@@ -460,6 +460,7 @@ const App: React.FC = () => {
                   isLoading={status === 'loading' || isAdding}
                   hasResults={localGroups.length > 0}
                   currentMode={inputMode}
+                  currentRecipes={recipes}
                 />
 
                 {error && (
