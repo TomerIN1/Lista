@@ -14,6 +14,7 @@ interface InputAreaProps {
   hasResults: boolean;
   currentMode?: InputMode;
   currentRecipes?: Recipe[];
+  currentTitle?: string;
 }
 
 const InputArea: React.FC<InputAreaProps> = ({
@@ -25,7 +26,8 @@ const InputArea: React.FC<InputAreaProps> = ({
   isLoading,
   hasResults,
   currentMode = 'items',
-  currentRecipes = []
+  currentRecipes = [],
+  currentTitle = ''
 }) => {
   const [text, setText] = useState('');
   const [name, setName] = useState('');
@@ -49,6 +51,11 @@ const InputArea: React.FC<InputAreaProps> = ({
   useEffect(() => {
     setMode(currentMode);
   }, [currentMode]);
+
+  // Sync name from props when list title changes
+  useEffect(() => {
+    setName(currentTitle);
+  }, [currentTitle]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -468,6 +468,7 @@ const App: React.FC = () => {
                   hasResults={localGroups.length > 0}
                   currentMode={inputMode}
                   currentRecipes={recipes}
+                  currentTitle={activeList?.title || ''}
                 />
 
                 {error && (
