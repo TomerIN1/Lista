@@ -1,5 +1,18 @@
 export type Unit = 'pcs' | 'g' | 'kg' | 'L' | 'ml';
 export type Language = 'en' | 'he';
+export type InputMode = 'items' | 'recipe';
+
+export interface Recipe {
+  id: string;
+  name: string;
+  ingredients: string;
+}
+
+export interface RecipeLabel {
+  recipeId: string;
+  recipeName: string;
+  color: string; // Hex color for badge
+}
 
 export interface Item {
   id: string;
@@ -7,6 +20,7 @@ export interface Item {
   checked: boolean;
   amount: number;
   unit: Unit;
+  recipeLabels?: RecipeLabel[]; // Array of recipes this item belongs to
 }
 
 export interface CategoryGroup {
@@ -32,6 +46,8 @@ export interface ListDocument {
   ownerId: string;
   memberEmails: string[];
   groups: CategoryGroup[];
+  recipes?: Recipe[]; // Array of recipes used in this list
+  inputMode?: InputMode; // Current mode ('items' or 'recipe')
   createdAt?: any;
   updatedAt?: any;
 }
