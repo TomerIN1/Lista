@@ -210,6 +210,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
                onKeyDown={handleTitleKeyDown}
                onBlur={handleTitleSave}
                autoFocus
+               enterKeyHint="done"
                className="text-3xl font-bold text-slate-800 font-display bg-transparent border-b-2 border-indigo-500 focus:outline-none w-full max-w-md"
              />
            ) : (
