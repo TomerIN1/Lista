@@ -199,20 +199,26 @@ ${recipeTexts}
 
 Instructions:
 - Extract all ingredients with their quantities and units
-- Combine duplicate ingredients across recipes by summing quantities
+- IMPORTANT: Normalize all ingredient names to SINGULAR form (e.g., "onions" → "onion", "tomatoes" → "tomato", "eggs" → "egg")
+- IMPORTANT: After normalizing to singular, combine duplicate ingredients across recipes by summing quantities
+- IMPORTANT: The amount for each item should be the TOTAL sum across all recipes (e.g., if 3 recipes each use 1 egg, the amount should be 3)
 - Convert measurements to consistent units (e.g., use L for >1000ml, kg for >1000g)
 - Group ingredients into logical shopping categories
 
 Return a JSON object with a "categories" array where each object has:
 - category: string (the category name, e.g., "Produce", "Dairy", "Spices")
 - items: array of objects with:
-  - name: string (ingredient name)
-  - amount: number (quantity as decimal, default to 1 if not specified)
+  - name: string (ingredient name in SINGULAR form)
+  - amount: number (TOTAL quantity summed across all recipes as decimal, default to 1 per recipe if not specified)
   - unit: string (e.g., "g", "kg", "L", "ml", "pcs")
   - recipeIds: string[] (array of recipe names this ingredient appears in)
 
 Example:
-{"categories": [{"category": "Dairy", "items": [{"name": "milk", "amount": 2, "unit": "L", "recipeIds": ["Pasta Carbonara"]}, {"name": "eggs", "amount": 5, "unit": "pcs", "recipeIds": ["Pasta Carbonara", "Caesar Salad"]}]}]}`
+If Recipe A has "2 eggs" and Recipe B has "3 eggs", the result should be:
+{"categories": [{"category": "Dairy", "items": [{"name": "egg", "amount": 5, "unit": "pcs", "recipeIds": ["Recipe A", "Recipe B"]}]}]}
+
+If Recipe A has "1 onion" and Recipe B has "2 onions", the result should be:
+{"categories": [{"category": "Produce", "items": [{"name": "onion", "amount": 3, "unit": "pcs", "recipeIds": ["Recipe A", "Recipe B"]}]}]}`
         }
       ],
       response_format: { type: "json_object" },
