@@ -2,6 +2,7 @@ import React from 'react';
 import { Item, Unit } from '../types';
 import { X, Check } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import RecipeBadge from './RecipeBadge';
 
 interface CategoryItemProps {
   item: Item;
@@ -36,15 +37,31 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ item, onToggle, onUpdate, o
         <Check className="w-3.5 h-3.5" strokeWidth={3} />
       </button>
 
-      {/* Item Name */}
-      <span 
-        className={`
-          flex-grow text-[15px] transition-all me-2 font-medium
-          ${item.checked ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700'}
-        `}
-      >
-        {item.name}
-      </span>
+      {/* Item Name with Recipe Badges */}
+      <div className="flex-grow flex items-center gap-2 flex-wrap me-2">
+        <span
+          className={`
+            text-[15px] transition-all font-medium
+            ${item.checked ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700'}
+          `}
+        >
+          {item.name}
+        </span>
+
+        {/* Recipe Badges */}
+        {item.recipeLabels && item.recipeLabels.length > 0 && (
+          <div className="flex items-center gap-1 flex-wrap">
+            {item.recipeLabels.slice(0, 3).map(label => (
+              <RecipeBadge key={label.recipeId} label={label} size="sm" />
+            ))}
+            {item.recipeLabels.length > 3 && (
+              <span className="text-[10px] text-slate-400 font-medium">
+                +{item.recipeLabels.length - 3}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Controls Container */}
       <div className="flex items-center gap-1.5 ms-auto sm:ms-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
