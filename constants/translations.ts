@@ -38,7 +38,9 @@ export const TRANSLATIONS = {
       loginToCopy: "Sign in to Copy",
       loginToShare: "Sign in to Share",
       createdBy: "This list created by Lista",
-      openSharedList: "Open shared list:"
+      openSharedList: "Open shared list:",
+      recipeMode: "Recipe Mode",
+      recipesUsed: "recipes combined"
     },
     sidebar: {
       myLists: "My Lists",
@@ -127,6 +129,8 @@ export const TRANSLATIONS = {
       addItemPlaceholder: "הוסף פריט...",
       loginToCopy: "התחבר כדי להעתיק",
       loginToShare: "התחבר כדי לשתף",
+      recipeMode: "מצב מתכונים",
+      recipesUsed: "מתכונים משולבים",
       createdBy: "רשימה זו נוצרה ע״י Lista",
       openSharedList: "פתח רשימה משותפת:"
     },

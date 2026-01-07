@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { CategoryGroup, Item } from '../types';
+import { CategoryGroup, Item, Recipe, InputMode } from '../types';
 import CategoryCard from './CategoryCard';
-import { Check, Copy, Trash2, Lock } from 'lucide-react';
+import { Check, Copy, Trash2, Lock, ChefHat } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface ResultCardProps {
@@ -15,6 +15,8 @@ interface ResultCardProps {
   onDeleteList: (id: string) => void;
   isGuest: boolean;
   onLoginRequest: () => void;
+  recipes?: Recipe[];
+  inputMode?: InputMode;
 }
 
 const ResultCard: React.FC<ResultCardProps> = ({
@@ -27,7 +29,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
   onUpdateList,
   onDeleteList,
   isGuest,
-  onLoginRequest
+  onLoginRequest,
+  recipes = [],
+  inputMode = 'items'
 }) => {
   const [copied, setCopied] = useState(false);
   const { t, tUnit } = useLanguage();
@@ -40,15 +44,32 @@ const ResultCard: React.FC<ResultCardProps> = ({
 
     // Format the list content with translated units
     const header = title ? `${title}\n\n` : '';
+
+    // Add recipe breakdown if in recipe mode
+    let recipeSection = '';
+    if (inputMode === 'recipe' && recipes.length > 0) {
+      recipeSection = `${t('result.recipeMode')} • ${recipes.length} ${t('result.recipesUsed')}\n\n`;
+      recipeSection += recipes.map(r => `${r.name}:\n${r.ingredients}`).join('\n\n');
+      recipeSection += '\n\n━━━━━━━━━━━━━━━━\n\n';
+    }
+
     const listContent = groups
-      .map(g => `${g.category}:\n${g.items.map(i => `• ${i.name} (${i.amount} ${tUnit(i.unit)})`).join('\n')}`)
+      .map(g => {
+        const items = g.items.map(i => {
+          const badges = i.recipeLabels && i.recipeLabels.length > 0
+            ? ` [${i.recipeLabels.map(l => l.recipeName.substring(0, 2).toUpperCase()).join(', ')}]`
+            : '';
+          return `• ${i.name}${badges} (${i.amount} ${tUnit(i.unit)})`;
+        }).join('\n');
+        return `${g.category}:\n${items}`;
+      })
       .join('\n\n');
 
     // Create share link
     const shareLink = `${window.location.origin}/share/${listId}`;
 
     // Combine everything with messaging-friendly format
-    const text = `${header}${listContent}\n\n━━━━━━━━━━━━━━━━\n${t('result.createdBy')}\n\n${t('result.openSharedList')}\n${shareLink}`;
+    const text = `${header}${recipeSection}${listContent}\n\n━━━━━━━━━━━━━━━━\n${t('result.createdBy')}\n\n${t('result.openSharedList')}\n${shareLink}`;
 
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -141,6 +162,15 @@ const ResultCard: React.FC<ResultCardProps> = ({
     <div className="mt-12 space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
       <div className="flex items-end justify-between border-b border-slate-200 pb-4 flex-wrap gap-4">
         <div>
+           {/* Recipe Mode Indicator */}
+           {inputMode === 'recipe' && recipes.length > 0 && (
+             <div className="flex items-center gap-2 mb-2">
+               <ChefHat className="w-4 h-4 text-emerald-600" />
+               <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
+                 {t('result.recipeMode')} • {recipes.length} {t('result.recipesUsed')}
+               </span>
+             </div>
+           )}
            {title && <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1 block">{t('result.listNameLabel')}</span>}
            <h2 className="text-3xl font-bold text-slate-800 font-display">
             {title ? title : t('result.defaultTitle')}

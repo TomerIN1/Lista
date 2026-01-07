@@ -470,10 +470,10 @@ const App: React.FC = () => {
                 )}
 
                 {(localGroups.length > 0) && (
-                  <ResultCard 
-                    groups={localGroups} 
+                  <ResultCard
+                    groups={localGroups}
                     members={activeList?.memberEmails || []}
-                    setGroups={setLocalGroups} 
+                    setGroups={setLocalGroups}
                     title={activeList?.title}
                     listId={activeListId || 'guest-list'}
                     onShareClick={() => setIsShareModalOpen(true)}
@@ -481,6 +481,8 @@ const App: React.FC = () => {
                     onDeleteList={handleDeleteList}
                     isGuest={!user}
                     onLoginRequest={handleLogin}
+                    recipes={recipes}
+                    inputMode={inputMode}
                   />
                 )}
               </div>
