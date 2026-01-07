@@ -17,7 +17,16 @@ export const TRANSLATIONS = {
       replace: "Replace",
       processing: "Processing...",
       addItems: "Add Items",
-      organize: "Organize"
+      organize: "Organize",
+      modeItems: "Items Mode",
+      modeRecipe: "Recipe Mode",
+      recipe: "Recipe",
+      recipeName: "Recipe Name",
+      recipeIngredients: "Ingredients",
+      addRecipe: "Add Another Recipe",
+      removeRecipe: "Remove Recipe",
+      addRecipes: "Add Recipes",
+      organizeRecipes: "Organize Recipes"
     },
     result: {
       listNameLabel: "List Name",
@@ -98,7 +107,16 @@ export const TRANSLATIONS = {
       replace: "החלף",
       processing: "מעבד...",
       addItems: "הוסף פריטים",
-      organize: "סדר לי"
+      organize: "סדר לי",
+      modeItems: "מצב פריטים",
+      modeRecipe: "מצב מתכונים",
+      recipe: "מתכון",
+      recipeName: "שם המתכון",
+      recipeIngredients: "מרכיבים",
+      addRecipe: "הוסף מתכון נוסף",
+      removeRecipe: "הסר מתכון",
+      addRecipes: "הוסף מתכונים",
+      organizeRecipes: "ארגן מתכונים"
     },
     result: {
       listNameLabel: "שם הרשימה",
