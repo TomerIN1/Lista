@@ -11,7 +11,7 @@ import {
   arrayUnion, 
   getDoc
 } from 'firebase/firestore';
-import { ListDocument, CategoryGroup } from '../types';
+import { ListDocument, CategoryGroup, Recipe, InputMode } from '../types';
 
 const COLLECTION_NAME = 'lists';
 
@@ -35,6 +35,21 @@ export const updateListGroups = async (listId: string, groups: CategoryGroup[]) 
   const listRef = doc(db, COLLECTION_NAME, listId);
   await updateDoc(listRef, {
     groups,
+    updatedAt: Date.now()
+  });
+};
+
+export const updateListGroupsAndRecipes = async (
+  listId: string,
+  groups: CategoryGroup[],
+  recipes: Recipe[],
+  mode: InputMode
+) => {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+  await updateDoc(listRef, {
+    groups,
+    recipes,
+    inputMode: mode,
     updatedAt: Date.now()
   });
 };

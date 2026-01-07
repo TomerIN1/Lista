@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument } from './types';
-import { organizeList, generateCategoryImage } from './services/geminiService';
-import { createList, subscribeToLists, updateListGroups, updateListTitle, shareList, deleteList, joinSharedList } from './services/firestoreService';
+import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode } from './types';
+import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
+import { createList, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
 
 import Header from './components/Header';
@@ -36,6 +36,10 @@ const App: React.FC = () => {
   const activeList = lists.find(l => l.id === activeListId);
   const [localGroups, setLocalGroups] = useState<CategoryGroup[]>([]);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // Recipe Mode State
+  const [inputMode, setInputMode] = useState<InputMode>('items');
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
 
   // Legal Modal State
   const [activeLegalDoc, setActiveLegalDoc] = useState<LegalDocType | null>(null);
@@ -120,12 +124,16 @@ const App: React.FC = () => {
       const current = lists.find(l => l.id === activeListId);
       if (current) {
         setLocalGroups(current.groups);
+        setInputMode(current.inputMode || 'items');
+        setRecipes(current.recipes || []);
         setStatus(current.groups.length > 0 ? 'success' : 'idle');
       }
     } else if (!user) {
       // Guest mode: Don't reset localGroups immediately if organizing
       if (status === 'idle') {
         setLocalGroups([]);
+        setRecipes([]);
+        setInputMode('items');
       }
     }
   }, [activeListId, lists, user]);
@@ -265,6 +273,69 @@ const App: React.FC = () => {
     }
   };
 
+  const handleOrganizeRecipes = async (recipesToOrganize: Recipe[], name: string) => {
+    setStatus('loading');
+    setError(null);
+
+    try {
+      let targetListId = activeListId;
+
+      if (user) {
+        if (!targetListId) {
+          targetListId = await createList(name || "New Recipe List", user.uid, user.email || '');
+          setActiveListId(targetListId);
+        } else if (name && activeList?.title !== name) {
+          await updateListTitle(targetListId, name);
+        }
+      }
+
+      const result = await organizeRecipes(recipesToOrganize, language);
+
+      setLocalGroups(result);
+      setRecipes(recipesToOrganize);
+      setInputMode('recipe');
+
+      if (user && targetListId) {
+        await updateListGroupsAndRecipes(targetListId, result, recipesToOrganize, 'recipe');
+        generateIconsForGroups(result, targetListId);
+      } else {
+        generateIconsForGroups(result, null);
+      }
+
+      setStatus('success');
+    } catch (err: any) {
+      console.error(err);
+      setError(t('errors.organizeFailed'));
+      setStatus('error');
+    }
+  };
+
+  const handleAddRecipes = async (newRecipes: Recipe[]) => {
+    setIsAdding(true);
+    setError(null);
+
+    try {
+      const allRecipes = [...recipes, ...newRecipes];
+      const existingCategories = localGroups.map(g => g.category);
+      const result = await organizeRecipes(allRecipes, language, existingCategories);
+
+      setLocalGroups(result);
+      setRecipes(allRecipes);
+
+      if (user && activeListId) {
+        await updateListGroupsAndRecipes(activeListId, result, allRecipes, 'recipe');
+        generateIconsForGroups(result, activeListId);
+      } else {
+        generateIconsForGroups(result, null);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(t('errors.addFailed'));
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
   const handleListUpdate = async (newGroups: CategoryGroup[]) => {
     setLocalGroups(newGroups);
     if (user && activeListId) {
@@ -374,16 +445,21 @@ const App: React.FC = () => {
                    </div>
                 )}
 
-                <InputArea 
-                  onOrganize={handleOrganize} 
+                <InputArea
+                  onOrganize={handleOrganize}
+                  onOrganizeRecipes={handleOrganizeRecipes}
                   onAdd={handleAddItems}
+                  onAddRecipes={handleAddRecipes}
                   onReset={() => {
                     setLocalGroups([]);
+                    setRecipes([]);
+                    setInputMode('items');
                     setStatus('idle');
                     setActiveListId(null);
-                  }} 
-                  isLoading={status === 'loading' || isAdding} 
+                  }}
+                  isLoading={status === 'loading' || isAdding}
                   hasResults={localGroups.length > 0}
+                  currentMode={inputMode}
                 />
 
                 {error && (
