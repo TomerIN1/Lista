@@ -199,6 +199,7 @@ const InputArea: React.FC<InputAreaProps> = ({
             placeholder={t('input.listNamePlaceholder')}
             className="w-full bg-transparent font-display font-semibold text-lg text-slate-800 placeholder:text-slate-400 placeholder:font-normal focus:outline-none"
             disabled={isLoading}
+            enterKeyHint="done"
           />
         </div>
 

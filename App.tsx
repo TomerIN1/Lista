@@ -200,7 +200,7 @@ const App: React.FC = () => {
           targetListId = await createList(name || "New List", user.uid, user.email || '');
           setActiveListId(targetListId);
         } else if (name && activeList?.title !== name) {
-          await updateListTitle(targetListId, name);
+          await handleTitleUpdate(name);
         }
       }
 
@@ -285,7 +285,7 @@ const App: React.FC = () => {
           targetListId = await createList(name || "New Recipe List", user.uid, user.email || '');
           setActiveListId(targetListId);
         } else if (name && activeList?.title !== name) {
-          await updateListTitle(targetListId, name);
+          await handleTitleUpdate(name);
         }
       }
 
