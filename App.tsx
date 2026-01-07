@@ -315,15 +315,16 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      const allRecipes = [...recipes, ...newRecipes];
+      // newRecipes already contains all recipes from the form (old + new)
+      // No need to merge with state to avoid duplicates
       const existingCategories = localGroups.map(g => g.category);
-      const result = await organizeRecipes(allRecipes, language, existingCategories);
+      const result = await organizeRecipes(newRecipes, language, existingCategories);
 
       setLocalGroups(result);
-      setRecipes(allRecipes);
+      setRecipes(newRecipes);
 
       if (user && activeListId) {
-        await updateListGroupsAndRecipes(activeListId, result, allRecipes, 'recipe');
+        await updateListGroupsAndRecipes(activeListId, result, newRecipes, 'recipe');
         generateIconsForGroups(result, activeListId);
       } else {
         generateIconsForGroups(result, null);
