@@ -101,36 +101,34 @@ const RecipeInputCard: React.FC<RecipeInputCardProps> = ({
       </div>
 
       {/* Ingredients textarea with AI suggest button */}
-      <div className="relative">
-        <div className="flex items-start gap-2">
-          <textarea
-            value={recipe.ingredients}
-            onChange={(e) => onUpdate(recipe.id, { ingredients: e.target.value })}
-            placeholder={t('input.recipeIngredients')}
-            disabled={isLoading || isSuggesting}
-            rows={4}
-            className="flex-1 px-4 py-3 bg-white border border-emerald-200 rounded-xl
-              focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400
-              placeholder-slate-400 text-slate-900
-              disabled:opacity-50 disabled:cursor-not-allowed
-              transition-all duration-200 resize-none"
-          />
+      <div className="relative space-y-2">
+        <textarea
+          value={recipe.ingredients}
+          onChange={(e) => onUpdate(recipe.id, { ingredients: e.target.value })}
+          placeholder={t('input.recipeIngredients')}
+          disabled={isLoading || isSuggesting}
+          rows={4}
+          className="w-full px-4 py-3 bg-white border border-emerald-200 rounded-xl
+            focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400
+            placeholder-slate-400 text-slate-900
+            disabled:opacity-50 disabled:cursor-not-allowed
+            transition-all duration-200 resize-none"
+        />
 
-          {/* AI Suggest Button */}
-          <button
-            type="button"
-            onClick={handleAISuggest}
-            disabled={isLoading || isSuggesting || !recipe.name.trim()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600
-              text-white rounded-lg shadow-sm hover:shadow-md hover:from-emerald-600 hover:to-emerald-700
-              disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm
-              transition-all duration-200 text-xs font-medium whitespace-nowrap h-fit"
-            title={t('input.aiSuggest')}
-          >
-            <Sparkles className={`w-3.5 h-3.5 ${isSuggesting ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{isSuggesting ? t('input.suggestingIngredients') : t('input.aiSuggest')}</span>
-          </button>
-        </div>
+        {/* AI Suggest Button */}
+        <button
+          type="button"
+          onClick={handleAISuggest}
+          disabled={isLoading || isSuggesting || !recipe.name.trim()}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600
+            text-white rounded-lg shadow-sm hover:shadow-md hover:from-emerald-600 hover:to-emerald-700
+            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm
+            transition-all duration-200 text-sm font-medium"
+          title={t('input.aiSuggest')}
+        >
+          <Sparkles className={`w-4 h-4 ${isSuggesting ? 'animate-spin' : ''}`} />
+          <span>{isSuggesting ? t('input.suggestingIngredients') : t('input.aiSuggest')}</span>
+        </button>
 
         {/* Error message */}
         {suggestionError && (
