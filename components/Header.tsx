@@ -19,10 +19,11 @@ const Header: React.FC<HeaderProps> = ({ user, onLogin, onLogout, sidebarOpen = 
     <header className="mb-8 sm:mb-12 relative">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-4 text-center sm:text-start">
-          <Logo className="w-12 h-12 shadow-xl shadow-indigo-500/20 rounded-2xl" />
-          <h1 className="text-4xl font-bold tracking-tight text-slate-900 font-display">
-            Lista
-          </h1>
+          <img
+            src="/lista-05.svg"
+            alt="Lista"
+            className="h-12 w-auto"
+          />
         </div>
 
         <div className="flex items-center flex-wrap justify-center gap-3">
