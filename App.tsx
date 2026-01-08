@@ -484,6 +484,11 @@ const App: React.FC = () => {
                   onOrganizeRecipes={handleOrganizeRecipes}
                   onAdd={handleAddItems}
                   onAddRecipes={handleAddRecipes}
+                  onSaveRecipe={(recipe) => {
+                    // Placeholder for Phase 4 Firestore implementation
+                    console.log('Save recipe:', recipe);
+                    alert(`Recipe "${recipe.name}" will be saved in Phase 4!`);
+                  }}
                   onReset={() => {
                     setLocalGroups([]);
                     setRecipes([]);
@@ -493,6 +498,7 @@ const App: React.FC = () => {
                   }}
                   isLoading={status === 'loading' || isAdding}
                   hasResults={localGroups.length > 0}
+                  isLoggedIn={!!user}
                   currentMode={inputMode}
                   currentRecipes={recipes}
                   currentTitle={activeList?.title || ''}

@@ -10,8 +10,10 @@ interface InputAreaProps {
   onAdd: (text: string) => void;
   onAddRecipes: (recipes: Recipe[]) => void;
   onReset: () => void;
+  onSaveRecipe?: (recipe: Recipe) => void;
   isLoading: boolean;
   hasResults: boolean;
+  isLoggedIn?: boolean;
   currentMode?: InputMode;
   currentRecipes?: Recipe[];
   currentTitle?: string;
@@ -23,8 +25,10 @@ const InputArea: React.FC<InputAreaProps> = ({
   onAdd,
   onAddRecipes,
   onReset,
+  onSaveRecipe,
   isLoading,
   hasResults,
+  isLoggedIn = false,
   currentMode = 'items',
   currentRecipes = [],
   currentTitle = ''
@@ -224,8 +228,10 @@ const InputArea: React.FC<InputAreaProps> = ({
                 index={index}
                 onUpdate={handleUpdateRecipe}
                 onDelete={handleDeleteRecipe}
+                onSave={onSaveRecipe || (() => {})}
                 isLoading={isLoading}
                 canDelete={recipes.length > 1}
+                isLoggedIn={isLoggedIn}
               />
             ))}
 
