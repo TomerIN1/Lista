@@ -11,7 +11,7 @@ import {
   arrayUnion, 
   getDoc
 } from 'firebase/firestore';
-import { ListDocument, CategoryGroup, Recipe, InputMode } from '../types';
+import { ListDocument, CategoryGroup, Recipe, InputMode, SavedRecipe } from '../types';
 
 const COLLECTION_NAME = 'lists';
 
@@ -140,4 +140,90 @@ export const subscribeToLists = (userId: string, email: string | null, callback:
   });
 
   return unsubscribe;
+};
+
+// ==================== SAVED RECIPES FUNCTIONS ====================
+
+/**
+ * Save a recipe to the user's personal recipe library
+ * @param userId - The user's UID
+ * @param recipe - The recipe to save
+ * @returns The recipe ID
+ */
+export const saveRecipeToLibrary = async (
+  userId: string,
+  recipe: Recipe
+): Promise<string> => {
+  const recipeId = recipe.id || crypto.randomUUID();
+  const recipeRef = doc(db, 'users', userId, 'saved_recipes', recipeId);
+
+  const savedRecipe: SavedRecipe = {
+    ...recipe,
+    id: recipeId,
+    userId,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  await setDoc(recipeRef, savedRecipe);
+  return recipeId;
+};
+
+/**
+ * Subscribe to a user's saved recipes (real-time updates)
+ * @param userId - The user's UID
+ * @param callback - Function to call when recipes update
+ * @returns Unsubscribe function
+ */
+export const subscribeToSavedRecipes = (
+  userId: string,
+  callback: (recipes: SavedRecipe[]) => void
+): (() => void) => {
+  const recipesRef = collection(db, 'users', userId, 'saved_recipes');
+
+  const unsubscribe = onSnapshot(recipesRef, (snapshot) => {
+    const recipes: SavedRecipe[] = [];
+    snapshot.forEach((doc) => {
+      recipes.push(doc.data() as SavedRecipe);
+    });
+    // Sort by most recently updated
+    recipes.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    callback(recipes);
+  }, (error) => {
+    console.error("Error fetching saved recipes from Firestore:", error);
+    callback([]);
+  });
+
+  return unsubscribe;
+};
+
+/**
+ * Delete a saved recipe from the user's library
+ * @param userId - The user's UID
+ * @param recipeId - The recipe ID to delete
+ */
+export const deleteSavedRecipe = async (
+  userId: string,
+  recipeId: string
+): Promise<void> => {
+  const recipeRef = doc(db, 'users', userId, 'saved_recipes', recipeId);
+  await deleteDoc(recipeRef);
+};
+
+/**
+ * Update a saved recipe in the user's library
+ * @param userId - The user's UID
+ * @param recipeId - The recipe ID to update
+ * @param updates - Partial recipe updates
+ */
+export const updateSavedRecipe = async (
+  userId: string,
+  recipeId: string,
+  updates: Partial<Recipe>
+): Promise<void> => {
+  const recipeRef = doc(db, 'users', userId, 'saved_recipes', recipeId);
+  await updateDoc(recipeRef, {
+    ...updates,
+    updatedAt: Date.now()
+  });
 };

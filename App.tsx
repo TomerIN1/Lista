@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
-import { createList, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList } from './services/firestoreService';
+import { createList, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
 
 import Header from './components/Header';
@@ -484,10 +484,19 @@ const App: React.FC = () => {
                   onOrganizeRecipes={handleOrganizeRecipes}
                   onAdd={handleAddItems}
                   onAddRecipes={handleAddRecipes}
-                  onSaveRecipe={(recipe) => {
-                    // Placeholder for Phase 4 Firestore implementation
-                    console.log('Save recipe:', recipe);
-                    alert(`Recipe "${recipe.name}" will be saved in Phase 4!`);
+                  onSaveRecipe={async (recipe) => {
+                    if (!user) {
+                      handleLogin();
+                      return;
+                    }
+
+                    try {
+                      await saveRecipeToLibrary(user.uid, recipe);
+                      // Success feedback is handled by RecipeInputCard
+                    } catch (error) {
+                      console.error('Error saving recipe:', error);
+                      // Error feedback is handled by RecipeInputCard
+                    }
                   }}
                   onReset={() => {
                     setLocalGroups([]);
