@@ -198,7 +198,9 @@ export const organizeRecipes = async (
 ${recipeTexts}
 
 Instructions:
-- Extract all ingredients with their quantities and units
+- Extract ONLY the ingredients with their quantities and units
+- IGNORE any cooking instructions or preparation steps
+- If a recipe contains instructions, skip those lines and only process ingredient lines
 - IMPORTANT: Normalize all ingredient names to SINGULAR form (e.g., "onions" → "onion", "tomatoes" → "tomato", "eggs" → "egg")
 - IMPORTANT: After normalizing to singular, combine duplicate ingredients across recipes by summing quantities
 - IMPORTANT: The amount for each item should be the TOTAL sum across all recipes (e.g., if 3 recipes each use 1 egg, the amount should be 3)
@@ -393,6 +395,96 @@ Recipe name: "${recipeName}"`
       error: language === 'he'
         ? 'שגיאה בהצעת מרכיבים. נסה שוב.'
         : 'Error suggesting ingredients. Please try again.'
+    };
+  }
+};
+
+/**
+ * Suggests BOTH ingredients AND instructions for a recipe name using AI
+ * @param recipeName - The name of the recipe
+ * @param language - User's language preference
+ * @returns Suggested ingredients and instructions, or error message
+ */
+export const suggestFullRecipe = async (
+  recipeName: string,
+  language: Language
+): Promise<{ ingredients: string; instructions: string; error?: string }> => {
+  try {
+    if (!recipeName.trim()) {
+      return {
+        ingredients: '',
+        instructions: '',
+        error: language === 'he'
+          ? 'אנא הזן שם מתכון'
+          : 'Please enter a recipe name'
+      };
+    }
+
+    const languageInstruction = language === 'he'
+      ? "Respond in Hebrew. List ingredients and instructions in Hebrew."
+      : "Respond in English.";
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are a professional cooking assistant. ${languageInstruction} Return ONLY valid JSON.`
+        },
+        {
+          role: "user",
+          content: `Is "${recipeName}" a valid recipe name? If yes, provide typical ingredients (with quantities) and step-by-step cooking instructions. If no (gibberish, not food-related), respond with "NOT_A_RECIPE".
+
+Format your response as JSON:
+{
+  "ingredients": "ingredient1\\ningredient2\\ningredient3",
+  "instructions": "Step 1: ...\\nStep 2: ...\\nStep 3: ..."
+}
+
+Examples of valid recipes: "Pasta Carbonara", "Chocolate Chip Cookies"
+Examples of invalid: "asdfgh", "Recipe 1", "abc123"
+
+Recipe name: "${recipeName}"`
+        }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 800 // Higher limit for instructions
+    });
+
+    const content = response.choices[0]?.message?.content?.trim();
+
+    if (!content) {
+      throw new Error("No response from AI");
+    }
+
+    // Check for NOT_A_RECIPE response
+    if (content.includes('NOT_A_RECIPE')) {
+      return {
+        ingredients: '',
+        instructions: '',
+        error: language === 'he'
+          ? 'לא זיהינו מתכון תקין. אנא תן שם מתכון ברור יותר (לדוגמה: "פסטה קרבונרה", "עוגת שוקולד")'
+          : 'Could not recognize a valid recipe. Please provide a clearer recipe name (e.g., "Pasta Carbonara", "Chocolate Cake")'
+      };
+    }
+
+    const parsed = JSON.parse(content);
+
+    return {
+      ingredients: parsed.ingredients || '',
+      instructions: parsed.instructions || '',
+      error: undefined
+    };
+
+  } catch (error) {
+    console.error("Error suggesting full recipe:", error);
+    return {
+      ingredients: '',
+      instructions: '',
+      error: language === 'he'
+        ? 'שגיאה בהצעת מתכון. נסה שוב.'
+        : 'Error suggesting recipe. Please try again.'
     };
   }
 };

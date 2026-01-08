@@ -6,6 +6,13 @@ export interface Recipe {
   id: string;
   name: string;
   ingredients: string;
+  instructions?: string; // Optional cooking instructions
+}
+
+export interface SavedRecipe extends Recipe {
+  userId: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface RecipeLabel {
