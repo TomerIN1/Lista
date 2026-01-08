@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Recipe } from '../types';
-import { X, ChefHat, Sparkles, Heart } from 'lucide-react';
+import { X, ChefHat, Sparkles, Star } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { suggestFullRecipe } from '../services/geminiService';
 
@@ -113,7 +113,7 @@ const RecipeInputCard: React.FC<RecipeInputCardProps> = ({
               aria-label={t('input.saveRecipe')}
               title={t('input.saveRecipe')}
             >
-              <Heart className={`w-4 h-4 text-emerald-600 ${isSaving ? 'animate-pulse' : ''}`} />
+              <Star className={`w-4 h-4 text-emerald-600 ${isSaving ? 'animate-pulse fill-emerald-600' : ''}`} />
             </button>
           )}
           {canDelete && (
