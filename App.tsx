@@ -200,17 +200,25 @@ const App: React.FC = () => {
           targetListId = await createList(name || "New List", user.uid, user.email || '');
           setActiveListId(targetListId);
         } else if (name && activeList?.title !== name) {
-          await handleTitleUpdate(name);
+          // Update local state immediately for instant UI feedback
+          setLists(prevLists =>
+            prevLists.map(list =>
+              list.id === activeListId
+                ? { ...list, title: name }
+                : list
+            )
+          );
         }
       }
 
       const result = await organizeList(text, language);
-      
+
       // Update State
       setLocalGroups(result);
-      
+
       if (user && targetListId) {
-        await updateListGroups(targetListId, result);
+        // Update Firestore with groups and title in one call
+        await updateListGroups(targetListId, result, name || undefined);
         generateIconsForGroups(result, targetListId);
       } else {
         // Guest: generate icons but don't save to DB
@@ -285,7 +293,14 @@ const App: React.FC = () => {
           targetListId = await createList(name || "New Recipe List", user.uid, user.email || '');
           setActiveListId(targetListId);
         } else if (name && activeList?.title !== name) {
-          await handleTitleUpdate(name);
+          // Update local state immediately for instant UI feedback
+          setLists(prevLists =>
+            prevLists.map(list =>
+              list.id === activeListId
+                ? { ...list, title: name }
+                : list
+            )
+          );
         }
       }
 
@@ -296,7 +311,8 @@ const App: React.FC = () => {
       setInputMode('recipe');
 
       if (user && targetListId) {
-        await updateListGroupsAndRecipes(targetListId, result, recipesToOrganize, 'recipe');
+        // Update Firestore with groups, recipes, mode, and title in one call
+        await updateListGroupsAndRecipes(targetListId, result, recipesToOrganize, 'recipe', name || undefined);
         generateIconsForGroups(result, targetListId);
       } else {
         generateIconsForGroups(result, null);

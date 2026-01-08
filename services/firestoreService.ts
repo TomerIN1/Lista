@@ -31,27 +31,40 @@ export const createList = async (title: string, ownerId: string, ownerEmail: str
   return newList.id;
 };
 
-export const updateListGroups = async (listId: string, groups: CategoryGroup[]) => {
+export const updateListGroups = async (listId: string, groups: CategoryGroup[], title?: string) => {
   const listRef = doc(db, COLLECTION_NAME, listId);
-  await updateDoc(listRef, {
+  const updateData: any = {
     groups,
     updatedAt: Date.now()
-  });
+  };
+
+  if (title !== undefined) {
+    updateData.title = title;
+  }
+
+  await updateDoc(listRef, updateData);
 };
 
 export const updateListGroupsAndRecipes = async (
   listId: string,
   groups: CategoryGroup[],
   recipes: Recipe[],
-  mode: InputMode
+  mode: InputMode,
+  title?: string
 ) => {
   const listRef = doc(db, COLLECTION_NAME, listId);
-  await updateDoc(listRef, {
+  const updateData: any = {
     groups,
     recipes,
     inputMode: mode,
     updatedAt: Date.now()
-  });
+  };
+
+  if (title !== undefined) {
+    updateData.title = title;
+  }
+
+  await updateDoc(listRef, updateData);
 };
 
 export const updateListTitle = async (listId: string, title: string) => {
