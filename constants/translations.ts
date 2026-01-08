@@ -26,7 +26,10 @@ export const TRANSLATIONS = {
       addRecipe: "Add Another Recipe",
       removeRecipe: "Remove Recipe",
       addRecipes: "Add Recipes",
-      organizeRecipes: "Organize Recipes"
+      organizeRecipes: "Organize Recipes",
+      aiSuggest: "AI Suggest",
+      suggestingIngredients: "Generating ingredients...",
+      aiSuggestError: "Could not suggest ingredients"
     },
     result: {
       listNameLabel: "List Name",
@@ -118,7 +121,10 @@ export const TRANSLATIONS = {
       addRecipe: "הוסף מתכון נוסף",
       removeRecipe: "הסר מתכון",
       addRecipes: "הוסף מתכונים",
-      organizeRecipes: "ארגן מתכונים"
+      organizeRecipes: "ארגן מתכונים",
+      aiSuggest: "הצע מרכיבים",
+      suggestingIngredients: "מייצר מרכיבים...",
+      aiSuggestError: "לא הצלחנו להציע מרכיבים"
     },
     result: {
       listNameLabel: "שם הרשימה",

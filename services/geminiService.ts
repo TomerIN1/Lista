@@ -316,3 +316,83 @@ If Recipe A has "1 onion" and Recipe B has "2 onions", the result should be:
     throw error;
   }
 };
+
+/**
+ * Suggests ingredients for a given recipe name using AI
+ * @param recipeName - The name of the recipe
+ * @param language - User's language preference
+ * @returns Suggested ingredients as a formatted string, or error message
+ */
+export const suggestRecipeIngredients = async (
+  recipeName: string,
+  language: Language
+): Promise<{ ingredients: string; error?: string }> => {
+  try {
+    if (!recipeName.trim()) {
+      return {
+        ingredients: '',
+        error: language === 'he'
+          ? 'אנא הזן שם מתכון'
+          : 'Please enter a recipe name'
+      };
+    }
+
+    const languageInstruction = language === 'he'
+      ? "Respond in Hebrew. List ingredients in Hebrew."
+      : "Respond in English.";
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are a helpful cooking assistant. Your task is to suggest typical ingredients for a recipe. ${languageInstruction}`
+        },
+        {
+          role: "user",
+          content: `Is "${recipeName}" a valid recipe name? If yes, list the typical ingredients needed (one per line, with quantities). If no (e.g., it's gibberish, not food-related, or unclear), respond with "NOT_A_RECIPE".
+
+Examples:
+- "Pasta Carbonara" → Valid recipe, list ingredients
+- "asdfgh" → NOT_A_RECIPE
+- "Recipe 1" → NOT_A_RECIPE (too generic)
+- "abc123" → NOT_A_RECIPE
+
+Recipe name: "${recipeName}"`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 300
+    });
+
+    const content = response.choices[0]?.message?.content?.trim();
+
+    if (!content) {
+      throw new Error("No response from AI");
+    }
+
+    // Check if AI determined it's not a recipe
+    if (content.includes('NOT_A_RECIPE')) {
+      return {
+        ingredients: '',
+        error: language === 'he'
+          ? 'לא זיהינו מתכון תקין. אנא תן שם מתכון ברור יותר (לדוגמה: "פסטה קרבונרה", "עוגת שוקולד")'
+          : 'Could not recognize a valid recipe. Please provide a clearer recipe name (e.g., "Pasta Carbonara", "Chocolate Cake")'
+      };
+    }
+
+    return {
+      ingredients: content,
+      error: undefined
+    };
+
+  } catch (error) {
+    console.error("Error suggesting ingredients:", error);
+    return {
+      ingredients: '',
+      error: language === 'he'
+        ? 'שגיאה בהצעת מרכיבים. נסה שוב.'
+        : 'Error suggesting ingredients. Please try again.'
+    };
+  }
+};
