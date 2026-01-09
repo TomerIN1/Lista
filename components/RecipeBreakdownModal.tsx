@@ -91,35 +91,48 @@ const RecipeBreakdownModal: React.FC<RecipeBreakdownModalProps> = ({
                 className="bg-gradient-to-br from-emerald-50 to-white border border-emerald-100 rounded-xl p-5 hover:shadow-md transition-shadow"
               >
                 {/* Recipe Number & Name */}
-                <div className={`flex items-center justify-between gap-3 mb-4`}>
-                  <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-600 text-white text-sm font-bold shrink-0">
-                      {index + 1}
+                {isEditing ? (
+                  // Editing mode - Stack vertically on mobile for better layout
+                  <div className="mb-4 space-y-3">
+                    <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-600 text-white text-sm font-bold shrink-0">
+                        {index + 1}
+                      </div>
+                      <h4 className="text-sm font-semibold text-emerald-700">
+                        {language === 'he' ? 'עריכת מתכון' : 'Editing Recipe'}
+                      </h4>
                     </div>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editedRecipe.name || ''}
-                        onChange={(e) => setEditedRecipe(prev => ({ ...prev, name: e.target.value }))}
-                        className="flex-1 text-xl font-display font-bold text-slate-800 bg-white border border-emerald-200 rounded-lg px-3 py-1"
-                      />
-                    ) : (
-                      <h3 className="text-xl font-display font-bold text-slate-800">
+                    <input
+                      type="text"
+                      value={editedRecipe.name || ''}
+                      onChange={(e) => setEditedRecipe(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full text-lg sm:text-xl font-display font-bold text-slate-800 bg-white border-2 border-emerald-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400"
+                      placeholder={language === 'he' ? 'שם המתכון' : 'Recipe name'}
+                    />
+                  </div>
+                ) : (
+                  // View mode - Horizontal layout
+                  <div className={`flex items-center justify-between gap-3 mb-4`}>
+                    <div className={`flex items-center gap-3 flex-1 min-w-0 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-600 text-white text-sm font-bold shrink-0">
+                        {index + 1}
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-display font-bold text-slate-800 truncate">
                         {recipe.name}
                       </h3>
+                    </div>
+
+                    {canEdit && (
+                      <button
+                        onClick={() => handleEdit(recipe)}
+                        className="p-2 hover:bg-emerald-100 rounded-lg transition-colors text-emerald-600 shrink-0"
+                        title={language === 'he' ? 'ערוך מתכון' : 'Edit recipe'}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
                     )}
                   </div>
-
-                  {canEdit && !isEditing && (
-                    <button
-                      onClick={() => handleEdit(recipe)}
-                      className="p-2 hover:bg-emerald-100 rounded-lg transition-colors text-emerald-600"
-                      title={language === 'he' ? 'ערוך מתכון' : 'Edit recipe'}
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
+                )}
 
                 {/* Ingredients */}
                 <div className="mb-4">
