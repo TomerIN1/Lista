@@ -85,7 +85,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     try {
       await updateSavedRecipe(user.uid, recipeId, updates);
-      // The subscription will automatically update the UI
+
+      // Update the viewingRecipe state immediately to show changes in the modal
+      if (viewingRecipe && viewingRecipe.id === recipeId) {
+        setViewingRecipe({
+          ...viewingRecipe,
+          ...updates,
+          updatedAt: Date.now()
+        });
+      }
+
+      // The subscription will automatically update the savedRecipes array
     } catch (error) {
       console.error('Error updating recipe:', error);
       throw error; // Re-throw to let the modal handle the error
