@@ -184,16 +184,16 @@ const Sidebar: React.FC<SidebarProps> = ({
                     >
                       {isRTL ? (
                         <>
+                          <div className="flex items-center gap-2">
+                            <ChefHat className="w-4 h-4 text-emerald-600" />
+                            <span className="font-display font-bold text-sm">{t('sidebar.savedRecipes')}</span>
+                            <span className="text-xs text-slate-400">({savedRecipes.length})</span>
+                          </div>
                           {recipesExpanded ? (
                             <ChevronDown className="w-4 h-4 text-slate-400" />
                           ) : (
                             <ChevronLeft className="w-4 h-4 text-slate-400" />
                           )}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-400">({savedRecipes.length})</span>
-                            <span className="font-display font-bold text-sm">{t('sidebar.savedRecipes')}</span>
-                            <ChefHat className="w-4 h-4 text-emerald-600" />
-                          </div>
                         </>
                       ) : (
                         <>
