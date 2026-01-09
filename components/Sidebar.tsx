@@ -180,9 +180,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <div className="mt-6 pt-4 border-t border-slate-200">
                     <button
                       onClick={() => setRecipesExpanded(!recipesExpanded)}
-                      className={`w-full flex items-center justify-between px-2 py-2 text-slate-700 hover:text-slate-900 transition-colors ${isRTL ? 'flex-row-reverse' : ''}`}
+                      className={`w-full flex items-center px-2 py-2 text-slate-700 hover:text-slate-900 transition-colors ${isRTL ? 'flex-row-reverse justify-between' : 'justify-between'}`}
                     >
-                      <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                      <div className="flex items-center gap-2">
                         <ChefHat className="w-4 h-4 text-emerald-600" />
                         <span className="font-display font-bold text-sm">{t('sidebar.savedRecipes')}</span>
                         <span className="text-xs text-slate-400">({savedRecipes.length})</span>
