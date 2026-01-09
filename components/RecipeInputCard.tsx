@@ -133,6 +133,12 @@ const RecipeInputCard: React.FC<RecipeInputCardProps> = ({
           <span className="text-sm font-semibold text-emerald-700">
             {t('input.recipe')} {index + 1}
           </span>
+          {/* Indicator for loaded saved recipe */}
+          {recipe.originalSavedRecipeId && (
+            <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
+              {language === 'he' ? 'מתכון שמור' : 'Saved'}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Save Recipe Button (only if logged in) */}
@@ -141,11 +147,23 @@ const RecipeInputCard: React.FC<RecipeInputCardProps> = ({
               type="button"
               onClick={handleSaveRecipe}
               disabled={isLoading || isSaving}
-              className="p-1.5 hover:bg-emerald-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label={t('input.saveRecipe')}
-              title={t('input.saveRecipe')}
+              className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                recipe.originalSavedRecipeId
+                  ? 'hover:bg-amber-100'
+                  : 'hover:bg-emerald-100'
+              }`}
+              aria-label={recipe.originalSavedRecipeId
+                ? (language === 'he' ? 'עדכן או שמור כחדש' : 'Update or save as new')
+                : t('input.saveRecipe')}
+              title={recipe.originalSavedRecipeId
+                ? (language === 'he' ? 'עדכן מתכון קיים או שמור כמתכון חדש' : 'Update existing recipe or save as new')
+                : t('input.saveRecipe')}
             >
-              <Star className={`w-4 h-4 text-emerald-600 ${isSaving ? 'animate-pulse fill-emerald-600' : ''}`} />
+              <Star className={`w-4 h-4 ${
+                recipe.originalSavedRecipeId
+                  ? 'text-amber-500 fill-amber-500'
+                  : 'text-emerald-600'
+              } ${isSaving ? 'animate-pulse' : ''}`} />
             </button>
           )}
           {canDelete && (
