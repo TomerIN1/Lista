@@ -35,7 +35,9 @@ export const TRANSLATIONS = {
       suggestingIngredients: "Generating ingredients...",
       suggestingRecipe: "Generating recipe...",
       aiSuggestError: "Could not suggest ingredients",
-      saveRecipe: "Save Recipe"
+      saveRecipe: "Save Recipe",
+      updateRecipe: "Update Recipe",
+      updatingRecipe: "Updating..."
     },
     result: {
       listNameLabel: "List Name",
@@ -145,7 +147,9 @@ export const TRANSLATIONS = {
       suggestingIngredients: "מייצר מרכיבים...",
       suggestingRecipe: "מייצר מתכון...",
       aiSuggestError: "לא הצלחנו להציע מרכיבים",
-      saveRecipe: "שמור מתכון"
+      saveRecipe: "שמור מתכון",
+      updateRecipe: "עדכן מתכון",
+      updatingRecipe: "מעדכן..."
     },
     result: {
       listNameLabel: "שם הרשימה",
