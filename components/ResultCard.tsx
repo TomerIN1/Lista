@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CategoryGroup, Item, Recipe, InputMode } from '../types';
 import CategoryCard from './CategoryCard';
-import { Check, Copy, Trash2, Lock, ChefHat, Pencil } from 'lucide-react';
+import RecipeBreakdownModal from './RecipeBreakdownModal';
+import { Check, Copy, Trash2, Lock, ChefHat, Pencil, Eye } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface ResultCardProps {
@@ -38,6 +39,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
   const [copied, setCopied] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(title || '');
+  const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
   const { t, tUnit } = useLanguage();
 
   const handleCopy = () => {
@@ -268,6 +270,18 @@ const ResultCard: React.FC<ResultCardProps> = ({
             )}
           </button>
 
+          {/* View Recipes Button (Only in recipe mode) */}
+          {inputMode === 'recipe' && recipes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsRecipeModalOpen(true)}
+              className="group flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-emerald-600 transition-colors px-4 py-2 rounded-xl hover:bg-emerald-50 active:scale-95 duration-200"
+            >
+              <Eye className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
+              <span>{t('result.viewRecipes')}</span>
+            </button>
+          )}
+
           {/* Delete Button (Allowed for guests to clear local view, or server for users) */}
           <div className="w-px h-6 bg-slate-200 mx-1" />
 
@@ -296,6 +310,13 @@ const ResultCard: React.FC<ResultCardProps> = ({
           />
         ))}
       </div>
+
+      {/* Recipe Breakdown Modal */}
+      <RecipeBreakdownModal
+        isOpen={isRecipeModalOpen}
+        onClose={() => setIsRecipeModalOpen(false)}
+        recipes={recipes}
+      />
     </div>
   );
 };

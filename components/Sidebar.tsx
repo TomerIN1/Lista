@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ListDocument, UserProfile, SavedRecipe } from '../types';
-import { Plus, List, Trash2, Layout, Lock, ChefHat, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Plus, List, Trash2, Layout, Lock, ChefHat, ChevronDown, ChevronRight, ChevronLeft, Eye, PenLine } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { subscribeToSavedRecipes, deleteSavedRecipe } from '../services/firestoreService';
+import RecipeBreakdownModal from './RecipeBreakdownModal';
 
 interface SidebarProps {
   lists: ListDocument[];
@@ -32,6 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { t, isRTL } = useLanguage();
   const [savedRecipes, setSavedRecipes] = useState<SavedRecipe[]>([]);
   const [recipesExpanded, setRecipesExpanded] = useState(true);
+  const [viewingRecipe, setViewingRecipe] = useState<SavedRecipe | null>(null);
 
   const handleOverlayClick = () => setIsOpen(false);
 
@@ -216,31 +218,41 @@ const Sidebar: React.FC<SidebarProps> = ({
                         {savedRecipes.map(recipe => (
                           <div
                             key={recipe.id}
-                            className="group relative flex items-center justify-between px-3 py-2 rounded-xl text-slate-600 hover:bg-emerald-50 transition-all"
+                            className="group relative flex flex-col px-3 py-2 rounded-xl text-slate-600 hover:bg-emerald-50 transition-all"
                           >
-                            <button
-                              onClick={() => handleUseRecipe(recipe)}
-                              className={`flex items-center gap-3 overflow-hidden flex-1 ${isRTL ? 'text-right' : 'text-left'}`}
-                            >
-                              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600">
-                                <ChefHat className="w-4 h-4" />
+                            {/* Recipe Name */}
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600">
+                                <ChefHat className="w-3 h-3" />
                               </div>
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <span className="text-sm font-semibold truncate">{recipe.name}</span>
-                                <span className="text-[10px] text-slate-400 truncate">
-                                  {t('sidebar.useRecipe')}
-                                </span>
-                              </div>
-                            </button>
+                              <span className="text-sm font-semibold truncate flex-1">{recipe.name}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteRecipe(e, recipe.id)}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 hover:bg-white rounded transition-all"
+                                aria-label="Delete Recipe"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
 
-                            <button
-                              type="button"
-                              onClick={(e) => handleDeleteRecipe(e, recipe.id)}
-                              className="lg:opacity-0 lg:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all focus:opacity-100 relative z-20"
-                              aria-label="Delete Recipe"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {/* Action Buttons */}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setViewingRecipe(recipe)}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors"
+                              >
+                                <Eye className="w-3 h-3" />
+                                {t('sidebar.viewRecipe')}
+                              </button>
+                              <button
+                                onClick={() => handleUseRecipe(recipe)}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded-lg transition-colors"
+                              >
+                                <PenLine className="w-3 h-3" />
+                                {t('sidebar.useRecipe')}
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -258,6 +270,15 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       </aside>
+
+      {/* Recipe View Modal */}
+      {viewingRecipe && (
+        <RecipeBreakdownModal
+          isOpen={!!viewingRecipe}
+          onClose={() => setViewingRecipe(null)}
+          recipes={[viewingRecipe]}
+        />
+      )}
     </>
   );
 };

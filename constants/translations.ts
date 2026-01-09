@@ -49,7 +49,11 @@ export const TRANSLATIONS = {
       createdBy: "This list created by Lista",
       openSharedList: "Open shared list:",
       recipeMode: "Recipe Mode",
-      recipesUsed: "recipes combined"
+      recipesUsed: "recipes combined",
+      viewRecipes: "View Recipes",
+      viewRecipesTitle: "Recipe Breakdown",
+      recipes: "recipes",
+      close: "Close"
     },
     sidebar: {
       myLists: "My Lists",
@@ -63,7 +67,8 @@ export const TRANSLATIONS = {
       loginDesc: "Sign in to save and manage your lists across devices.",
       savedRecipes: "Saved Recipes",
       noSavedRecipes: "No saved recipes yet",
-      useRecipe: "Use Recipe",
+      viewRecipe: "View",
+      useRecipe: "Use",
       deleteRecipeConfirm: "Are you sure you want to delete this recipe?"
     },
     share: {
@@ -154,7 +159,11 @@ export const TRANSLATIONS = {
       recipeMode: "מצב מתכונים",
       recipesUsed: "מתכונים משולבים",
       createdBy: "רשימה זו נוצרה ע״י Lista",
-      openSharedList: "פתח רשימה משותפת:"
+      openSharedList: "פתח רשימה משותפת:",
+      viewRecipes: "צפה במתכונים",
+      viewRecipesTitle: "פירוט המתכונים",
+      recipes: "מתכונים",
+      close: "סגור"
     },
     sidebar: {
       myLists: "הרשימות שלי",
@@ -168,7 +177,8 @@ export const TRANSLATIONS = {
       loginDesc: "התחבר כדי לשמור ולנהל את הרשימות שלך מכל מכשיר.",
       savedRecipes: "המתכונים השמורים",
       noSavedRecipes: "אין עדיין מתכונים שמורים",
-      useRecipe: "השתמש במתכון",
+      viewRecipe: "צפה",
+      useRecipe: "השתמש",
       deleteRecipeConfirm: "האם אתה בטוח שברצונך למחוק מתכון זה?"
     },
     share: {
