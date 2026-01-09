@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ListDocument, UserProfile, SavedRecipe } from '../types';
-import { Plus, List, Trash2, Layout, Lock, ChefHat, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, List, Trash2, Layout, Lock, ChefHat, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { subscribeToSavedRecipes, deleteSavedRecipe } from '../services/firestoreService';
 
@@ -180,9 +180,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <div className="mt-6 pt-4 border-t border-slate-200">
                     <button
                       onClick={() => setRecipesExpanded(!recipesExpanded)}
-                      className="w-full flex items-center justify-between px-2 py-2 text-slate-700 hover:text-slate-900 transition-colors"
+                      className={`w-full flex items-center justify-between px-2 py-2 text-slate-700 hover:text-slate-900 transition-colors ${isRTL ? 'flex-row-reverse' : ''}`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
                         <ChefHat className="w-4 h-4 text-emerald-600" />
                         <span className="font-display font-bold text-sm">{t('sidebar.savedRecipes')}</span>
                         <span className="text-xs text-slate-400">({savedRecipes.length})</span>
@@ -190,7 +190,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       {recipesExpanded ? (
                         <ChevronDown className="w-4 h-4 text-slate-400" />
                       ) : (
-                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                        isRTL ? <ChevronLeft className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />
                       )}
                     </button>
 
@@ -203,7 +203,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           >
                             <button
                               onClick={() => handleUseRecipe(recipe)}
-                              className="flex items-center gap-3 overflow-hidden flex-1 text-left"
+                              className={`flex items-center gap-3 overflow-hidden flex-1 ${isRTL ? 'text-right' : 'text-left'}`}
                             >
                               <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600">
                                 <ChefHat className="w-4 h-4" />
