@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode } from './types';
+import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
-import { createList, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary } from './services/firestoreService';
+import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
 
 import Header from './components/Header';
@@ -81,8 +81,13 @@ const App: React.FC = () => {
 
   // Firestore List Subscription
   useEffect(() => {
-    if (!user || !user.email) return;
+    if (!user || !user.email) {
+      console.log('[App] No user or email, skipping subscription');
+      return;
+    }
+    console.log('[App] Subscribing to lists for user:', user.email);
     const unsubscribe = subscribeToLists(user.uid, user.email, (updatedLists) => {
+      console.log('[App] Lists updated from Firestore:', updatedLists.length, 'lists');
       setLists(updatedLists);
     });
     return () => unsubscribe();
@@ -120,13 +125,18 @@ const App: React.FC = () => {
 
   // Sync active list change when selection changes or lists update
   useEffect(() => {
+    console.log('[Sync Effect] Running - activeListId:', activeListId, 'user:', !!user, 'lists count:', lists.length);
     if (activeListId && user) {
       const current = lists.find(l => l.id === activeListId);
+      console.log('[Sync Effect] Found current list:', !!current);
       if (current) {
+        console.log('[Sync Effect] Syncing state from Firestore - groups:', current.groups.length, 'recipes:', current.recipes?.length, 'mode:', current.inputMode);
         setLocalGroups(current.groups);
         setInputMode(current.inputMode || 'items');
         setRecipes(current.recipes || []);
         setStatus(current.groups.length > 0 ? 'success' : 'idle');
+      } else {
+        console.log('[Sync Effect] List not found in lists array yet');
       }
     } else if (!user) {
       // Guest mode: Don't reset localGroups immediately if organizing
@@ -282,45 +292,68 @@ const App: React.FC = () => {
   };
 
   const handleOrganizeRecipes = async (recipesToOrganize: Recipe[], name: string) => {
+    console.log('[handleOrganizeRecipes] Starting with recipes:', recipesToOrganize.length, 'name:', name);
+    console.log('[handleOrganizeRecipes] User email:', user?.email, 'activeListId:', activeListId);
+
     setStatus('loading');
     setError(null);
 
     try {
+      console.log('[handleOrganizeRecipes] Organizing recipes with AI...');
+      const result = await organizeRecipes(recipesToOrganize, language);
+      console.log('[handleOrganizeRecipes] AI returned', result.length, 'categories');
+
       let targetListId = activeListId;
 
       if (user) {
         if (!targetListId) {
-          targetListId = await createList(name || "New Recipe List", user.uid, user.email || '');
-          setActiveListId(targetListId);
-        } else if (name && activeList?.title !== name) {
-          // Update local state immediately for instant UI feedback
-          setLists(prevLists =>
-            prevLists.map(list =>
-              list.id === activeListId
-                ? { ...list, title: name }
-                : list
-            )
+          // Create the list with recipes in one operation to avoid race condition
+          console.log('[handleOrganizeRecipes] Creating new list with recipes...');
+          targetListId = await createListWithRecipes(
+            name || "New Recipe List",
+            user.uid,
+            user.email || '',
+            result,
+            recipesToOrganize,
+            'recipe'
           );
+          console.log('[handleOrganizeRecipes] List created with ID:', targetListId);
+          setActiveListId(targetListId);
+          console.log('[handleOrganizeRecipes] Active list ID set to:', targetListId);
+          // Generate icons after creation
+          generateIconsForGroups(result, targetListId);
+        } else {
+          // Update existing list
+          console.log('[handleOrganizeRecipes] Updating existing list...');
+          if (name && activeList?.title !== name) {
+            // Update local state immediately for instant UI feedback
+            setLists(prevLists =>
+              prevLists.map(list =>
+                list.id === activeListId
+                  ? { ...list, title: name }
+                  : list
+              )
+            );
+          }
+          await updateListGroupsAndRecipes(targetListId, result, recipesToOrganize, 'recipe', name || undefined);
+          console.log('[handleOrganizeRecipes] Firestore updated successfully');
+          generateIconsForGroups(result, targetListId);
         }
-      }
-
-      const result = await organizeRecipes(recipesToOrganize, language);
-
-      setLocalGroups(result);
-      setRecipes(recipesToOrganize);
-      setInputMode('recipe');
-
-      if (user && targetListId) {
-        // Update Firestore with groups, recipes, mode, and title in one call
-        await updateListGroupsAndRecipes(targetListId, result, recipesToOrganize, 'recipe', name || undefined);
-        generateIconsForGroups(result, targetListId);
       } else {
+        // Guest mode
         generateIconsForGroups(result, null);
       }
 
+      // Update local state after Firestore operation completes
+      setLocalGroups(result);
+      setRecipes(recipesToOrganize);
+      setInputMode('recipe');
+      console.log('[handleOrganizeRecipes] Local state updated');
+
       setStatus('success');
+      console.log('[handleOrganizeRecipes] Complete!');
     } catch (err: any) {
-      console.error(err);
+      console.error('[handleOrganizeRecipes] Error:', err);
       setError(t('errors.organizeFailed'));
       setStatus('error');
     }
@@ -407,6 +440,24 @@ const App: React.FC = () => {
     await updateListTitle(activeListId, newTitle);
   };
 
+  const handleLoadRecipe = (savedRecipe: SavedRecipe) => {
+    // Switch to recipe mode
+    setInputMode('recipe');
+
+    // Load the recipe into the recipes state
+    setRecipes([{
+      id: savedRecipe.id,
+      name: savedRecipe.name,
+      ingredients: savedRecipe.ingredients,
+      instructions: savedRecipe.instructions
+    }]);
+
+    // Clear any active list to start fresh
+    setActiveListId(null);
+    setLocalGroups([]);
+    setStatus('idle');
+  };
+
   const LegalModal = () => (
     <InfoModal 
       isOpen={!!activeLegalDoc}
@@ -418,7 +469,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex">
-      <Sidebar 
+      <Sidebar
         isOpen={sidebarOpen}
         setIsOpen={setSidebarOpen}
         lists={lists}
@@ -428,6 +479,7 @@ const App: React.FC = () => {
         onDelete={handleDeleteList}
         user={user}
         onLogin={handleLogin}
+        onLoadRecipe={handleLoadRecipe}
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative scroll-smooth">

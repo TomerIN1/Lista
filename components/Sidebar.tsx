@@ -1,7 +1,8 @@
-import React from 'react';
-import { ListDocument, UserProfile } from '../types';
-import { Plus, List, Trash2, Layout, Lock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ListDocument, UserProfile, SavedRecipe } from '../types';
+import { Plus, List, Trash2, Layout, Lock, ChefHat, ChevronDown, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { subscribeToSavedRecipes, deleteSavedRecipe } from '../services/firestoreService';
 
 interface SidebarProps {
   lists: ListDocument[];
@@ -13,29 +14,68 @@ interface SidebarProps {
   setIsOpen: (open: boolean) => void;
   user: UserProfile | null;
   onLogin: () => void;
+  onLoadRecipe: (recipe: SavedRecipe) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  lists, 
-  activeListId, 
-  onSelect, 
-  onCreate, 
+const Sidebar: React.FC<SidebarProps> = ({
+  lists,
+  activeListId,
+  onSelect,
+  onCreate,
   onDelete,
   isOpen,
   setIsOpen,
   user,
-  onLogin
+  onLogin,
+  onLoadRecipe
 }) => {
   const { t, isRTL } = useLanguage();
+  const [savedRecipes, setSavedRecipes] = useState<SavedRecipe[]>([]);
+  const [recipesExpanded, setRecipesExpanded] = useState(true);
+
   const handleOverlayClick = () => setIsOpen(false);
+
+  // Subscribe to saved recipes
+  useEffect(() => {
+    if (!user) {
+      setSavedRecipes([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToSavedRecipes(user.uid, (recipes) => {
+      setSavedRecipes(recipes);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   const handleDeleteClick = (e: React.MouseEvent, listId: string) => {
     e.stopPropagation(); // Stop bubbling to list select
     e.preventDefault();  // Stop any other default actions
-    
+
     if (window.confirm(t('sidebar.deleteConfirm'))) {
       onDelete(listId);
     }
+  };
+
+  const handleDeleteRecipe = async (e: React.MouseEvent, recipeId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (!user) return;
+
+    if (window.confirm(t('sidebar.deleteRecipeConfirm'))) {
+      try {
+        await deleteSavedRecipe(user.uid, recipeId);
+      } catch (error) {
+        console.error('Error deleting recipe:', error);
+      }
+    }
+  };
+
+  const handleUseRecipe = (recipe: SavedRecipe) => {
+    onLoadRecipe(recipe);
+    setIsOpen(false);
   };
 
   return (
@@ -98,12 +138,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                 )}
 
                 {lists.map(list => (
-                  <div 
+                  <div
                     key={list.id}
                     className={`
                       group relative flex items-center justify-between px-3 py-2.5 rounded-xl transition-all cursor-pointer
-                      ${activeListId === list.id 
-                        ? 'bg-indigo-50 text-indigo-900' 
+                      ${activeListId === list.id
+                        ? 'bg-indigo-50 text-indigo-900'
                         : 'text-slate-600 hover:bg-slate-50'
                       }
                     `}
@@ -134,6 +174,62 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                   </div>
                 ))}
+
+                {/* Saved Recipes Section */}
+                {savedRecipes.length > 0 && (
+                  <div className="mt-6 pt-4 border-t border-slate-200">
+                    <button
+                      onClick={() => setRecipesExpanded(!recipesExpanded)}
+                      className="w-full flex items-center justify-between px-2 py-2 text-slate-700 hover:text-slate-900 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ChefHat className="w-4 h-4 text-emerald-600" />
+                        <span className="font-display font-bold text-sm">{t('sidebar.savedRecipes')}</span>
+                        <span className="text-xs text-slate-400">({savedRecipes.length})</span>
+                      </div>
+                      {recipesExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      )}
+                    </button>
+
+                    {recipesExpanded && (
+                      <div className="mt-2 space-y-1">
+                        {savedRecipes.map(recipe => (
+                          <div
+                            key={recipe.id}
+                            className="group relative flex items-center justify-between px-3 py-2 rounded-xl text-slate-600 hover:bg-emerald-50 transition-all"
+                          >
+                            <button
+                              onClick={() => handleUseRecipe(recipe)}
+                              className="flex items-center gap-3 overflow-hidden flex-1 text-left"
+                            >
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600">
+                                <ChefHat className="w-4 h-4" />
+                              </div>
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <span className="text-sm font-semibold truncate">{recipe.name}</span>
+                                <span className="text-[10px] text-slate-400 truncate">
+                                  {t('sidebar.useRecipe')}
+                                </span>
+                              </div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteRecipe(e, recipe.id)}
+                              className="lg:opacity-0 lg:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all focus:opacity-100 relative z-20"
+                              aria-label="Delete Recipe"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

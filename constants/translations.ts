@@ -60,7 +60,11 @@ export const TRANSLATIONS = {
       private: "Private",
       deleteConfirm: "Are you sure you want to delete this list?",
       loginTitle: "Sign in",
-      loginDesc: "Sign in to save and manage your lists across devices."
+      loginDesc: "Sign in to save and manage your lists across devices.",
+      savedRecipes: "Saved Recipes",
+      noSavedRecipes: "No saved recipes yet",
+      useRecipe: "Use Recipe",
+      deleteRecipeConfirm: "Are you sure you want to delete this recipe?"
     },
     share: {
       title: "Share List",
@@ -161,7 +165,11 @@ export const TRANSLATIONS = {
       private: "פרטי",
       deleteConfirm: "האם אתה בטוח שברצונך למחוק רשימה זו?",
       loginTitle: "התחבר",
-      loginDesc: "התחבר כדי לשמור ולנהל את הרשימות שלך מכל מכשיר."
+      loginDesc: "התחבר כדי לשמור ולנהל את הרשימות שלך מכל מכשיר.",
+      savedRecipes: "המתכונים השמורים",
+      noSavedRecipes: "אין עדיין מתכונים שמורים",
+      useRecipe: "השתמש במתכון",
+      deleteRecipeConfirm: "האם אתה בטוח שברצונך למחוק מתכון זה?"
     },
     share: {
       title: "שתף רשימה",

@@ -16,6 +16,7 @@ import { ListDocument, CategoryGroup, Recipe, InputMode, SavedRecipe } from '../
 const COLLECTION_NAME = 'lists';
 
 export const createList = async (title: string, ownerId: string, ownerEmail: string) => {
+  console.log('[createList] Creating list:', title, 'for user:', ownerEmail);
   const newListRef = doc(collection(db, COLLECTION_NAME));
   const newList: ListDocument = {
     id: newListRef.id,
@@ -26,8 +27,36 @@ export const createList = async (title: string, ownerId: string, ownerEmail: str
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
-  
+
   await setDoc(newListRef, newList);
+  console.log('[createList] List created with ID:', newList.id);
+  return newList.id;
+};
+
+export const createListWithRecipes = async (
+  title: string,
+  ownerId: string,
+  ownerEmail: string,
+  groups: CategoryGroup[],
+  recipes: Recipe[],
+  mode: InputMode
+) => {
+  console.log('[createListWithRecipes] Creating list:', title, 'with groups:', groups.length, 'recipes:', recipes.length);
+  const newListRef = doc(collection(db, COLLECTION_NAME));
+  const newList: ListDocument = {
+    id: newListRef.id,
+    title,
+    ownerId,
+    memberEmails: [ownerEmail],
+    groups,
+    recipes,
+    inputMode: mode,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  await setDoc(newListRef, newList);
+  console.log('[createListWithRecipes] List created with ID:', newList.id);
   return newList.id;
 };
 
@@ -52,6 +81,7 @@ export const updateListGroupsAndRecipes = async (
   mode: InputMode,
   title?: string
 ) => {
+  console.log('[updateListGroupsAndRecipes] Updating list:', listId, 'with groups:', groups.length, 'recipes:', recipes.length, 'mode:', mode, 'title:', title);
   const listRef = doc(db, COLLECTION_NAME, listId);
   const updateData: any = {
     groups,
@@ -65,6 +95,7 @@ export const updateListGroupsAndRecipes = async (
   }
 
   await updateDoc(listRef, updateData);
+  console.log('[updateListGroupsAndRecipes] Update complete');
 };
 
 export const updateListTitle = async (listId: string, title: string) => {
@@ -116,27 +147,33 @@ export const deleteList = async (listId: string) => {
 };
 
 export const subscribeToLists = (userId: string, email: string | null, callback: (lists: ListDocument[]) => void) => {
+  console.log('[subscribeToLists] Setting up subscription for email:', email);
   if (!email) {
+    console.log('[subscribeToLists] No email provided, returning empty callback');
     callback([]);
     return () => {};
   }
 
   // Query lists where the user is a member (by email)
   const q = query(
-    collection(db, COLLECTION_NAME), 
+    collection(db, COLLECTION_NAME),
     where('memberEmails', 'array-contains', email)
   );
 
   const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    console.log('[subscribeToLists] Snapshot received with', querySnapshot.size, 'documents');
     const lists: ListDocument[] = [];
     querySnapshot.forEach((doc) => {
-      lists.push(doc.data() as ListDocument);
+      const listData = doc.data() as ListDocument;
+      console.log('[subscribeToLists] List:', doc.id, 'title:', listData.title, 'groups:', listData.groups.length, 'recipes:', listData.recipes?.length);
+      lists.push(listData);
     });
     // Sort client-side to avoid complex Firestore composite indexes for now
     lists.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    console.log('[subscribeToLists] Calling callback with', lists.length, 'lists');
     callback(lists);
   }, (error) => {
-    console.error("Error fetching lists from Firestore:", error);
+    console.error("[subscribeToLists] Error fetching lists from Firestore:", error);
   });
 
   return unsubscribe;
