@@ -76,6 +76,24 @@ The application supports both authenticated users (via Google Sign-In) and guest
 - Real-time synchronization across devices
 - Import/export functionality
 
+### 🧑‍🍳 Recipe Mode (Advanced Feature)
+- **Dual Input Modes**: Switch between "Items Mode" (default) and "Recipe Mode"
+- **Multiple Recipe Support**: Add up to 10 recipes with names, ingredients, and instructions
+- **AI Recipe Suggestions**: Get full recipe details (ingredients + instructions) from just a recipe name
+- **Smart Ingredient Combining**: Automatically merges duplicate ingredients across recipes
+  - Normalizes names to singular form ("eggs" → "egg")
+  - Sums quantities (2 eggs + 3 eggs = 5 eggs)
+  - Combines by name + unit (separate items for different units)
+- **Colored Recipe Badges**: Each item shows which recipe(s) it belongs to with color-coded labels
+- **Recipe Breakdown Modal**: View original recipes with ingredients and instructions
+- **Saved Recipes Library**: Save favorite recipes for reuse
+  - View saved recipes instantly (no AI cost)
+  - Load saved recipes into input to organize
+  - Real-time sync across devices
+- **Unit Conversion**: AI converts measurements (>1000ml → L, >1000g → kg)
+- **Copy with Recipe Context**: Copied lists include original recipe breakdown
+- **Works Offline**: Recipe mode fully functional in guest mode
+
 ### 🤝 Collaboration
 - **Shareable Links**: Copy and share lists with a single link that includes full list content + join URL
 - **Email Invitations**: Share lists with other users via email
@@ -369,11 +387,109 @@ Navigation panel for managing multiple lists.
 - Login prompt for guests
 - Responsive drawer on mobile
 - Close on outside click (mobile)
+- **Saved Recipes Section**: Collapsible list of saved recipes with:
+  - Real-time Firestore subscription
+  - View recipe button (opens modal, no AI cost)
+  - Use recipe button (loads into input for organizing)
+  - Delete recipe with confirmation
+  - RTL support for Hebrew
 
 **States**:
 - Open/closed animation
 - Loading states
 - Empty state for no lists
+- Recipe section expanded/collapsed
+
+---
+
+### RecipeInputCard.tsx
+**Location**: `components/RecipeInputCard.tsx`
+
+Advanced input interface for recipe mode with multiple recipe support.
+
+**Features**:
+- **Mode Toggle**: Switch between "Items Mode" and "Recipe Mode"
+- **Multiple Recipes**: Add up to 10 recipes per list
+- **Recipe Fields**:
+  - Recipe name input
+  - Ingredients textarea
+  - Instructions textarea (optional)
+- **AI Suggestions**:
+  - "AI Suggest" button - generates ingredients only
+  - "AI Suggest Full Recipe" button - generates ingredients + instructions
+  - Loading states during AI generation
+- **Recipe Management**:
+  - Add/remove recipe forms dynamically
+  - Save recipe button (stores to Firestore)
+  - Organize recipes button
+- **Validation**: Requires recipe name and ingredients at minimum
+- **Keyboard Shortcuts**: Cmd/Ctrl + Enter to organize
+
+**UX Details**:
+- Auto-resize textareas
+- Clear visual separation between recipes
+- Numbered recipe headers (Recipe 1, Recipe 2, etc.)
+- Loading states with spinner animations
+- Error handling for AI suggestions
+
+---
+
+### RecipeBreakdownModal.tsx
+**Location**: `components/RecipeBreakdownModal.tsx`
+
+Modal component for viewing recipe details with ingredients and instructions.
+
+**Features**:
+- **Full-screen modal** with backdrop blur
+- **Recipe display**:
+  - Numbered recipe headers with color-coded badges
+  - Ingredients section (plain text)
+  - Instructions section (plain text, shown if available)
+- **Close actions**:
+  - Close button in header
+  - Click outside to close
+  - Escape key to close
+- **Responsive design**: Max-width container, scrollable content
+- **Internationalization**: All text translated (English/Hebrew)
+
+**Used In**:
+- ResultCard.tsx - "View Recipes" button when in recipe mode
+- Sidebar.tsx - "View" button for saved recipes
+
+**Props**:
+```typescript
+{
+  isOpen: boolean;
+  onClose: () => void;
+  recipes: Recipe[];
+}
+```
+
+---
+
+### RecipeBadge.tsx
+**Location**: `components/RecipeBadge.tsx`
+
+Small colored badge component showing recipe labels on items.
+
+**Features**:
+- **Color-coded**: Each recipe gets a unique, deterministic color
+- **Compact display**: Shows recipe initials (e.g., "PS" for "Pasta Salad")
+- **Tooltip**: Hover shows full recipe name
+- **Multiple badges**: Items from multiple recipes show multiple badges
+
+**Color Generation**:
+- Uses deterministic hash of recipe name
+- Generates HSL color (varying hue, consistent saturation/lightness)
+- Same recipe always gets same color across sessions
+
+**Example**:
+```typescript
+// Item from "Pasta Salad" and "Caesar Salad"
+<RecipeBadge label={{ recipeName: "Pasta Salad", recipeId: "1" }} />
+<RecipeBadge label={{ recipeName: "Caesar Salad", recipeId: "2" }} />
+// Shows: [PS] [CS] in different colors
+```
 
 ---
 
@@ -454,6 +570,127 @@ Handles all AI interactions with OpenAI.
 
 ---
 
+**`organizeRecipes(recipes: Recipe[], language: Language)`**
+
+**Purpose**: Organize multiple recipes into a unified shopping list with smart ingredient combining
+
+**AI Model**: `gpt-4o-mini`
+
+**Parameters**:
+- `recipes`: Array of Recipe objects with name, ingredients, and instructions
+- `language`: 'en' or 'he' for output language
+
+**Process**:
+1. Sends all recipes to GPT-4o-mini
+2. AI parses ingredients from natural text
+3. AI categorizes items into logical groups
+4. AI combines duplicate ingredients across recipes
+5. AI normalizes units (>1000ml → L, >1000g → kg)
+6. Returns CategoryGroup array with recipe labels
+
+**Key Features**:
+- **Smart Combining**: Merges duplicates by name + unit
+  - "2 eggs" + "3 eggs" = "5 eggs"
+  - Normalizes to singular form ("eggs" → "egg")
+  - Separate items for different units (1L milk ≠ 100ml milk)
+- **Recipe Tracking**: Each item tagged with source recipe(s)
+- **Unit Conversion**: Automatic conversion of large quantities
+- **Category Organization**: Groups ingredients logically (Produce, Dairy, etc.)
+
+**Output Format**:
+```json
+{
+  "categories": [
+    {
+      "category": "Produce",
+      "items": [
+        {
+          "name": "tomato",
+          "amount": 4,
+          "unit": "pcs",
+          "recipeLabels": [
+            {"recipeName": "Pasta Sauce", "recipeId": "1"},
+            {"recipeName": "Greek Salad", "recipeId": "2"}
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+**`suggestRecipeIngredients(recipeName: string, language: Language)`**
+
+**Purpose**: Generate ingredient list from recipe name
+
+**AI Model**: `gpt-4o-mini`
+
+**Parameters**:
+- `recipeName`: Name of recipe (e.g., "Chocolate Chip Cookies")
+- `language`: Output language
+
+**Process**:
+1. Sends recipe name to GPT-4o-mini
+2. AI generates typical ingredients with quantities
+3. Returns formatted ingredient list
+
+**Output**: String with ingredients (e.g., "2 eggs, 100g flour, 1 cup milk...")
+
+**Use Case**: Quick recipe creation without manual ingredient entry
+
+---
+
+**`suggestFullRecipe(recipeName: string, language: Language)`**
+
+**Purpose**: Generate complete recipe with ingredients and instructions
+
+**AI Model**: `gpt-4o-mini`
+
+**Parameters**:
+- `recipeName`: Name of recipe
+- `language`: Output language
+
+**Process**:
+1. Sends recipe name to GPT-4o-mini
+2. AI generates ingredients with quantities
+3. AI generates step-by-step instructions
+4. Returns both as formatted text
+
+**Output**:
+```typescript
+{
+  ingredients: "2 eggs, 100g flour...",
+  instructions: "Step 1: Mix ingredients...\nStep 2: Bake for 30 minutes..."
+}
+```
+
+**Use Case**: Full recipe creation with minimal user input
+
+---
+
+**`generateRecipeColor(recipeName: string)`**
+
+**Purpose**: Generate consistent color for recipe badges
+
+**Algorithm**: Deterministic hash-based color generation
+
+**Process**:
+1. Creates simple hash from recipe name
+2. Converts hash to hue value (0-360)
+3. Returns HSL color with fixed saturation and lightness
+4. Same recipe name always produces same color
+
+**Output**: HSL color string (e.g., "hsl(240, 70%, 60%)")
+
+**Features**:
+- Deterministic: Same recipe = same color every time
+- Visually distinct: Good color separation between recipes
+- Consistent across sessions and devices
+
+---
+
 ### services/firestoreService.ts
 **Location**: `services/firestoreService.ts`
 
@@ -469,10 +706,26 @@ Manages all Firestore database operations.
 - Sets timestamps (createdAt, updatedAt)
 - Returns newly created list ID
 
+**`createListWithRecipes(title, ownerId, ownerEmail, groups, recipes, mode)`**
+- **Purpose**: Creates list with recipes atomically (fixes race condition)
+- Creates new list document with recipes and groups in one operation
+- Prevents empty list appearing in UI before recipes are added
+- Sets `inputMode` to 'recipe'
+- Sets timestamps (createdAt, updatedAt)
+- Returns newly created list ID
+
+**Use Case**: Used when organizing recipes to avoid race condition where Firestore subscription fires with empty list data before recipes are added
+
 **`updateListGroups(listId, groups)`**
 - Updates list categories and items
 - Updates `updatedAt` timestamp
 - Used when adding/removing items or categories
+
+**`updateListGroupsAndRecipes(listId, groups, recipes, mode)`**
+- Updates list with both groups and recipes
+- Sets `inputMode` field
+- Used when adding recipes to existing lists
+- Updates `updatedAt` timestamp
 
 **`updateListTitle(listId, title)`**
 - Renames list
@@ -500,6 +753,39 @@ Manages all Firestore database operations.
 - Uses `arrayUnion` to prevent duplicates
 - Throws specific errors for "not-found" and "permission-denied" cases
 - Returns listId on success
+
+#### Saved Recipes Functions
+
+**`saveRecipe(userId, recipe)`**
+- Saves recipe to user's personal recipe library
+- Stores in `savedRecipes` subcollection under user document
+- Generates unique recipe ID
+- Sets timestamp
+- Returns saved recipe ID
+
+**`subscribeToSavedRecipes(userId, callback)`**
+- Real-time subscription to user's saved recipes
+- Listens to `savedRecipes` subcollection
+- Calls callback with updated recipes array on any change
+- Returns unsubscribe function for cleanup
+
+**`deleteSavedRecipe(userId, recipeId)`**
+- Permanently removes saved recipe from user's library
+- Deletes document from `savedRecipes` subcollection
+- No undo functionality
+
+**Firestore Structure**:
+```
+users/
+  {userId}/
+    savedRecipes/
+      {recipeId}:
+        id: string
+        name: string
+        ingredients: string
+        instructions: string
+        createdAt: timestamp
+```
 
 **Firestore Security Rules** (Configure in Firebase Console):
 ```javascript
@@ -621,6 +907,7 @@ interface Item {
   checked: boolean;        // Completion status
   amount: number;          // Quantity (default: 1)
   unit: Unit;             // 'pcs' | 'g' | 'kg' | 'L' | 'ml'
+  recipeLabels?: RecipeLabel[];  // NEW: Tags showing which recipe(s) this item belongs to
 }
 ```
 
@@ -645,6 +932,8 @@ interface ListDocument {
   ownerId: string;         // Creator's Firebase UID
   memberEmails: string[];  // Shared with users (includes owner)
   groups: CategoryGroup[]; // Organized categories
+  recipes?: Recipe[];      // NEW: Original recipes (if inputMode is 'recipe')
+  inputMode?: InputMode;   // NEW: 'items' or 'recipe'
   createdAt?: number;      // Unix timestamp
   updatedAt?: number;      // Unix timestamp
 }
@@ -669,6 +958,50 @@ type OrganizeStatus = 'idle' | 'loading' | 'success' | 'error';
 ```typescript
 type Language = 'en' | 'he';
 ```
+
+#### Recipe (NEW)
+```typescript
+interface Recipe {
+  id: string;              // UUID v4
+  name: string;            // Recipe name (e.g., "Pasta Carbonara")
+  ingredients: string;     // Ingredient list as text
+  instructions?: string;   // Optional cooking instructions
+}
+```
+
+**Purpose**: Represents a recipe with ingredients and optional instructions. Used in recipe mode to store original recipes before they're combined into a shopping list.
+
+#### RecipeLabel (NEW)
+```typescript
+interface RecipeLabel {
+  recipeName: string;      // Full recipe name
+  recipeId: string;        // Reference to recipe ID
+}
+```
+
+**Purpose**: Tags on items showing which recipe(s) they belong to. Multiple labels indicate item is shared across recipes.
+
+#### SavedRecipe (NEW)
+```typescript
+interface SavedRecipe {
+  id: string;              // Firestore document ID
+  name: string;            // Recipe name
+  ingredients: string;     // Ingredient list as text
+  instructions?: string;   // Optional cooking instructions
+  createdAt?: number;      // Unix timestamp
+}
+```
+
+**Purpose**: Represents a recipe saved to user's personal library. Stored in Firestore `users/{userId}/savedRecipes/{recipeId}` collection.
+
+#### InputMode (NEW)
+```typescript
+type InputMode = 'items' | 'recipe';
+```
+
+**Purpose**: Determines the input interface and list organization behavior:
+- `'items'`: Standard mode for unstructured text lists
+- `'recipe'`: Recipe mode with multiple recipe support and ingredient combining
 
 ---
 
