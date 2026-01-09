@@ -444,18 +444,34 @@ const App: React.FC = () => {
     // Switch to recipe mode
     setInputMode('recipe');
 
-    // Load the recipe into the recipes state
-    setRecipes([{
-      id: savedRecipe.id,
-      name: savedRecipe.name,
-      ingredients: savedRecipe.ingredients,
-      instructions: savedRecipe.instructions
-    }]);
+    // Append to existing recipes (max 10)
+    setRecipes(prevRecipes => {
+      // Check if we've reached the limit
+      if (prevRecipes.length >= 10) {
+        alert(language === 'he'
+          ? 'הגעת למקסימום של 10 מתכונים. אנא ארגן את המתכונים הנוכחיים תחילה.'
+          : 'You have reached the maximum of 10 recipes. Please organize the current recipes first.');
+        return prevRecipes;
+      }
 
-    // Clear any active list to start fresh
-    setActiveListId(null);
-    setLocalGroups([]);
-    setStatus('idle');
+      // If this is the first recipe, clear the active list/groups to start fresh
+      if (prevRecipes.length === 0) {
+        setActiveListId(null);
+        setLocalGroups([]);
+        setStatus('idle');
+      }
+
+      // Append the new recipe with a fresh ID
+      return [
+        ...prevRecipes,
+        {
+          id: crypto.randomUUID(), // Generate new unique ID
+          name: savedRecipe.name,
+          ingredients: savedRecipe.ingredients,
+          instructions: savedRecipe.instructions
+        }
+      ];
+    });
   };
 
   const LegalModal = () => (
