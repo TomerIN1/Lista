@@ -7,6 +7,7 @@ export interface Recipe {
   name: string;
   ingredients: string;
   instructions?: string; // Optional cooking instructions
+  originalSavedRecipeId?: string; // Tracks which saved recipe this came from (for update vs save as new)
 }
 
 export interface SavedRecipe extends Recipe {

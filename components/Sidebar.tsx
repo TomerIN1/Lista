@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ListDocument, UserProfile, SavedRecipe } from '../types';
 import { Plus, List, Trash2, Layout, Lock, ChefHat, ChevronDown, ChevronRight, ChevronLeft, Eye, PenLine } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { subscribeToSavedRecipes, deleteSavedRecipe } from '../services/firestoreService';
+import { subscribeToSavedRecipes, deleteSavedRecipe, updateSavedRecipe } from '../services/firestoreService';
 import RecipeBreakdownModal from './RecipeBreakdownModal';
 
 interface SidebarProps {
@@ -78,6 +78,18 @@ const Sidebar: React.FC<SidebarProps> = ({
   const handleUseRecipe = (recipe: SavedRecipe) => {
     onLoadRecipe(recipe);
     setIsOpen(false);
+  };
+
+  const handleUpdateRecipe = async (recipeId: string, updates: Partial<SavedRecipe>) => {
+    if (!user) return;
+
+    try {
+      await updateSavedRecipe(user.uid, recipeId, updates);
+      // The subscription will automatically update the UI
+    } catch (error) {
+      console.error('Error updating recipe:', error);
+      throw error; // Re-throw to let the modal handle the error
+    }
   };
 
   return (
@@ -277,6 +289,8 @@ const Sidebar: React.FC<SidebarProps> = ({
           isOpen={!!viewingRecipe}
           onClose={() => setViewingRecipe(null)}
           recipes={[viewingRecipe]}
+          canEdit={true}
+          onUpdate={handleUpdateRecipe}
         />
       )}
     </>

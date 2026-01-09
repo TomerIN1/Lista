@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
-import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary } from './services/firestoreService';
+import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
 
 import Header from './components/Header';
@@ -461,14 +461,15 @@ const App: React.FC = () => {
         setStatus('idle');
       }
 
-      // Append the new recipe with a fresh ID
+      // Append the new recipe with a fresh ID, tracking the original saved recipe ID
       return [
         ...prevRecipes,
         {
-          id: crypto.randomUUID(), // Generate new unique ID
+          id: crypto.randomUUID(), // Generate new unique ID for the working copy
           name: savedRecipe.name,
           ingredients: savedRecipe.ingredients,
-          instructions: savedRecipe.instructions
+          instructions: savedRecipe.instructions,
+          originalSavedRecipeId: savedRecipe.id // Track where this came from
         }
       ];
     });
@@ -559,11 +560,14 @@ const App: React.FC = () => {
                     }
 
                     try {
+                      // Check if we need to update or save as new
+                      // If recipe.id matches a saved recipe ID, it's an update
                       await saveRecipeToLibrary(user.uid, recipe);
                       // Success feedback is handled by RecipeInputCard
                     } catch (error) {
                       console.error('Error saving recipe:', error);
                       // Error feedback is handled by RecipeInputCard
+                      throw error;
                     }
                   }}
                   onReset={() => {

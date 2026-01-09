@@ -75,17 +75,49 @@ const RecipeInputCard: React.FC<RecipeInputCardProps> = ({
       return;
     }
 
-    setIsSaving(true);
-    try {
-      await onSave(recipe);
-      // Show success feedback
-      setSuggestionError(language === 'he' ? 'נשמר בהצלחה!' : 'Saved successfully!');
-      setTimeout(() => setSuggestionError(null), 2000);
-    } catch (error) {
-      setSuggestionError(language === 'he' ? 'שגיאה בשמירה' : 'Error saving recipe');
-      setTimeout(() => setSuggestionError(null), 3000);
-    } finally {
-      setIsSaving(false);
+    // If this recipe came from a saved recipe, ask user if they want to update or save as new
+    if (recipe.originalSavedRecipeId) {
+      const updateMessage = language === 'he'
+        ? 'האם לעדכן את המתכון השמור או לשמור כמתכון חדש?'
+        : 'Update the existing saved recipe or save as a new recipe?';
+
+      const updateButton = language === 'he' ? 'עדכן את המתכון הקיים' : 'Update existing recipe';
+      const saveNewButton = language === 'he' ? 'שמור כמתכון חדש' : 'Save as new recipe';
+
+      const shouldUpdate = window.confirm(`${updateMessage}\n\nOK = ${updateButton}\nCancel = ${saveNewButton}`);
+
+      setIsSaving(true);
+      try {
+        if (shouldUpdate) {
+          // Update the existing saved recipe with the current ID
+          await onSave({ ...recipe, id: recipe.originalSavedRecipeId });
+          setSuggestionError(language === 'he' ? 'המתכון עודכן בהצלחה!' : 'Recipe updated successfully!');
+        } else {
+          // Save as a new recipe (remove originalSavedRecipeId to ensure it's saved as new)
+          const { originalSavedRecipeId, ...recipeWithoutOriginal } = recipe;
+          await onSave({ ...recipeWithoutOriginal, id: crypto.randomUUID() });
+          setSuggestionError(language === 'he' ? 'נשמר כמתכון חדש!' : 'Saved as new recipe!');
+        }
+        setTimeout(() => setSuggestionError(null), 2000);
+      } catch (error) {
+        setSuggestionError(language === 'he' ? 'שגיאה בשמירה' : 'Error saving recipe');
+        setTimeout(() => setSuggestionError(null), 3000);
+      } finally {
+        setIsSaving(false);
+      }
+    } else {
+      // Normal save for new recipes
+      setIsSaving(true);
+      try {
+        await onSave(recipe);
+        setSuggestionError(language === 'he' ? 'נשמר בהצלחה!' : 'Saved successfully!');
+        setTimeout(() => setSuggestionError(null), 2000);
+      } catch (error) {
+        setSuggestionError(language === 'he' ? 'שגיאה בשמירה' : 'Error saving recipe');
+        setTimeout(() => setSuggestionError(null), 3000);
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 

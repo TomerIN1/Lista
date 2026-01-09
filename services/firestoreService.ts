@@ -1,15 +1,15 @@
 import { db } from '../firebase';
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  onSnapshot, 
-  arrayUnion, 
-  getDoc
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  onSnapshot,
+  arrayUnion
 } from 'firebase/firestore';
 import { ListDocument, CategoryGroup, Recipe, InputMode, SavedRecipe } from '../types';
 
@@ -194,11 +194,15 @@ export const saveRecipeToLibrary = async (
   const recipeId = recipe.id || crypto.randomUUID();
   const recipeRef = doc(db, 'users', userId, 'saved_recipes', recipeId);
 
+  // Check if recipe already exists to preserve createdAt
+  const existingDoc = await getDoc(recipeRef);
+  const existingData = existingDoc.exists() ? existingDoc.data() as SavedRecipe : null;
+
   const savedRecipe: SavedRecipe = {
     ...recipe,
     id: recipeId,
     userId,
-    createdAt: Date.now(),
+    createdAt: existingData?.createdAt || Date.now(), // Preserve original createdAt on updates
     updatedAt: Date.now()
   };
 
