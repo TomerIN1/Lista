@@ -33,6 +33,23 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
   const [editedName, setEditedName] = useState(group.category);
   const { t } = useLanguage();
 
+  // Build a map of existing recipe colors from all items in this group
+  const getRecipeColors = (): Map<string, string> => {
+    const colorMap = new Map<string, string>();
+    group.items.forEach(item => {
+      if (item.recipeLabels) {
+        item.recipeLabels.forEach(label => {
+          if (!colorMap.has(label.recipeId)) {
+            colorMap.set(label.recipeId, label.color);
+          }
+        });
+      }
+    });
+    return colorMap;
+  };
+
+  const recipeColorMap = getRecipeColors();
+
   const handleAddItemSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newItemName.trim()) {
@@ -200,6 +217,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
               key={item.id}
               item={item}
               recipes={recipes}
+              recipeColorMap={recipeColorMap}
               onToggle={() => onUpdateItem(item.id, { checked: !item.checked })}
               onUpdate={(changes) => onUpdateItem(item.id, changes)}
               onDelete={() => onDeleteItem(item.id)}

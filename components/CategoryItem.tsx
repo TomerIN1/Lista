@@ -7,6 +7,7 @@ import RecipeBadge from './RecipeBadge';
 interface CategoryItemProps {
   item: Item;
   recipes?: Recipe[];
+  recipeColorMap: Map<string, string>;
   onToggle: () => void;
   onUpdate: (changes: Partial<Item>) => void;
   onDelete: () => void;
@@ -14,12 +15,19 @@ interface CategoryItemProps {
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
-const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], onToggle, onUpdate, onDelete }) => {
+const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], recipeColorMap, onToggle, onUpdate, onDelete }) => {
   const { tUnit } = useLanguage();
   const [showRecipeMenu, setShowRecipeMenu] = useState(false);
 
-  // Helper function to generate color for recipe (same as in geminiService)
+  // Helper function to get recipe color - use existing color or generate new one
   const getRecipeColor = (recipeId: string) => {
+    // First, check if we have an existing color for this recipe
+    const existingColor = recipeColorMap.get(recipeId);
+    if (existingColor) {
+      return existingColor;
+    }
+
+    // If not, generate a new color (fallback)
     const colors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316'];
     const index = parseInt(recipeId.slice(-8), 16) % colors.length;
     return colors[index];
