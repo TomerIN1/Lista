@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { CategoryGroup, Item } from '../types';
+import { CategoryGroup, Item, Recipe, RecipeLabel } from '../types';
 import CategoryItem from './CategoryItem';
+import RecipeBadge from './RecipeBadge';
 import { Trash2, Plus, UserCheck, Pencil } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface CategoryCardProps {
   group: CategoryGroup;
   members: string[];
+  recipes?: Recipe[];
   onDeleteCategory: () => void;
-  onAddItem: (name: string) => void;
+  onAddItem: (name: string, recipeLabels?: RecipeLabel[]) => void;
   onUpdateItem: (itemId: string, changes: Partial<Item>) => void;
   onDeleteItem: (itemId: string) => void;
   onAssignCategory: (assignedTo: string | undefined) => void;
@@ -18,6 +20,7 @@ interface CategoryCardProps {
 const CategoryCard: React.FC<CategoryCardProps> = ({
   group,
   members,
+  recipes = [],
   onDeleteCategory,
   onAddItem,
   onUpdateItem,
@@ -29,14 +32,41 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
   const [showAssignMenu, setShowAssignMenu] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(group.category);
+  const [selectedRecipeIds, setSelectedRecipeIds] = useState<string[]>([]);
   const { t } = useLanguage();
+
+  // Helper function to generate color for recipe (same as in geminiService)
+  const getRecipeColor = (recipeId: string) => {
+    const colors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316'];
+    const index = parseInt(recipeId.slice(-8), 16) % colors.length;
+    return colors[index];
+  };
 
   const handleAddItemSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newItemName.trim()) {
-      onAddItem(newItemName.trim());
+      // Create recipe labels from selected recipes
+      const recipeLabels: RecipeLabel[] = selectedRecipeIds.map(recipeId => {
+        const recipe = recipes.find(r => r.id === recipeId);
+        return {
+          recipeId,
+          recipeName: recipe?.name || '',
+          color: getRecipeColor(recipeId)
+        };
+      });
+
+      onAddItem(newItemName.trim(), recipeLabels.length > 0 ? recipeLabels : undefined);
       setNewItemName('');
+      setSelectedRecipeIds([]); // Clear selection after adding
     }
+  };
+
+  const toggleRecipeSelection = (recipeId: string) => {
+    setSelectedRecipeIds(prev =>
+      prev.includes(recipeId)
+        ? prev.filter(id => id !== recipeId)
+        : [...prev, recipeId]
+    );
   };
 
   const handleNameEdit = () => {
@@ -212,6 +242,34 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
 
       {/* Add Item Footer */}
       <div className="p-3 mt-auto">
+        {/* Recipe Selection (only show if recipes exist) */}
+        {recipes.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {recipes.map(recipe => {
+              const isSelected = selectedRecipeIds.includes(recipe.id);
+              const recipeLabel: RecipeLabel = {
+                recipeId: recipe.id,
+                recipeName: recipe.name,
+                color: getRecipeColor(recipe.id)
+              };
+
+              return (
+                <button
+                  key={recipe.id}
+                  type="button"
+                  onClick={() => toggleRecipeSelection(recipe.id)}
+                  className={`transition-all ${
+                    isSelected ? 'opacity-100 scale-100' : 'opacity-50 hover:opacity-75 scale-95'
+                  }`}
+                  title={`${isSelected ? 'Remove' : 'Add'} ${recipe.name} label`}
+                >
+                  <RecipeBadge label={recipeLabel} size="sm" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <form onSubmit={handleAddItemSubmit} className="relative flex items-center group/input">
           <input
             type="text"
