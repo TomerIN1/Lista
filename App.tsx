@@ -475,6 +475,24 @@ const App: React.FC = () => {
     });
   };
 
+  const handleCreateRecipe = () => {
+    // Switch to recipe mode
+    setInputMode('recipe');
+
+    // Clear active list and start fresh
+    setActiveListId(null);
+    setLocalGroups([]);
+    setStatus('idle');
+
+    // Initialize with one empty recipe
+    setRecipes([{
+      id: crypto.randomUUID(),
+      name: '',
+      ingredients: '',
+      instructions: ''
+    }]);
+  };
+
   const LegalModal = () => (
     <InfoModal 
       isOpen={!!activeLegalDoc}
@@ -497,6 +515,7 @@ const App: React.FC = () => {
         user={user}
         onLogin={handleLogin}
         onLoadRecipe={handleLoadRecipe}
+        onCreateRecipe={handleCreateRecipe}
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative scroll-smooth">

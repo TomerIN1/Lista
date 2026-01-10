@@ -69,6 +69,7 @@ export const TRANSLATIONS = {
       loginDesc: "Sign in to save and manage your lists across devices.",
       savedRecipes: "Saved Recipes",
       noSavedRecipes: "No saved recipes yet",
+      createNewRecipe: "Create New Recipe",
       viewRecipe: "View",
       useRecipe: "Use",
       deleteRecipeConfirm: "Are you sure you want to delete this recipe?"
@@ -181,6 +182,7 @@ export const TRANSLATIONS = {
       loginDesc: "התחבר כדי לשמור ולנהל את הרשימות שלך מכל מכשיר.",
       savedRecipes: "המתכונים השמורים",
       noSavedRecipes: "אין עדיין מתכונים שמורים",
+      createNewRecipe: "צור מתכון חדש",
       viewRecipe: "צפה",
       useRecipe: "השתמש",
       deleteRecipeConfirm: "האם אתה בטוח שברצונך למחוק מתכון זה?"

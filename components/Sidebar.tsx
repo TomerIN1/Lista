@@ -16,6 +16,7 @@ interface SidebarProps {
   user: UserProfile | null;
   onLogin: () => void;
   onLoadRecipe: (recipe: SavedRecipe) => void;
+  onCreateRecipe: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -28,7 +29,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   setIsOpen,
   user,
   onLogin,
-  onLoadRecipe
+  onLoadRecipe,
+  onCreateRecipe
 }) => {
   const { t, isRTL } = useLanguage();
   const [savedRecipes, setSavedRecipes] = useState<SavedRecipe[]>([]);
@@ -199,8 +201,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 ))}
 
-                {/* Saved Recipes Section */}
-                {savedRecipes.length > 0 && (
+                {/* Saved Recipes Section - Always visible for logged in users */}
+                {user && (
                   <div className="mt-6 pt-4 border-t border-slate-200">
                     <button
                       onClick={() => setRecipesExpanded(!recipesExpanded)}
@@ -237,6 +239,27 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                     {recipesExpanded && (
                       <div className="mt-2 space-y-1">
+                        {/* Create New Recipe Button */}
+                        <button
+                          onClick={() => {
+                            onCreateRecipe();
+                            setIsOpen(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-emerald-200 text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 transition-all group"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:bg-white transition-colors">
+                            <Plus className="w-4 h-4" />
+                          </div>
+                          <span className="font-medium text-sm">{t('sidebar.createNewRecipe')}</span>
+                        </button>
+
+                        {savedRecipes.length === 0 && (
+                          <div className="text-center py-4 text-xs text-slate-400">
+                            {t('sidebar.noSavedRecipes')}
+                          </div>
+                        )}
+
+                        {/* Saved Recipe Cards */}
                         {savedRecipes.map(recipe => (
                           <div
                             key={recipe.id}
