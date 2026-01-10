@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CategoryGroup, Item, Recipe, InputMode, RecipeLabel } from '../types';
+import { CategoryGroup, Item, Recipe, InputMode } from '../types';
 import CategoryCard from './CategoryCard';
 import RecipeBreakdownModal from './RecipeBreakdownModal';
 import { Check, Copy, Trash2, Lock, ChefHat, Pencil, Eye } from 'lucide-react';
@@ -118,16 +118,15 @@ const ResultCard: React.FC<ResultCardProps> = ({
     onUpdateList(newGroups);
   };
 
-  const handleAddItem = (groupId: string, name: string, recipeLabels?: RecipeLabel[]) => {
+  const handleAddItem = (groupId: string, name: string) => {
     const newItem: Item = {
       id: crypto.randomUUID(),
       name,
       checked: false,
       amount: 1,
-      unit: 'pcs',
-      recipeLabels
+      unit: 'pcs'
     };
-
+    
     const newGroups = groups.map(g => {
       if (g.id === groupId) {
         return { ...g, items: [...g.items, newItem] };
@@ -314,10 +313,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
             key={group.id}
             group={group}
             members={members}
-            recipes={recipes}
             onDeleteCategory={() => handleDeleteCategory(group.id)}
             onRenameCategory={(newName) => handleRenameCategory(group.id, newName)}
-            onAddItem={(name, recipeLabels) => handleAddItem(group.id, name, recipeLabels)}
+            onAddItem={(name) => handleAddItem(group.id, name)}
             onUpdateItem={(itemId, changes) => handleUpdateItem(group.id, itemId, changes)}
             onDeleteItem={(itemId) => handleDeleteItem(group.id, itemId)}
             onAssignCategory={(assignedTo) => handleAssignCategory(group.id, assignedTo)}
