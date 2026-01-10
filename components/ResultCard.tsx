@@ -313,6 +313,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
             key={group.id}
             group={group}
             members={members}
+            recipes={recipes}
             onDeleteCategory={() => handleDeleteCategory(group.id)}
             onRenameCategory={(newName) => handleRenameCategory(group.id, newName)}
             onAddItem={(name) => handleAddItem(group.id, name)}

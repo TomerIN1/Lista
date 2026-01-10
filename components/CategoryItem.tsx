@@ -1,11 +1,12 @@
-import React from 'react';
-import { Item, Unit } from '../types';
-import { X, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { Item, Unit, Recipe, RecipeLabel } from '../types';
+import { X, Check, Tag } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import RecipeBadge from './RecipeBadge';
 
 interface CategoryItemProps {
   item: Item;
+  recipes?: Recipe[];
   onToggle: () => void;
   onUpdate: (changes: Partial<Item>) => void;
   onDelete: () => void;
@@ -13,8 +14,41 @@ interface CategoryItemProps {
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
-const CategoryItem: React.FC<CategoryItemProps> = ({ item, onToggle, onUpdate, onDelete }) => {
+const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], onToggle, onUpdate, onDelete }) => {
   const { tUnit } = useLanguage();
+  const [showRecipeMenu, setShowRecipeMenu] = useState(false);
+
+  // Helper function to generate color for recipe (same as in geminiService)
+  const getRecipeColor = (recipeId: string) => {
+    const colors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316'];
+    const index = parseInt(recipeId.slice(-8), 16) % colors.length;
+    return colors[index];
+  };
+
+  const toggleRecipeLabel = (recipe: Recipe) => {
+    const currentLabels = item.recipeLabels || [];
+    const existingIndex = currentLabels.findIndex(label => label.recipeId === recipe.id);
+
+    let newLabels: RecipeLabel[];
+    if (existingIndex >= 0) {
+      // Remove the label
+      newLabels = currentLabels.filter((_, i) => i !== existingIndex);
+    } else {
+      // Add the label
+      const newLabel: RecipeLabel = {
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        color: getRecipeColor(recipe.id)
+      };
+      newLabels = [...currentLabels, newLabel];
+    }
+
+    onUpdate({ recipeLabels: newLabels.length > 0 ? newLabels : undefined });
+  };
+
+  const hasRecipeLabel = (recipeId: string) => {
+    return item.recipeLabels?.some(label => label.recipeId === recipeId) || false;
+  };
 
   return (
     <div 
@@ -91,6 +125,66 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ item, onToggle, onUpdate, o
         </div>
 
         <div className="w-px h-4 bg-slate-200 mx-1" />
+
+        {/* Recipe Labels Button (only show if recipes exist) */}
+        {recipes.length > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setShowRecipeMenu(!showRecipeMenu)}
+              className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
+                item.recipeLabels && item.recipeLabels.length > 0
+                  ? 'text-emerald-600 bg-emerald-50'
+                  : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+              }`}
+              title="Add recipe labels"
+            >
+              <Tag className="w-3.5 h-3.5" />
+            </button>
+
+            {showRecipeMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowRecipeMenu(false)}
+                />
+                <div className="absolute right-0 rtl:right-auto rtl:left-0 top-full mt-2 z-20 bg-white rounded-xl shadow-lg border border-slate-100 py-2 min-w-[200px] max-h-[300px] overflow-y-auto">
+                  <div className="px-3 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Select Recipes
+                  </div>
+                  {recipes.map((recipe) => {
+                    const isSelected = hasRecipeLabel(recipe.id);
+                    const recipeLabel: RecipeLabel = {
+                      recipeId: recipe.id,
+                      recipeName: recipe.name,
+                      color: getRecipeColor(recipe.id)
+                    };
+
+                    return (
+                      <button
+                        key={recipe.id}
+                        onClick={() => toggleRecipeLabel(recipe)}
+                        className={`w-full px-3 py-2 text-left text-sm transition-colors flex items-center gap-2 ${
+                          isSelected
+                            ? 'bg-emerald-50'
+                            : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                          isSelected
+                            ? 'bg-emerald-500 border-emerald-500'
+                            : 'border-slate-300'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                        </div>
+                        <RecipeBadge label={recipeLabel} size="sm" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Delete Item */}
         <button

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CategoryGroup, Item } from '../types';
+import { CategoryGroup, Item, Recipe } from '../types';
 import CategoryItem from './CategoryItem';
 import { Trash2, Plus, UserCheck, Pencil } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -7,6 +7,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 interface CategoryCardProps {
   group: CategoryGroup;
   members: string[];
+  recipes?: Recipe[];
   onDeleteCategory: () => void;
   onAddItem: (name: string) => void;
   onUpdateItem: (itemId: string, changes: Partial<Item>) => void;
@@ -18,6 +19,7 @@ interface CategoryCardProps {
 const CategoryCard: React.FC<CategoryCardProps> = ({
   group,
   members,
+  recipes = [],
   onDeleteCategory,
   onAddItem,
   onUpdateItem,
@@ -197,6 +199,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
             <CategoryItem
               key={item.id}
               item={item}
+              recipes={recipes}
               onToggle={() => onUpdateItem(item.id, { checked: !item.checked })}
               onUpdate={(changes) => onUpdateItem(item.id, changes)}
               onDelete={() => onDeleteItem(item.id)}
