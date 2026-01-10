@@ -89,6 +89,27 @@ const RecipeInputCard: React.FC<RecipeInputCardProps> = ({
     }
   };
 
+  const handleSaveNewRecipe = async () => {
+    if (!recipe.name.trim() || !recipe.ingredients.trim()) {
+      setSuggestionError(language === 'he' ? 'אנא הזן שם ומרכיבים' : 'Please enter name and ingredients');
+      setTimeout(() => setSuggestionError(null), 3000);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Save as a new recipe
+      await onSave(recipe);
+      setSuggestionError(language === 'he' ? 'המתכון נשמר בהצלחה!' : 'Recipe saved successfully!');
+      setTimeout(() => setSuggestionError(null), 2000);
+    } catch (error) {
+      setSuggestionError(language === 'he' ? 'שגיאה בשמירה' : 'Error saving recipe');
+      setTimeout(() => setSuggestionError(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div
       className="relative bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 space-y-3"
@@ -190,23 +211,37 @@ const RecipeInputCard: React.FC<RecipeInputCardProps> = ({
         />
       </div>
 
-      {/* Update Recipe Button (only for loaded saved recipes) */}
-      {recipe.originalSavedRecipeId && isLoggedIn && (
-        <button
-          type="button"
-          onClick={handleUpdateRecipe}
-          disabled={isLoading || isSuggesting || isSaving}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-        >
-          <Star className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
-          <span>{isSaving ? t('input.updatingRecipe') : t('input.updateRecipe')}</span>
-        </button>
+      {/* Save or Update Recipe Button */}
+      {isLoggedIn && (
+        recipe.originalSavedRecipeId ? (
+          // Update Recipe Button (for loaded saved recipes)
+          <button
+            type="button"
+            onClick={handleUpdateRecipe}
+            disabled={isLoading || isSuggesting || isSaving}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          >
+            <Star className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+            <span>{isSaving ? t('input.updatingRecipe') : t('input.updateRecipe')}</span>
+          </button>
+        ) : (
+          // Save Recipe Button (for new recipes)
+          <button
+            type="button"
+            onClick={handleSaveNewRecipe}
+            disabled={isLoading || isSuggesting || isSaving}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          >
+            <Star className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+            <span>{isSaving ? (language === 'he' ? 'שומר...' : 'Saving...') : t('input.saveRecipe')}</span>
+          </button>
+        )
       )}
 
       {/* Error/Success message */}
       {suggestionError && (
         <div className={`mt-2 text-xs px-3 py-2 rounded-lg border ${
-          suggestionError.includes('success') || suggestionError.includes('הצלחה') || suggestionError.includes('עודכן')
+          suggestionError.includes('success') || suggestionError.includes('הצלחה') || suggestionError.includes('עודכן') || suggestionError.includes('נשמר')
             ? 'text-emerald-600 bg-emerald-50 border-emerald-100'
             : 'text-red-600 bg-red-50 border-red-100'
         }`}>
