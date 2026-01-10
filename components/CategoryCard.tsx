@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CategoryGroup, Item } from '../types';
 import CategoryItem from './CategoryItem';
-import { Trash2, Plus, UserCheck } from 'lucide-react';
+import { Trash2, Plus, UserCheck, Pencil } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface CategoryCardProps {
@@ -12,6 +12,7 @@ interface CategoryCardProps {
   onUpdateItem: (itemId: string, changes: Partial<Item>) => void;
   onDeleteItem: (itemId: string) => void;
   onAssignCategory: (assignedTo: string | undefined) => void;
+  onRenameCategory: (newName: string) => void;
 }
 
 const CategoryCard: React.FC<CategoryCardProps> = ({
@@ -21,10 +22,13 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
   onAddItem,
   onUpdateItem,
   onDeleteItem,
-  onAssignCategory
+  onAssignCategory,
+  onRenameCategory
 }) => {
   const [newItemName, setNewItemName] = useState('');
   const [showAssignMenu, setShowAssignMenu] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(group.category);
   const { t } = useLanguage();
 
   const handleAddItemSubmit = (e: React.FormEvent) => {
@@ -32,6 +36,28 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
     if (newItemName.trim()) {
       onAddItem(newItemName.trim());
       setNewItemName('');
+    }
+  };
+
+  const handleNameEdit = () => {
+    setEditedName(group.category);
+    setIsEditingName(true);
+  };
+
+  const handleNameSave = () => {
+    const newName = editedName.trim();
+    if (newName && newName !== group.category) {
+      onRenameCategory(newName);
+    }
+    setIsEditingName(false);
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleNameSave();
+    } else if (e.key === 'Escape') {
+      setIsEditingName(false);
+      setEditedName(group.category);
     }
   };
 
@@ -54,7 +80,31 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
              )}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-lg text-slate-800 leading-tight font-display truncate">{group.category}</h3>
+            {isEditingName ? (
+              <input
+                type="text"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                onKeyDown={handleNameKeyDown}
+                onBlur={handleNameSave}
+                autoFocus
+                enterKeyHint="done"
+                className="font-bold text-lg text-slate-800 leading-tight font-display bg-transparent border-b-2 border-indigo-500 focus:outline-none w-full"
+              />
+            ) : (
+              <div className="flex items-center gap-2 group/name">
+                <h3 className="font-bold text-lg text-slate-800 leading-tight font-display truncate">
+                  {group.category}
+                </h3>
+                <button
+                  onClick={handleNameEdit}
+                  className="opacity-0 group-hover/name:opacity-100 transition-opacity p-1 hover:bg-slate-100 rounded-lg"
+                  title="Rename category"
+                >
+                  <Pencil className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600" />
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
                 {group.items.length} {group.items.length === 1 ? 'item' : 'items'}

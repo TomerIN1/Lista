@@ -96,6 +96,17 @@ const ResultCard: React.FC<ResultCardProps> = ({
     onUpdateList(newGroups);
   };
 
+  const handleRenameCategory = (groupId: string, newName: string) => {
+    const newGroups = groups.map(g => {
+      if (g.id === groupId) {
+        return { ...g, category: newName };
+      }
+      return g;
+    });
+    setGroups(newGroups);
+    onUpdateList(newGroups);
+  };
+
   const handleAssignCategory = (groupId: string, assignedTo: string | undefined) => {
     const newGroups = groups.map(g => {
       if (g.id === groupId) {
@@ -303,6 +314,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
             group={group}
             members={members}
             onDeleteCategory={() => handleDeleteCategory(group.id)}
+            onRenameCategory={(newName) => handleRenameCategory(group.id, newName)}
             onAddItem={(name) => handleAddItem(group.id, name)}
             onUpdateItem={(itemId, changes) => handleUpdateItem(group.id, itemId, changes)}
             onDeleteItem={(itemId) => handleDeleteItem(group.id, itemId)}
