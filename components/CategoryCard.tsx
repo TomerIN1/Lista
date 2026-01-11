@@ -81,7 +81,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgb(0,0,0,0.03)] hover:shadow-[0_8px_24px_rgb(0,0,0,0.06)] hover:border-indigo-100 transition-all duration-300 overflow-hidden group/card">
+    <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgb(0,0,0,0.03)] hover:shadow-[0_8px_24px_rgb(0,0,0,0.06)] hover:border-indigo-100 transition-all duration-300 overflow-visible group/card">
       {/* Card Header */}
       <div className="p-5 flex items-center justify-between bg-gradient-to-b from-slate-50/50 to-transparent">
         <div className="flex items-center gap-4 flex-1 min-w-0">

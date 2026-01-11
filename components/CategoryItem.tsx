@@ -18,6 +18,8 @@ const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], recipeColorMap, onToggle, onUpdate, onDelete }) => {
   const { tUnit } = useLanguage();
   const [showRecipeMenu, setShowRecipeMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<'bottom' | 'top'>('bottom');
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
 
   // Helper function to get recipe color - use existing color or generate new one
   const getRecipeColor = (recipeId: string) => {
@@ -56,6 +58,24 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], recipeC
 
   const hasRecipeLabel = (recipeId: string) => {
     return item.recipeLabels?.some(label => label.recipeId === recipeId) || false;
+  };
+
+  // Calculate if menu should open upward or downward
+  const handleMenuToggle = () => {
+    if (!showRecipeMenu && buttonRef.current) {
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - buttonRect.bottom;
+      const spaceAbove = buttonRect.top;
+      const menuHeight = 300; // max-h-[300px]
+
+      // If not enough space below but more space above, open upward
+      if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
+        setMenuPosition('top');
+      } else {
+        setMenuPosition('bottom');
+      }
+    }
+    setShowRecipeMenu(!showRecipeMenu);
   };
 
   return (
@@ -138,7 +158,8 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], recipeC
         {recipes.length > 0 && (
           <div className="relative">
             <button
-              onClick={() => setShowRecipeMenu(!showRecipeMenu)}
+              ref={buttonRef}
+              onClick={handleMenuToggle}
               className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
                 item.recipeLabels && item.recipeLabels.length > 0
                   ? 'text-emerald-600 bg-emerald-50'
@@ -155,7 +176,9 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], recipeC
                   className="fixed inset-0 z-10"
                   onClick={() => setShowRecipeMenu(false)}
                 />
-                <div className="absolute right-0 rtl:right-auto rtl:left-0 top-full mt-2 z-20 bg-white rounded-xl shadow-lg border border-slate-100 py-2 min-w-[200px] max-h-[300px] overflow-y-auto">
+                <div className={`absolute right-0 rtl:right-auto rtl:left-0 z-20 bg-white rounded-xl shadow-lg border border-slate-100 py-2 min-w-[200px] max-h-[300px] overflow-y-auto ${
+                  menuPosition === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'
+                }`}>
                   <div className="px-3 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     Select Recipes
                   </div>
