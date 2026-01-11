@@ -69,11 +69,16 @@ const combineItems = (items: Item[]): Item[] => {
 export const organizeList = async (inputList: string, language: Language, existingCategories: string[] = []): Promise<CategoryGroup[]> => {
   try {
     const contextInstruction = existingCategories.length > 0
-      ? `\nPrioritize using these existing category names if they are a good fit: ${existingCategories.join(', ')}.`
-      : '';
+      ? `\n\nEXISTING CATEGORIES: ${existingCategories.join(', ')}.
+CRITICAL RULES:
+1. If an item clearly belongs to an existing category, YOU MUST use that exact category name
+2. For items that don't fit existing categories, create a NEW SPECIFIC category (e.g., "Electronics" for keyboard/TV, "Stationery" for pens, "Cleaning" for detergent)
+3. NEVER create generic categories like "Other", "Miscellaneous", "Various", or "General"
+4. Every item must have a meaningful, specific category name`
+      : '\n\nCRITICAL RULE: NEVER create generic categories like "Other", "Miscellaneous", "Various", or "General". Every item must have a meaningful, specific category name (e.g., "Electronics" for keyboard/TV, "Stationery" for pens).';
 
     const languageInstruction = language === 'he'
-      ? "Output the category names and items in Hebrew. Use common Hebrew terminology for categories (e.g., 'פירות וירקות' instead of 'Fruits & Vegetables')."
+      ? "Output the category names and items in Hebrew. Use common Hebrew terminology for categories (e.g., 'פירות וירקות' instead of 'Fruits & Vegetables', 'אלקטרוניקה' for Electronics)."
       : "Output in English.";
 
     const response = await openai.chat.completions.create({
@@ -90,15 +95,15 @@ export const organizeList = async (inputList: string, language: Language, existi
 Input list: "${inputList}"
 
 Return a JSON object with a "categories" array where each object has:
-- category: string (the category name)
+- category: string (the category name - MUST be specific, never "Other" or "Miscellaneous")
 - items: string[] (array of item names)
 
 Example format:
-{"categories": [{"category": "Fruits", "items": ["apple", "banana"]}, {"category": "Dairy", "items": ["milk", "cheese"]}]}`
+{"categories": [{"category": "Fruits", "items": ["apple", "banana"]}, {"category": "Electronics", "items": ["keyboard", "mouse"]}]}`
         }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.7
+      temperature: 0.3
     });
 
     const content = response.choices[0]?.message?.content;
@@ -197,7 +202,9 @@ export const organizeRecipes = async (
 
 ${recipeTexts}
 
-Instructions:
+CRITICAL INSTRUCTIONS:
+- Extract EVERY SINGLE ingredient from each recipe - do not skip any items
+- Process ALL ingredients, even if they are separated by commas, newlines, or spaces
 - Extract ONLY the ingredients with their quantities and units
 - IGNORE any cooking instructions or preparation steps
 - If a recipe contains instructions, skip those lines and only process ingredient lines
@@ -216,11 +223,8 @@ Return a JSON object with a "categories" array where each object has:
   - recipeIds: string[] (array of recipe names this ingredient appears in)
 
 Example:
-If Recipe A has "2 eggs" and Recipe B has "3 eggs", the result should be:
-{"categories": [{"category": "Dairy", "items": [{"name": "egg", "amount": 5, "unit": "pcs", "recipeIds": ["Recipe A", "Recipe B"]}]}]}
-
-If Recipe A has "1 onion" and Recipe B has "2 onions", the result should be:
-{"categories": [{"category": "Produce", "items": [{"name": "onion", "amount": 3, "unit": "pcs", "recipeIds": ["Recipe A", "Recipe B"]}]}]}`
+If Recipe A has "2 eggs, 1 onion" and Recipe B has "3 eggs", the result should be:
+{"categories": [{"category": "Dairy", "items": [{"name": "egg", "amount": 5, "unit": "pcs", "recipeIds": ["Recipe A", "Recipe B"]}]}, {"category": "Produce", "items": [{"name": "onion", "amount": 1, "unit": "pcs", "recipeIds": ["Recipe A"]}]}]}`
         }
       ],
       response_format: { type: "json_object" },
