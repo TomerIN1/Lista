@@ -19,6 +19,8 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], recipeC
   const { tUnit } = useLanguage();
   const [showRecipeMenu, setShowRecipeMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState<'bottom' | 'top'>('bottom');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(item.name);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
 
   // Helper function to get recipe color - use existing color or generate new one
@@ -58,6 +60,29 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], recipeC
 
   const hasRecipeLabel = (recipeId: string) => {
     return item.recipeLabels?.some(label => label.recipeId === recipeId) || false;
+  };
+
+  // Handle name editing
+  const handleNameEdit = () => {
+    setEditedName(item.name);
+    setIsEditingName(true);
+  };
+
+  const handleNameSave = () => {
+    const newName = editedName.trim();
+    if (newName && newName !== item.name) {
+      onUpdate({ name: newName });
+    }
+    setIsEditingName(false);
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleNameSave();
+    } else if (e.key === 'Escape') {
+      setIsEditingName(false);
+      setEditedName(item.name);
+    }
   };
 
   // Calculate if menu should open upward or downward
@@ -101,14 +126,30 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ item, recipes = [], recipeC
 
       {/* Item Name with Recipe Badges */}
       <div className="flex-grow flex items-center gap-2 flex-wrap me-2">
-        <span
-          className={`
-            text-[15px] transition-all font-medium
-            ${item.checked ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700'}
-          `}
-        >
-          {item.name}
-        </span>
+        {isEditingName ? (
+          <input
+            type="text"
+            value={editedName}
+            onChange={(e) => setEditedName(e.target.value)}
+            onKeyDown={handleNameKeyDown}
+            onBlur={handleNameSave}
+            autoFocus
+            enterKeyHint="done"
+            className="text-[15px] font-medium text-slate-700 bg-transparent border-b-2 border-indigo-500 focus:outline-none min-w-[80px] max-w-full"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span
+            onClick={handleNameEdit}
+            className={`
+              text-[15px] transition-all font-medium cursor-pointer hover:text-indigo-600
+              ${item.checked ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700'}
+            `}
+            title="Click to rename"
+          >
+            {item.name}
+          </span>
+        )}
 
         {/* Recipe Badges */}
         {item.recipeLabels && item.recipeLabels.length > 0 && (
