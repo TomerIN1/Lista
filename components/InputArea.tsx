@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, Sparkles, Trash2, PlusCircle, PenLine, ListPlus, RefreshCw, ArrowLeft } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { InputMode, Recipe } from '../types';
+import { InputMode, Recipe, DbProduct } from '../types';
 import RecipeInputCard from './RecipeInputCard';
+import ProductSearchInput from './ProductSearchInput';
 
 interface InputAreaProps {
-  onOrganize: (text: string, name: string) => void;
+  onOrganize: (text: string, name: string, selectedProducts?: DbProduct[]) => void;
   onOrganizeRecipes: (recipes: Recipe[], name: string) => void;
-  onAdd: (text: string) => void;
+  onAdd: (text: string, selectedProducts?: DbProduct[]) => void;
   onAddRecipes: (recipes: Recipe[]) => void;
   onReset: () => void;
   onSaveRecipe?: (recipe: Recipe) => void;
@@ -39,6 +40,7 @@ const InputArea: React.FC<InputAreaProps> = ({
   const [recipes, setRecipes] = useState<Recipe[]>([
     { id: crypto.randomUUID(), name: '', ingredients: '' }
   ]);
+  const [selectedProducts, setSelectedProducts] = useState<DbProduct[]>([]);
   const { t, isRTL } = useLanguage();
 
   // Sync recipes from props when currentRecipes change (e.g., when reopening a list)
@@ -65,12 +67,15 @@ const InputArea: React.FC<InputAreaProps> = ({
     e.preventDefault();
 
     if (mode === 'items') {
-      if (!text.trim()) return;
+      // Allow submit if text OR selectedProducts have content
+      if (!text.trim() && selectedProducts.length === 0) return;
       if (hasResults) {
-        onAdd(text);
+        onAdd(text, selectedProducts.length > 0 ? selectedProducts : undefined);
         setText('');
+        setSelectedProducts([]);
       } else {
-        onOrganize(text, name);
+        onOrganize(text, name, selectedProducts.length > 0 ? selectedProducts : undefined);
+        setSelectedProducts([]);
       }
     } else {
       // Recipe mode
@@ -93,8 +98,9 @@ const InputArea: React.FC<InputAreaProps> = ({
 
   const handleReplace = () => {
     if (mode === 'items') {
-      if (text.trim()) {
-        onOrganize(text, name);
+      if (text.trim() || selectedProducts.length > 0) {
+        onOrganize(text, name, selectedProducts.length > 0 ? selectedProducts : undefined);
+        setSelectedProducts([]);
       }
     } else {
       const validRecipes = recipes.filter(r => r.ingredients.trim());
@@ -112,12 +118,14 @@ const InputArea: React.FC<InputAreaProps> = ({
     setText('');
     setName('');
     setRecipes([{ id: crypto.randomUUID(), name: '', ingredients: '' }]);
+    setSelectedProducts([]);
   };
 
   const handleNewList = () => {
     setText('');
     setName('');
     setRecipes([{ id: crypto.randomUUID(), name: '', ingredients: '' }]);
+    setSelectedProducts([]);
     onReset();
   };
 
@@ -139,25 +147,27 @@ const InputArea: React.FC<InputAreaProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      if (mode === 'items' && text.trim()) {
+      if (mode === 'items' && (text.trim() || selectedProducts.length > 0)) {
         if (hasResults) {
-          onAdd(text);
+          onAdd(text, selectedProducts.length > 0 ? selectedProducts : undefined);
           setText('');
+          setSelectedProducts([]);
         } else {
-          onOrganize(text, name);
+          onOrganize(text, name, selectedProducts.length > 0 ? selectedProducts : undefined);
+          setSelectedProducts([]);
         }
       }
     }
   };
 
   const hasContent = mode === 'items'
-    ? !!text.trim()
+    ? !!text.trim() || selectedProducts.length > 0
     : recipes.some(r => r.ingredients.trim());
 
   const showClear = hasContent;
   const showNewList = hasResults || hasContent;
   const showReplace = hasResults;
-  const canSubmit = mode === 'items' ? !!text.trim() : recipes.some(r => r.ingredients.trim());
+  const canSubmit = mode === 'items' ? (!!text.trim() || selectedProducts.length > 0) : recipes.some(r => r.ingredients.trim());
   
   // Icon based on direction
   const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
@@ -210,6 +220,12 @@ const InputArea: React.FC<InputAreaProps> = ({
         {/* Conditional Content: Items Mode or Recipe Mode */}
         {mode === 'items' ? (
           <div className="relative">
+            <ProductSearchInput
+              selectedProducts={selectedProducts}
+              onSelectProduct={(product) => setSelectedProducts((prev) => [...prev, product])}
+              onRemoveProduct={(barcode) => setSelectedProducts((prev) => prev.filter((p) => p.barcode !== barcode))}
+              disabled={isLoading}
+            />
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}

@@ -1,4 +1,8 @@
 {
+  "exclude": [
+    "packages_for_online_buying_agent/**/*",
+    "node_modules"
+  ],
   "compilerOptions": {
     "target": "ES2022",
     "experimentalDecorators": true,
@@ -11,7 +15,8 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "vite/client"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,

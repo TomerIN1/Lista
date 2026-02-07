@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { CategoryGroup, Item, Recipe, InputMode } from '../types';
 import CategoryCard from './CategoryCard';
 import RecipeBreakdownModal from './RecipeBreakdownModal';
-import { Check, Copy, Trash2, Lock, ChefHat, Pencil, Eye } from 'lucide-react';
+import PriceComparisonPanel from './PriceComparisonPanel';
+import { Check, Copy, Trash2, Lock, ChefHat, Pencil, Eye, DollarSign } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface ResultCardProps {
@@ -19,6 +20,8 @@ interface ResultCardProps {
   onLoginRequest: () => void;
   recipes?: Recipe[];
   inputMode?: InputMode;
+  onFindBestPrices?: () => void;
+  onStartOnlineAgent?: (storeName: string) => void;
 }
 
 const ResultCard: React.FC<ResultCardProps> = ({
@@ -34,13 +37,17 @@ const ResultCard: React.FC<ResultCardProps> = ({
   isGuest,
   onLoginRequest,
   recipes = [],
-  inputMode = 'items'
+  inputMode = 'items',
+  onFindBestPrices,
+  onStartOnlineAgent
 }) => {
   const [copied, setCopied] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(title || '');
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
+  const [isPriceComparisonOpen, setIsPriceComparisonOpen] = useState(false);
   const { t, tUnit } = useLanguage();
+
 
   const handleCopy = () => {
     if (isGuest) {
@@ -293,6 +300,20 @@ const ResultCard: React.FC<ResultCardProps> = ({
             </button>
           )}
 
+          {/* Find Best Prices Button */}
+          <button
+            type="button"
+            onClick={() => setIsPriceComparisonOpen((prev) => !prev)}
+            className={`group flex items-center gap-2 text-sm font-semibold transition-all px-4 py-2 rounded-xl shadow-sm hover:shadow-md active:scale-95 duration-200 ${
+              isPriceComparisonOpen
+                ? 'text-indigo-600 bg-indigo-50 border border-indigo-200'
+                : 'text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'
+            }`}
+          >
+            <DollarSign className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
+            <span>{t('result.findBestPrices')}</span>
+          </button>
+
           {/* Delete Button (Allowed for guests to clear local view, or server for users) */}
           <div className="w-px h-6 bg-slate-200 mx-1" />
 
@@ -323,6 +344,14 @@ const ResultCard: React.FC<ResultCardProps> = ({
           />
         ))}
       </div>
+
+      {/* Price Comparison Panel (Inline) */}
+      <PriceComparisonPanel
+        groups={groups}
+        isOpen={isPriceComparisonOpen}
+        onClose={() => setIsPriceComparisonOpen(false)}
+        onStartOnlineAgent={onStartOnlineAgent || (() => {})}
+      />
 
       {/* Recipe Breakdown Modal */}
       <RecipeBreakdownModal

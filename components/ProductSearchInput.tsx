@@ -1,0 +1,204 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Search, Loader2, X, Package } from 'lucide-react';
+import { useProductSearch } from '../hooks/useProductSearch';
+import { useLanguage } from '../contexts/LanguageContext';
+import { DbProduct } from '../types';
+
+interface ProductSearchInputProps {
+  selectedProducts: DbProduct[];
+  onSelectProduct: (product: DbProduct) => void;
+  onRemoveProduct: (barcode: string) => void;
+  disabled?: boolean;
+}
+
+const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
+  selectedProducts,
+  onSelectProduct,
+  onRemoveProduct,
+  disabled = false,
+}) => {
+  const { t, isRTL } = useLanguage();
+  const { results, isSearching, query, setQuery, clearResults } = useProductSearch();
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Show dropdown when results arrive
+  useEffect(() => {
+    if (results.length > 0 && query.length >= 2) {
+      setIsDropdownOpen(true);
+      setHighlightedIndex(-1);
+    } else if (query.length < 2) {
+      setIsDropdownOpen(false);
+    }
+  }, [results, query]);
+
+  const handleSelect = (product: DbProduct) => {
+    // Don't add duplicates
+    if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
+    onSelectProduct(product);
+    clearResults();
+    setIsDropdownOpen(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isDropdownOpen || results.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightedIndex((prev) => Math.min(prev + 1, results.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (highlightedIndex >= 0 && highlightedIndex < results.length) {
+          handleSelect(results[highlightedIndex]);
+        }
+        break;
+      case 'Escape':
+        setIsDropdownOpen(false);
+        break;
+    }
+  };
+
+  const formatPrice = (min: number, max: number) => {
+    if (min === max) return `₪${min.toFixed(2)}`;
+    return `₪${min.toFixed(2)} - ₪${max.toFixed(2)}`;
+  };
+
+  return (
+    <div className="relative">
+      {/* Search Input */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-indigo-50/30">
+        {isSearching ? (
+          <Loader2 className="w-4 h-4 text-indigo-400 animate-spin flex-shrink-0" />
+        ) : (
+          <Search className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onFocus={() => {
+            if (results.length > 0) setIsDropdownOpen(true);
+          }}
+          placeholder={t('productSearch.searchPlaceholder')}
+          className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+          disabled={disabled}
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => {
+              clearResults();
+              setIsDropdownOpen(false);
+            }}
+            className="p-0.5 text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown Results */}
+      {isDropdownOpen && results.length > 0 && (
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 w-full bg-white border border-slate-200 rounded-b-xl shadow-lg max-h-64 overflow-y-auto"
+        >
+          {results.map((product, index) => (
+            <button
+              key={product.barcode}
+              type="button"
+              onClick={() => handleSelect(product)}
+              className={`w-full text-start px-4 py-2.5 flex items-center gap-3 transition-colors ${
+                index === highlightedIndex
+                  ? 'bg-indigo-50'
+                  : 'hover:bg-slate-50'
+              } ${
+                selectedProducts.some((p) => p.barcode === product.barcode)
+                  ? 'opacity-40 cursor-not-allowed'
+                  : ''
+              }`}
+              disabled={selectedProducts.some((p) => p.barcode === product.barcode)}
+            >
+              <Package className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-slate-800 truncate">
+                  {product.name}
+                </div>
+                <div className="text-xs text-slate-500 truncate">
+                  {product.manufacturer}
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-indigo-600 whitespace-nowrap">
+                {formatPrice(product.min_price, product.max_price)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* No Results */}
+      {isDropdownOpen && query.length >= 2 && !isSearching && results.length === 0 && (
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 w-full bg-white border border-slate-200 rounded-b-xl shadow-lg px-4 py-3"
+        >
+          <p className="text-sm text-slate-500 text-center">
+            {t('productSearch.noResults')}
+          </p>
+        </div>
+      )}
+
+      {/* Selected Product Chips */}
+      {selectedProducts.length > 0 && (
+        <div className="flex flex-wrap gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
+          {selectedProducts.map((product) => (
+            <div
+              key={product.barcode}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium"
+            >
+              <span className="truncate max-w-[150px]">{product.name}</span>
+              {product.min_price > 0 && (
+                <span className="text-indigo-500">₪{product.min_price.toFixed(2)}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => onRemoveProduct(product.barcode)}
+                className="p-0.5 hover:bg-indigo-200 rounded-full transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ProductSearchInput;

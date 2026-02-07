@@ -55,7 +55,8 @@ export const TRANSLATIONS = {
       viewRecipes: "View Recipes",
       viewRecipesTitle: "Recipe Breakdown",
       recipes: "recipes",
-      close: "Close"
+      close: "Close",
+      findBestPrices: "Find Best Prices"
     },
     sidebar: {
       myLists: "My Lists",
@@ -107,6 +108,37 @@ export const TRANSLATIONS = {
       createBtn: "Create New List",
       guest: "Guest Mode",
       guestAlert: "You are in Guest Mode. Lists will not be saved."
+    },
+    productSearch: {
+      searching: "Searching...",
+      noResults: "No products found",
+      addProduct: "Add Product",
+      priceRange: "Price Range",
+      removeProduct: "Remove",
+      searchPlaceholder: "Search products by name...",
+      matchedFromDb: "Matched from database"
+    },
+    priceComparison: {
+      title: "Price Comparison",
+      comparePrices: "Compare Prices Across Stores",
+      comparing: "Comparing prices across stores...",
+      cheapestStore: "Cheapest",
+      savings: "Savings",
+      totalAt: "Total at",
+      noData: "Could not fetch price data. Try again.",
+      unmatchedItems: "Items without price data",
+      physicalMode: "Physical Shopping",
+      physicalDesc: "Find cheapest store nearby",
+      onlineMode: "Online Shopping",
+      onlineDesc: "Build cart & order online",
+      location: "Location",
+      locationPlaceholder: "Enter your city...",
+      goShopping: "Go Shopping",
+      buildCart: "Build Cart",
+      storeBreakdown: "Store Breakdown",
+      matched: "matched",
+      of: "of",
+      items: "items"
     },
     errors: {
       organizeFailed: "Failed to organize list.",
@@ -168,7 +200,8 @@ export const TRANSLATIONS = {
       viewRecipes: "צפה במתכונים",
       viewRecipesTitle: "פירוט המתכונים",
       recipes: "מתכונים",
-      close: "סגור"
+      close: "סגור",
+      findBestPrices: "מצא מחירים טובים"
     },
     sidebar: {
       myLists: "הרשימות שלי",
@@ -220,6 +253,37 @@ export const TRANSLATIONS = {
       createBtn: "צור רשימה חדשה",
       guest: "מצב אורח",
       guestAlert: "אתה במצב אורח. הרשימות לא יישמרו."
+    },
+    productSearch: {
+      searching: "מחפש...",
+      noResults: "לא נמצאו מוצרים",
+      addProduct: "הוסף מוצר",
+      priceRange: "טווח מחירים",
+      removeProduct: "הסר",
+      searchPlaceholder: "חפש מוצרים לפי שם...",
+      matchedFromDb: "מותאם ממסד הנתונים"
+    },
+    priceComparison: {
+      title: "השוואת מחירים",
+      comparePrices: "השווה מחירים בין חנויות",
+      comparing: "משווה מחירים בין חנויות...",
+      cheapestStore: "הזול ביותר",
+      savings: "חיסכון",
+      totalAt: "סה״כ ב",
+      noData: "לא ניתן לטעון נתוני מחירים. נסה שוב.",
+      unmatchedItems: "פריטים ללא נתוני מחיר",
+      physicalMode: "קנייה פיזית",
+      physicalDesc: "מצא את החנות הזולה ביותר",
+      onlineMode: "קנייה אונליין",
+      onlineDesc: "בנה עגלה והזמן באינטרנט",
+      location: "מיקום",
+      locationPlaceholder: "הכנס את העיר שלך...",
+      goShopping: "צא לקנות",
+      buildCart: "בנה עגלה",
+      storeBreakdown: "פירוט לפי חנות",
+      matched: "מותאמים",
+      of: "מתוך",
+      items: "פריטים"
     },
     errors: {
       organizeFailed: "נכשל בסידור הרשימה.",

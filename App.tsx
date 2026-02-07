@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe } from './types';
+import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
 import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
@@ -11,8 +11,10 @@ import Sidebar from './components/Sidebar';
 import ShareModal from './components/ShareModal';
 import Footer from './components/Footer';
 import InfoModal from './components/InfoModal';
+import PriceAgentChat from './components/PriceAgentChat';
 import { LEGAL_TEXT, LegalDocType } from './constants/legalText';
 import { useLanguage } from './contexts/LanguageContext';
+import { groupsToShoppingItems } from './types';
 
 import { AlertCircle, Sparkles, Menu, ShieldAlert } from 'lucide-react';
 
@@ -43,6 +45,9 @@ const App: React.FC = () => {
 
   // Legal Modal State
   const [activeLegalDoc, setActiveLegalDoc] = useState<LegalDocType | null>(null);
+
+  // Price Agent Chat State
+  const [isPriceAgentOpen, setIsPriceAgentOpen] = useState(false);
 
   // Language Context
   const { language, t } = useLanguage();
@@ -194,14 +199,41 @@ const App: React.FC = () => {
     });
   };
 
-  const handleOrganize = async (text: string, name: string) => {
+  const enrichItemsWithProductData = (groups: CategoryGroup[], products: DbProduct[]): CategoryGroup[] => {
+    if (!products || products.length === 0) return groups;
+
+    // Build a map of product name (lowercase) → DbProduct
+    const productMap = new Map<string, DbProduct>();
+    for (const p of products) {
+      productMap.set(p.name.toLowerCase(), p);
+    }
+
+    return groups.map((group) => ({
+      ...group,
+      items: group.items.map((item) => {
+        const match = productMap.get(item.name.toLowerCase());
+        if (match) {
+          return {
+            ...item,
+            barcode: match.barcode,
+            dbProductId: match.id,
+            manufacturer: match.manufacturer,
+            dbPrice: match.min_price,
+          };
+        }
+        return item;
+      }),
+    }));
+  };
+
+  const handleOrganize = async (text: string, name: string, selectedProducts?: DbProduct[]) => {
     setStatus('loading');
     setError(null);
-    
+
     try {
       let targetListId = activeListId;
 
-      // Logic: 
+      // Logic:
       // If User: Create list in DB immediately if not exists.
       // If Guest: Just organize in memory.
 
@@ -221,7 +253,19 @@ const App: React.FC = () => {
         }
       }
 
-      const result = await organizeList(text, language);
+      // Combine chip products with free-text into one text for AI
+      let fullText = text;
+      if (selectedProducts && selectedProducts.length > 0) {
+        const chipNames = selectedProducts.map(p => p.name).join(', ');
+        fullText = fullText ? `${chipNames}, ${fullText}` : chipNames;
+      }
+
+      let result = await organizeList(fullText, language);
+
+      // Enrich items with barcode/price data from selected products
+      if (selectedProducts && selectedProducts.length > 0) {
+        result = enrichItemsWithProductData(result, selectedProducts);
+      }
 
       // Update State
       setLocalGroups(result);
@@ -234,7 +278,7 @@ const App: React.FC = () => {
         // Guest: generate icons but don't save to DB
         generateIconsForGroups(result, null);
       }
-      
+
       setStatus('success');
     } catch (err: any) {
       console.error(err);
@@ -243,13 +287,25 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddItems = async (text: string) => {
+  const handleAddItems = async (text: string, selectedProducts?: DbProduct[]) => {
     setIsAdding(true);
     setError(null);
 
     try {
+      // Combine chip products with free-text
+      let fullText = text;
+      if (selectedProducts && selectedProducts.length > 0) {
+        const chipNames = selectedProducts.map(p => p.name).join(', ');
+        fullText = fullText ? `${chipNames}, ${fullText}` : chipNames;
+      }
+
       const existingCategories = localGroups.map(g => g.category);
-      const newGroups = await organizeList(text, language, existingCategories);
+      let newGroups = await organizeList(fullText, language, existingCategories);
+
+      // Enrich with barcode data from chips
+      if (selectedProducts && selectedProducts.length > 0) {
+        newGroups = enrichItemsWithProductData(newGroups, selectedProducts);
+      }
       
       const updatedGroups = [...localGroups];
       const groupsForIcon: CategoryGroup[] = [];
@@ -493,6 +549,17 @@ const App: React.FC = () => {
     }]);
   };
 
+  const handleFindBestPrices = () => {
+    // Only allow if there are items in the list
+    if (localGroups.length === 0) return;
+    setIsPriceAgentOpen(true);
+  };
+
+  const handleStartOnlineAgent = (storeName: string) => {
+    if (localGroups.length === 0) return;
+    setIsPriceAgentOpen(true);
+  };
+
   const LegalModal = () => (
     <InfoModal 
       isOpen={!!activeLegalDoc}
@@ -503,7 +570,7 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex">
+    <div className="h-screen overflow-hidden bg-[#FAFAFA] flex">
       <Sidebar
         isOpen={sidebarOpen}
         setIsOpen={setSidebarOpen}
@@ -626,6 +693,8 @@ const App: React.FC = () => {
                     onLoginRequest={handleLogin}
                     recipes={recipes}
                     inputMode={inputMode}
+                    onFindBestPrices={handleFindBestPrices}
+                    onStartOnlineAgent={handleStartOnlineAgent}
                   />
                 )}
               </div>
@@ -645,8 +714,17 @@ const App: React.FC = () => {
         members={activeList?.memberEmails || []}
         listId={activeListId || 'guest-list'}
       />
-      
+
       <LegalModal />
+
+      {/* Price Agent Chat Panel */}
+      <PriceAgentChat
+        isOpen={isPriceAgentOpen}
+        onClose={() => setIsPriceAgentOpen(false)}
+        userId={user?.uid || 'guest'}
+        listId={activeListId || 'guest-list'}
+        groceryList={groupsToShoppingItems(localGroups)}
+      />
     </div>
   );
 };
