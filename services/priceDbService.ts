@@ -15,6 +15,14 @@ import {
 
 const API_BASE = 'https://israeli-food-prices-database-and-ap-one.vercel.app';
 
+// Map English API names → Hebrew display names
+const SUPERMARKET_NAME_MAP: Record<string, string> = {
+  'Shufersal': 'שופרסל',
+  'Victory': 'ויקטורי',
+  'Market Warehouses': 'מחסני השוק',
+  'H. Cohen': 'ח. כהן',
+};
+
 // ============================================
 // LRU Cache
 // ============================================
@@ -271,7 +279,7 @@ export async function compareListPrices(
     }
 
     for (const storePrice of priceData.prices) {
-      const storeName = storePrice.supermarket;
+      const storeName = SUPERMARKET_NAME_MAP[storePrice.supermarket] || storePrice.supermarket;
       if (!storeMap.has(storeName)) {
         storeMap.set(storeName, {
           supermarketName: storeName,

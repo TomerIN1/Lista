@@ -20,17 +20,17 @@ import {
 
 // Real Israeli supermarket chains from the DB
 const ISRAELI_SUPERMARKETS: AgentStore[] = [
-  { id: 'shufersal', name: 'Shufersal', nameHe: 'שופרסל', deliveryFee: 30 },
-  { id: 'victory', name: 'Victory', nameHe: 'ויקטורי', deliveryFee: 20 },
-  { id: 'market-warehouses', name: 'Market Warehouses', nameHe: 'מחסני השוק', deliveryFee: 25 },
-  { id: 'h-cohen', name: 'H. Cohen', nameHe: 'ח. כהן', deliveryFee: 25 },
+  { id: 'shufersal', name: 'שופרסל', nameHe: 'שופרסל', deliveryFee: 30 },
+  { id: 'victory', name: 'ויקטורי', nameHe: 'ויקטורי', deliveryFee: 20 },
+  { id: 'market-warehouses', name: 'מחסני השוק', nameHe: 'מחסני השוק', deliveryFee: 25 },
+  { id: 'h-cohen', name: 'ח. כהן', nameHe: 'ח. כהן', deliveryFee: 25 },
 ];
 
 // Store categories (supermarket-focused)
 const STORE_CATEGORIES: StoreCategory[] = [
   {
     id: 'supermarkets',
-    name: 'Israeli Supermarkets',
+    name: 'סופרמרקטים ישראליים',
     nameHe: 'סופרמרקטים ישראליים',
     stores: ISRAELI_SUPERMARKETS,
   },
