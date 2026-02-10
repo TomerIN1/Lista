@@ -13,7 +13,10 @@ import {
 // Configuration
 // ============================================
 
-const API_BASE = 'https://israeli-food-prices-database-and-ap-one.vercel.app';
+// In dev, use Vite proxy to avoid CORS; in production, hit the API directly
+const API_BASE = import.meta.env.DEV
+  ? '/price-api'
+  : 'https://israeli-food-prices-database-and-ap-one.vercel.app';
 
 // Map English API names → Hebrew display names
 const SUPERMARKET_NAME_MAP: Record<string, string> = {
@@ -84,7 +87,10 @@ const SUPERMARKETS_TTL = 30 * 60 * 1000; // 30 minutes
 // ============================================
 
 async function apiFetch<T>(path: string, params?: Record<string, string | number>): Promise<T> {
-  const url = new URL(`${API_BASE}${path}`);
+  const fullPath = `${API_BASE}${path}`;
+  const url = fullPath.startsWith('http')
+    ? new URL(fullPath)
+    : new URL(fullPath, window.location.origin);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {

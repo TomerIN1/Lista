@@ -1,6 +1,8 @@
 export type Unit = 'pcs' | 'g' | 'kg' | 'L' | 'ml';
 export type Language = 'en' | 'he';
 export type InputMode = 'items' | 'recipe';
+export type AppMode = 'organize' | 'shopping';
+export type ShoppingFlowStep = 'build_list' | 'comparing' | 'mode_select' | 'ready';
 
 export interface Recipe {
   id: string;
@@ -60,6 +62,7 @@ export interface ListDocument {
   groups: CategoryGroup[];
   recipes?: Recipe[]; // Array of recipes used in this list
   inputMode?: InputMode; // Current mode ('items' or 'recipe')
+  appMode?: AppMode; // Top-level mode ('organize' or 'shopping') — undefined defaults to 'organize'
   createdAt?: any;
   updatedAt?: any;
 }

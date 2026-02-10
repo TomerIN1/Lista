@@ -9,6 +9,7 @@ interface ProductSearchInputProps {
   onSelectProduct: (product: DbProduct) => void;
   onRemoveProduct: (barcode: string) => void;
   disabled?: boolean;
+  prominent?: boolean;
 }
 
 const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
@@ -16,6 +17,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   onSelectProduct,
   onRemoveProduct,
   disabled = false,
+  prominent = false,
 }) => {
   const { t, isRTL } = useLanguage();
   const { results, isSearching, query, setQuery, clearResults } = useProductSearch();
@@ -88,13 +90,17 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative z-20">
       {/* Search Input */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-indigo-50/30">
+      <div className={`flex items-center gap-2 border-b border-slate-100 ${
+        prominent
+          ? 'px-6 py-4 bg-emerald-50/40'
+          : 'px-4 py-3 bg-indigo-50/30'
+      }`}>
         {isSearching ? (
-          <Loader2 className="w-4 h-4 text-indigo-400 animate-spin flex-shrink-0" />
+          <Loader2 className={`${prominent ? 'w-5 h-5 text-emerald-500' : 'w-4 h-4 text-indigo-400'} animate-spin flex-shrink-0`} />
         ) : (
-          <Search className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+          <Search className={`${prominent ? 'w-5 h-5 text-emerald-500' : 'w-4 h-4 text-indigo-400'} flex-shrink-0`} />
         )}
         <input
           ref={inputRef}
@@ -106,7 +112,9 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
             if (results.length > 0) setIsDropdownOpen(true);
           }}
           placeholder={t('productSearch.searchPlaceholder')}
-          className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+          className={`w-full bg-transparent text-slate-700 placeholder:text-slate-400 focus:outline-none ${
+            prominent ? 'text-base font-medium' : 'text-sm'
+          }`}
           disabled={disabled}
         />
         {query && (

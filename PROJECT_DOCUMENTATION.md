@@ -1621,6 +1621,143 @@ Future optimizations:
 
 ---
 
-**Last Updated**: December 12, 2024
-**Version**: 2.0.0
-**Status**: Production Ready ✅
+---
+
+## Two-Mode Restructuring (February 2026)
+
+### Overview
+
+The app was restructured into two top-level modes to separate the original free-text organizing experience from the new supermarket/price-comparison features:
+
+- **Organize Mode** — The original Lista: free-text input, recipes, AI categorization. No barcodes, no price DB.
+- **Shopping Mode** — Build a list from DB products, compare prices across stores, then choose physical shopping (AI-organized list with store recommendation) or online shopping (agent chat).
+
+### New Types
+
+| Type | Definition | Purpose |
+|------|-----------|---------|
+| `AppMode` | `'organize' \| 'shopping'` | Top-level mode selector |
+| `ShoppingFlowStep` | `'build_list' \| 'comparing' \| 'mode_select' \| 'ready'` | Shopping mode flow state |
+| `ListDocument.appMode` | `AppMode` (optional) | Persisted mode per list; `undefined` defaults to `'organize'` for backward compatibility |
+
+### New Components
+
+#### `components/AppModeToggle.tsx`
+- Top-level pill toggle above all content
+- Two buttons: Organize (Sparkles icon) / Shopping (ShoppingCart icon)
+- Props: `appMode`, `onSwitch`, `disabled`
+- Disabled during loading states to prevent mid-operation switches
+
+#### `components/ShoppingInputArea.tsx`
+- Shopping mode list builder
+- Uses `ProductSearchInput` with `prominent` prop for larger, primary input styling
+- Only accepts DB products (no free text) to ensure all items have barcodes and prices for reliable agent/comparison operation
+- "Compare Prices" button triggers price comparison flow
+- Clear button to reset product selection
+
+#### `components/ShoppingPriceStep.tsx`
+- Displays price comparison results inline as a main-flow step
+- Reuses `SavingsReport`, `ModeSelector`, and `LocationInput` components
+- Back button returns to build_list step
+- Physical mode: "Organize for Store" button triggers AI categorization with store recommendation
+- Online mode: "Build Cart" button opens PriceAgentChat directly
+
+### Modified Components
+
+#### `components/InputArea.tsx`
+- Removed `ProductSearchInput` import and all usage
+- Removed `selectedProducts` state and all related logic
+- Simplified `onOrganize` signature to `(text: string, name: string) => void`
+- Simplified `onAdd` signature to `(text: string) => void`
+- Items/Recipe sub-toggle unchanged
+
+#### `components/ResultCard.tsx`
+- Added `appMode` and `storeRecommendation` props
+- Removed "Find Best Prices" button entirely (price features live in Shopping mode now)
+- Removed `PriceComparisonPanel` inline rendering
+- Removed `onFindBestPrices` and `onStartOnlineAgent` props
+- Added store recommendation banner (green gradient with store name and savings amount) that renders above the category grid when `storeRecommendation` is set
+
+#### `components/ProductSearchInput.tsx`
+- Added `prominent?: boolean` prop — larger input, bigger padding, emerald color scheme for use as primary input in Shopping mode
+- Added `z-20` to wrapper div to ensure dropdown renders above sibling elements
+
+### App.tsx Changes
+
+#### New State
+```typescript
+appMode: AppMode                    // 'organize' | 'shopping'
+shoppingStep: ShoppingFlowStep     // Current step in shopping flow
+shoppingProducts: DbProduct[]      // Selected products from DB search
+priceComparison: ListPriceComparison | null  // Comparison results
+selectedShoppingMode: ShoppingMode | null    // 'physical' | 'online'
+storeRecommendation: { storeName: string; savingsAmount: number } | null
+isShoppingComparing: boolean       // Loading state for comparison
+```
+
+#### New Handlers
+- `handleAppModeSwitch(mode)` — Switches mode, resets shopping state when going back to organize
+- `handleShoppingCompare()` — Builds temp groups from DB products, calls `compareListPrices`, advances to mode_select
+- `handleShoppingPhysical()` — Calls `handleOrganize` with product names, sets store recommendation from comparison data
+- `handleShoppingOnline()` — Builds temp groups from DB products, opens PriceAgentChat
+
+#### Simplified Handlers
+- `handleOrganize` — Removed `selectedProducts` parameter (organize mode is pure free-text now)
+- `handleAddItems` — Removed `selectedProducts` parameter
+- Removed `enrichItemsWithProductData` helper (no longer needed)
+- Removed `handleFindBestPrices` handler
+
+#### Conditional Rendering
+```
+AppModeToggle (always visible)
+
+if appMode === 'organize':
+  InputArea (text + recipes, no DB search)
+  ResultCard (no price features)
+
+if appMode === 'shopping':
+  if step === 'build_list':   ShoppingInputArea (DB product search only)
+  if step === 'mode_select':  ShoppingPriceStep (savings + mode choice)
+  if step === 'ready':        ResultCard (with store recommendation banner)
+```
+
+#### Sync Effect
+- Reads `list.appMode` from loaded Firestore lists and sets `appMode` state accordingly (defaults to `'organize'` for backward compat)
+
+### Infrastructure Changes
+
+#### `vite.config.ts`
+- Added dev proxy: `/price-api` → `https://israeli-food-prices-database-and-ap-one.vercel.app`
+- Solves CORS issue where the external price API doesn't send `Access-Control-Allow-Origin` headers
+
+#### `services/priceDbService.ts`
+- `API_BASE` now uses `/price-api` in dev (Vite proxy) and the full URL in production
+- Fixed `apiFetch` to handle relative URLs by using `window.location.origin` as base for `new URL()` constructor
+
+#### `constants/translations.ts`
+- Added `appMode` section with 12 keys in both English and Hebrew:
+  - Mode labels: `organize`, `shopping`, `organizeDesc`, `shoppingDesc`
+  - Shopping flow: `buildList`, `comparePricesStep`, `selectMode`, `proceedToCompare`
+  - Actions: `backToBuildList`, `organizeForStore`, `shoppingListEmpty`
+
+### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `types.ts` | Modified | Added `AppMode`, `ShoppingFlowStep`, extended `ListDocument` |
+| `constants/translations.ts` | Modified | Added `appMode` section (en + he) |
+| `components/AppModeToggle.tsx` | **New** | Top-level mode toggle |
+| `components/ShoppingInputArea.tsx` | **New** | Shopping mode DB product search |
+| `components/ShoppingPriceStep.tsx` | **New** | Price comparison + mode selection step |
+| `components/InputArea.tsx` | Modified | Removed ProductSearchInput, simplified props |
+| `components/ResultCard.tsx` | Modified | Removed price features, added store banner |
+| `components/ProductSearchInput.tsx` | Modified | Added `prominent` prop, fixed z-index |
+| `App.tsx` | Modified | Two-mode state, handlers, conditional rendering |
+| `vite.config.ts` | Modified | Added CORS proxy for price API |
+| `services/priceDbService.ts` | Modified | Dev proxy support, fixed URL construction |
+
+---
+
+**Last Updated**: February 10, 2026
+**Version**: 3.0.0
+**Status**: Production Ready

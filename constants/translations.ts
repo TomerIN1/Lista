@@ -140,6 +140,21 @@ export const TRANSLATIONS = {
       of: "of",
       items: "items"
     },
+    appMode: {
+      organize: "Organize",
+      shopping: "Shopping",
+      organizeDesc: "Free-text lists & AI categorization",
+      shoppingDesc: "Search products & compare prices",
+      buildList: "Build Your List",
+      comparePricesStep: "Compare Prices",
+      selectMode: "Choose Shopping Method",
+      addFreeTextLabel: "Unlisted items",
+      freeTextPlaceholder: "Add items not found in search...",
+      proceedToCompare: "Compare Prices",
+      backToBuildList: "Back to List",
+      organizeForStore: "Organize for Store",
+      shoppingListEmpty: "Add products to start comparing prices"
+    },
     errors: {
       organizeFailed: "Failed to organize list.",
       createFailed: "Failed to create list.",
@@ -284,6 +299,21 @@ export const TRANSLATIONS = {
       matched: "מותאמים",
       of: "מתוך",
       items: "פריטים"
+    },
+    appMode: {
+      organize: "ארגון",
+      shopping: "קניות",
+      organizeDesc: "רשימות חופשיות וסידור עם AI",
+      shoppingDesc: "חפש מוצרים והשווה מחירים",
+      buildList: "בנה את הרשימה",
+      comparePricesStep: "השווה מחירים",
+      selectMode: "בחר שיטת קנייה",
+      addFreeTextLabel: "פריטים נוספים",
+      freeTextPlaceholder: "הוסף פריטים שלא נמצאו בחיפוש...",
+      proceedToCompare: "השווה מחירים",
+      backToBuildList: "חזרה לרשימה",
+      organizeForStore: "ארגן לחנות",
+      shoppingListEmpty: "הוסף מוצרים כדי להתחיל להשוות מחירים"
     },
     errors: {
       organizeFailed: "נכשל בסידור הרשימה.",

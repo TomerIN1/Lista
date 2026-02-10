@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct } from './types';
+import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct, AppMode, ShoppingFlowStep, ShoppingMode, ListPriceComparison } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
 import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
@@ -12,9 +12,13 @@ import ShareModal from './components/ShareModal';
 import Footer from './components/Footer';
 import InfoModal from './components/InfoModal';
 import PriceAgentChat from './components/PriceAgentChat';
+import AppModeToggle from './components/AppModeToggle';
+import ShoppingInputArea from './components/ShoppingInputArea';
+import ShoppingPriceStep from './components/ShoppingPriceStep';
 import { LEGAL_TEXT, LegalDocType } from './constants/legalText';
 import { useLanguage } from './contexts/LanguageContext';
 import { groupsToShoppingItems } from './types';
+import { compareListPrices } from './services/priceDbService';
 
 import { AlertCircle, Sparkles, Menu, ShieldAlert } from 'lucide-react';
 
@@ -48,6 +52,15 @@ const App: React.FC = () => {
 
   // Price Agent Chat State
   const [isPriceAgentOpen, setIsPriceAgentOpen] = useState(false);
+
+  // App Mode State (Organize vs Shopping)
+  const [appMode, setAppMode] = useState<AppMode>('organize');
+  const [shoppingStep, setShoppingStep] = useState<ShoppingFlowStep>('build_list');
+  const [shoppingProducts, setShoppingProducts] = useState<DbProduct[]>([]);
+  const [priceComparison, setPriceComparison] = useState<ListPriceComparison | null>(null);
+  const [selectedShoppingMode, setSelectedShoppingMode] = useState<ShoppingMode | null>(null);
+  const [storeRecommendation, setStoreRecommendation] = useState<{ storeName: string; savingsAmount: number } | null>(null);
+  const [isShoppingComparing, setIsShoppingComparing] = useState(false);
 
   // Language Context
   const { language, t } = useLanguage();
@@ -139,6 +152,7 @@ const App: React.FC = () => {
         setLocalGroups(current.groups);
         setInputMode(current.inputMode || 'items');
         setRecipes(current.recipes || []);
+        setAppMode(current.appMode || 'organize');
         setStatus(current.groups.length > 0 ? 'success' : 'idle');
       } else {
         console.log('[Sync Effect] List not found in lists array yet');
@@ -199,50 +213,18 @@ const App: React.FC = () => {
     });
   };
 
-  const enrichItemsWithProductData = (groups: CategoryGroup[], products: DbProduct[]): CategoryGroup[] => {
-    if (!products || products.length === 0) return groups;
-
-    // Build a map of product name (lowercase) → DbProduct
-    const productMap = new Map<string, DbProduct>();
-    for (const p of products) {
-      productMap.set(p.name.toLowerCase(), p);
-    }
-
-    return groups.map((group) => ({
-      ...group,
-      items: group.items.map((item) => {
-        const match = productMap.get(item.name.toLowerCase());
-        if (match) {
-          return {
-            ...item,
-            barcode: match.barcode,
-            dbProductId: match.id,
-            manufacturer: match.manufacturer,
-            dbPrice: match.min_price,
-          };
-        }
-        return item;
-      }),
-    }));
-  };
-
-  const handleOrganize = async (text: string, name: string, selectedProducts?: DbProduct[]) => {
+  const handleOrganize = async (text: string, name: string) => {
     setStatus('loading');
     setError(null);
 
     try {
       let targetListId = activeListId;
 
-      // Logic:
-      // If User: Create list in DB immediately if not exists.
-      // If Guest: Just organize in memory.
-
       if (user) {
         if (!targetListId) {
           targetListId = await createList(name || "New List", user.uid, user.email || '');
           setActiveListId(targetListId);
         } else if (name && activeList?.title !== name) {
-          // Update local state immediately for instant UI feedback
           setLists(prevLists =>
             prevLists.map(list =>
               list.id === activeListId
@@ -253,29 +235,14 @@ const App: React.FC = () => {
         }
       }
 
-      // Combine chip products with free-text into one text for AI
-      let fullText = text;
-      if (selectedProducts && selectedProducts.length > 0) {
-        const chipNames = selectedProducts.map(p => p.name).join(', ');
-        fullText = fullText ? `${chipNames}, ${fullText}` : chipNames;
-      }
+      const result = await organizeList(text, language);
 
-      let result = await organizeList(fullText, language);
-
-      // Enrich items with barcode/price data from selected products
-      if (selectedProducts && selectedProducts.length > 0) {
-        result = enrichItemsWithProductData(result, selectedProducts);
-      }
-
-      // Update State
       setLocalGroups(result);
 
       if (user && targetListId) {
-        // Update Firestore with groups and title in one call
         await updateListGroups(targetListId, result, name || undefined);
         generateIconsForGroups(result, targetListId);
       } else {
-        // Guest: generate icons but don't save to DB
         generateIconsForGroups(result, null);
       }
 
@@ -287,26 +254,14 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddItems = async (text: string, selectedProducts?: DbProduct[]) => {
+  const handleAddItems = async (text: string) => {
     setIsAdding(true);
     setError(null);
 
     try {
-      // Combine chip products with free-text
-      let fullText = text;
-      if (selectedProducts && selectedProducts.length > 0) {
-        const chipNames = selectedProducts.map(p => p.name).join(', ');
-        fullText = fullText ? `${chipNames}, ${fullText}` : chipNames;
-      }
-
       const existingCategories = localGroups.map(g => g.category);
-      let newGroups = await organizeList(fullText, language, existingCategories);
+      const newGroups = await organizeList(text, language, existingCategories);
 
-      // Enrich with barcode data from chips
-      if (selectedProducts && selectedProducts.length > 0) {
-        newGroups = enrichItemsWithProductData(newGroups, selectedProducts);
-      }
-      
       const updatedGroups = [...localGroups];
       const groupsForIcon: CategoryGroup[] = [];
 
@@ -549,14 +504,101 @@ const App: React.FC = () => {
     }]);
   };
 
-  const handleFindBestPrices = () => {
-    // Only allow if there are items in the list
+  const handleStartOnlineAgent = (storeName: string) => {
     if (localGroups.length === 0) return;
     setIsPriceAgentOpen(true);
   };
 
-  const handleStartOnlineAgent = (storeName: string) => {
-    if (localGroups.length === 0) return;
+  // ============================================
+  // App Mode Handlers
+  // ============================================
+
+  const handleAppModeSwitch = (mode: AppMode) => {
+    setAppMode(mode);
+    // Reset shopping state when switching
+    if (mode === 'organize') {
+      setShoppingStep('build_list');
+      setShoppingProducts([]);
+      setPriceComparison(null);
+      setSelectedShoppingMode(null);
+      setStoreRecommendation(null);
+    }
+  };
+
+  const handleShoppingCompare = async () => {
+    if (shoppingProducts.length === 0) return;
+
+    setIsShoppingComparing(true);
+    setShoppingStep('comparing');
+
+    try {
+      // Build temporary groups from DB products for comparison
+      const tempItems = shoppingProducts.map((p) => ({
+        id: crypto.randomUUID(),
+        name: p.name,
+        checked: false,
+        amount: 1 as number,
+        unit: 'pcs' as const,
+        barcode: p.barcode,
+        dbProductId: p.id,
+        manufacturer: p.manufacturer,
+        dbPrice: p.min_price,
+      }));
+
+      const tempGroups: CategoryGroup[] = [
+        { id: crypto.randomUUID(), category: 'Shopping List', items: tempItems },
+      ];
+
+      const result = await compareListPrices(tempGroups);
+      setPriceComparison(result);
+      setShoppingStep('mode_select');
+    } catch (err) {
+      console.error('Shopping compare failed:', err);
+      setError(t('priceComparison.noData'));
+      setShoppingStep('build_list');
+    } finally {
+      setIsShoppingComparing(false);
+    }
+  };
+
+  const handleShoppingPhysical = async () => {
+    if (!priceComparison) return;
+
+    const fullText = shoppingProducts.map((p) => p.name).join(', ');
+
+    // Set store recommendation from comparison
+    setStoreRecommendation({
+      storeName: priceComparison.cheapestStoreId,
+      savingsAmount: priceComparison.savingsAmount,
+    });
+
+    // Call handleOrganize with product names
+    await handleOrganize(fullText, '');
+
+    setShoppingStep('ready');
+  };
+
+  const handleShoppingOnline = () => {
+    if (!priceComparison) return;
+
+    // Build temporary groups from DB products for the agent
+    const tempItems = shoppingProducts.map((p) => ({
+      id: crypto.randomUUID(),
+      name: p.name,
+      checked: false,
+      amount: 1 as number,
+      unit: 'pcs' as const,
+      barcode: p.barcode,
+      dbProductId: p.id,
+      manufacturer: p.manufacturer,
+      dbPrice: p.min_price,
+    }));
+
+    const tempGroups: CategoryGroup[] = [
+      { id: crypto.randomUUID(), category: 'Shopping List', items: tempItems },
+    ];
+
+    setLocalGroups(tempGroups);
     setIsPriceAgentOpen(true);
   };
 
@@ -634,68 +676,134 @@ const App: React.FC = () => {
                    </div>
                 )}
 
-                <InputArea
-                  onOrganize={handleOrganize}
-                  onOrganizeRecipes={handleOrganizeRecipes}
-                  onAdd={handleAddItems}
-                  onAddRecipes={handleAddRecipes}
-                  onSaveRecipe={async (recipe) => {
-                    if (!user) {
-                      handleLogin();
-                      return;
-                    }
-
-                    try {
-                      // Check if we need to update or save as new
-                      // If recipe.id matches a saved recipe ID, it's an update
-                      await saveRecipeToLibrary(user.uid, recipe);
-                      // Success feedback is handled by RecipeInputCard
-                    } catch (error) {
-                      console.error('Error saving recipe:', error);
-                      // Error feedback is handled by RecipeInputCard
-                      throw error;
-                    }
-                  }}
-                  onReset={() => {
-                    setLocalGroups([]);
-                    setRecipes([]);
-                    setInputMode('items');
-                    setStatus('idle');
-                    setActiveListId(null);
-                  }}
-                  isLoading={status === 'loading' || isAdding}
-                  hasResults={localGroups.length > 0}
-                  isLoggedIn={!!user}
-                  currentMode={inputMode}
-                  currentRecipes={recipes}
-                  currentTitle={activeList?.title || ''}
+                {/* App Mode Toggle */}
+                <AppModeToggle
+                  appMode={appMode}
+                  onSwitch={handleAppModeSwitch}
+                  disabled={status === 'loading' || isAdding || isShoppingComparing}
                 />
 
-                {error && (
-                  <div className="p-4 rounded-2xl bg-red-50/80 backdrop-blur-sm text-red-800 border border-red-100 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                    <AlertCircle className="w-5 h-5 shrink-0" />
-                    <p className="font-medium">{error}</p>
-                  </div>
+                {/* ==================== ORGANIZE MODE ==================== */}
+                {appMode === 'organize' && (
+                  <>
+                    <InputArea
+                      onOrganize={handleOrganize}
+                      onOrganizeRecipes={handleOrganizeRecipes}
+                      onAdd={handleAddItems}
+                      onAddRecipes={handleAddRecipes}
+                      onSaveRecipe={async (recipe) => {
+                        if (!user) {
+                          handleLogin();
+                          return;
+                        }
+                        try {
+                          await saveRecipeToLibrary(user.uid, recipe);
+                        } catch (error) {
+                          console.error('Error saving recipe:', error);
+                          throw error;
+                        }
+                      }}
+                      onReset={() => {
+                        setLocalGroups([]);
+                        setRecipes([]);
+                        setInputMode('items');
+                        setStatus('idle');
+                        setActiveListId(null);
+                      }}
+                      isLoading={status === 'loading' || isAdding}
+                      hasResults={localGroups.length > 0}
+                      isLoggedIn={!!user}
+                      currentMode={inputMode}
+                      currentRecipes={recipes}
+                      currentTitle={activeList?.title || ''}
+                    />
+
+                    {error && (
+                      <div className="p-4 rounded-2xl bg-red-50/80 backdrop-blur-sm text-red-800 border border-red-100 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                        <AlertCircle className="w-5 h-5 shrink-0" />
+                        <p className="font-medium">{error}</p>
+                      </div>
+                    )}
+
+                    {localGroups.length > 0 && (
+                      <ResultCard
+                        groups={localGroups}
+                        members={activeList?.memberEmails || []}
+                        setGroups={setLocalGroups}
+                        title={activeList?.title}
+                        listId={activeListId || 'guest-list'}
+                        onShareClick={() => setIsShareModalOpen(true)}
+                        onUpdateList={handleListUpdate}
+                        onDeleteList={handleDeleteList}
+                        onTitleUpdate={handleTitleUpdate}
+                        isGuest={!user}
+                        onLoginRequest={handleLogin}
+                        recipes={recipes}
+                        inputMode={inputMode}
+                        appMode="organize"
+                      />
+                    )}
+                  </>
                 )}
 
-                {(localGroups.length > 0) && (
-                  <ResultCard
-                    groups={localGroups}
-                    members={activeList?.memberEmails || []}
-                    setGroups={setLocalGroups}
-                    title={activeList?.title}
-                    listId={activeListId || 'guest-list'}
-                    onShareClick={() => setIsShareModalOpen(true)}
-                    onUpdateList={handleListUpdate}
-                    onDeleteList={handleDeleteList}
-                    onTitleUpdate={handleTitleUpdate}
-                    isGuest={!user}
-                    onLoginRequest={handleLogin}
-                    recipes={recipes}
-                    inputMode={inputMode}
-                    onFindBestPrices={handleFindBestPrices}
-                    onStartOnlineAgent={handleStartOnlineAgent}
-                  />
+                {/* ==================== SHOPPING MODE ==================== */}
+                {appMode === 'shopping' && (
+                  <>
+                    {/* Step 1: Build List */}
+                    {(shoppingStep === 'build_list' || shoppingStep === 'comparing') && (
+                      <ShoppingInputArea
+                        products={shoppingProducts}
+                        onProductsChange={setShoppingProducts}
+                        onCompare={handleShoppingCompare}
+                        isLoading={isShoppingComparing}
+                      />
+                    )}
+
+                    {error && (
+                      <div className="p-4 rounded-2xl bg-red-50/80 backdrop-blur-sm text-red-800 border border-red-100 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                        <AlertCircle className="w-5 h-5 shrink-0" />
+                        <p className="font-medium">{error}</p>
+                      </div>
+                    )}
+
+                    {/* Step 2: Mode Select (with SavingsReport) */}
+                    {shoppingStep === 'mode_select' && priceComparison && (
+                      <ShoppingPriceStep
+                        comparison={priceComparison}
+                        selectedMode={selectedShoppingMode}
+                        onSelectMode={setSelectedShoppingMode}
+                        onBack={() => {
+                          setShoppingStep('build_list');
+                          setPriceComparison(null);
+                          setSelectedShoppingMode(null);
+                        }}
+                        onOrganizeForStore={handleShoppingPhysical}
+                        onStartOnlineAgent={handleShoppingOnline}
+                        isOrganizing={status === 'loading'}
+                      />
+                    )}
+
+                    {/* Step 3: Ready (organized results with store banner) */}
+                    {shoppingStep === 'ready' && localGroups.length > 0 && (
+                      <ResultCard
+                        groups={localGroups}
+                        members={activeList?.memberEmails || []}
+                        setGroups={setLocalGroups}
+                        title={activeList?.title}
+                        listId={activeListId || 'guest-list'}
+                        onShareClick={() => setIsShareModalOpen(true)}
+                        onUpdateList={handleListUpdate}
+                        onDeleteList={handleDeleteList}
+                        onTitleUpdate={handleTitleUpdate}
+                        isGuest={!user}
+                        onLoginRequest={handleLogin}
+                        recipes={recipes}
+                        inputMode={inputMode}
+                        appMode="shopping"
+                        storeRecommendation={storeRecommendation || undefined}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             )}

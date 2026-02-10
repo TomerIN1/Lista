@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { CategoryGroup, Item, Recipe, InputMode } from '../types';
+import { CategoryGroup, Item, Recipe, InputMode, AppMode } from '../types';
 import CategoryCard from './CategoryCard';
 import RecipeBreakdownModal from './RecipeBreakdownModal';
-import PriceComparisonPanel from './PriceComparisonPanel';
-import { Check, Copy, Trash2, Lock, ChefHat, Pencil, Eye, DollarSign } from 'lucide-react';
+import { Check, Copy, Trash2, Lock, ChefHat, Pencil, Eye, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface ResultCardProps {
@@ -20,8 +19,8 @@ interface ResultCardProps {
   onLoginRequest: () => void;
   recipes?: Recipe[];
   inputMode?: InputMode;
-  onFindBestPrices?: () => void;
-  onStartOnlineAgent?: (storeName: string) => void;
+  appMode?: AppMode;
+  storeRecommendation?: { storeName: string; savingsAmount: number };
 }
 
 const ResultCard: React.FC<ResultCardProps> = ({
@@ -38,15 +37,14 @@ const ResultCard: React.FC<ResultCardProps> = ({
   onLoginRequest,
   recipes = [],
   inputMode = 'items',
-  onFindBestPrices,
-  onStartOnlineAgent
+  appMode = 'organize',
+  storeRecommendation,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(title || '');
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
-  const [isPriceComparisonOpen, setIsPriceComparisonOpen] = useState(false);
-  const { t, tUnit } = useLanguage();
+  const { t, tUnit, language } = useLanguage();
 
 
   const handleCopy = () => {
@@ -300,20 +298,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
             </button>
           )}
 
-          {/* Find Best Prices Button */}
-          <button
-            type="button"
-            onClick={() => setIsPriceComparisonOpen((prev) => !prev)}
-            className={`group flex items-center gap-2 text-sm font-semibold transition-all px-4 py-2 rounded-xl shadow-sm hover:shadow-md active:scale-95 duration-200 ${
-              isPriceComparisonOpen
-                ? 'text-indigo-600 bg-indigo-50 border border-indigo-200'
-                : 'text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'
-            }`}
-          >
-            <DollarSign className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
-            <span>{t('result.findBestPrices')}</span>
-          </button>
-
           {/* Delete Button (Allowed for guests to clear local view, or server for users) */}
           <div className="w-px h-6 bg-slate-200 mx-1" />
 
@@ -327,6 +311,23 @@ const ResultCard: React.FC<ResultCardProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Store Recommendation Banner (Shopping mode, physical path) */}
+      {storeRecommendation && (
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-5 text-white flex items-center gap-4">
+          <ShoppingCart className="w-8 h-8 flex-shrink-0" />
+          <div>
+            <p className="font-bold text-lg">
+              {t('priceComparison.goShopping')}
+            </p>
+            <p className="text-sm opacity-90">
+              {language === 'he'
+                ? `קנו ב-${storeRecommendation.storeName} וחסכו ₪${storeRecommendation.savingsAmount.toFixed(2)}!`
+                : `Shop at ${storeRecommendation.storeName} and save ₪${storeRecommendation.savingsAmount.toFixed(2)}!`}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
         {groups.map((group) => (
@@ -344,14 +345,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
           />
         ))}
       </div>
-
-      {/* Price Comparison Panel (Inline) */}
-      <PriceComparisonPanel
-        groups={groups}
-        isOpen={isPriceComparisonOpen}
-        onClose={() => setIsPriceComparisonOpen(false)}
-        onStartOnlineAgent={onStartOnlineAgent || (() => {})}
-      />
 
       {/* Recipe Breakdown Modal */}
       <RecipeBreakdownModal

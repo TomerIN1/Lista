@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        proxy: {
+          '/price-api': {
+            target: 'https://israeli-food-prices-database-and-ap-one.vercel.app',
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/price-api/, ''),
+          },
+        },
       },
       plugins: [react()],
       define: {
