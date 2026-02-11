@@ -4,6 +4,27 @@ import { useProductSearch } from '../hooks/useProductSearch';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DbProduct } from '../types';
 
+const ProductThumb: React.FC<{ src: string | null; alt: string; size?: string }> = ({ src, alt, size = 'w-10 h-10' }) => {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return (
+      <div className={`${size} rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0`}>
+        <Package className="w-1/2 h-1/2 text-slate-300" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={`${size} object-contain rounded-lg bg-white flex-shrink-0`}
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
 interface ProductSearchInputProps {
   selectedProducts: DbProduct[];
   onSelectProduct: (product: DbProduct) => void;
@@ -153,7 +174,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
               }`}
               disabled={selectedProducts.some((p) => p.barcode === product.barcode)}
             >
-              <Package className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <ProductThumb src={product.image_url} alt={product.name} />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-slate-800 truncate">
                   {product.name}
@@ -188,8 +209,9 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
           {selectedProducts.map((product) => (
             <div
               key={product.barcode}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium"
+              className="inline-flex items-center gap-1.5 ps-1 pe-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium"
             >
+              <ProductThumb src={product.image_url} alt={product.name} size="w-6 h-6" />
               <span className="truncate max-w-[150px]">{product.name}</span>
               {product.min_price > 0 && (
                 <span className="text-indigo-500">₪{product.min_price.toFixed(2)}</span>

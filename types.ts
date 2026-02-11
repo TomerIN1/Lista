@@ -77,6 +77,7 @@ export interface DbProduct {
   name: string;
   manufacturer: string;
   category: string;
+  image_url: string | null;
   min_price: number;
   max_price: number;
   savings: number;

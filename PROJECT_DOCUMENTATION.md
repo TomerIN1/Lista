@@ -1768,8 +1768,20 @@ Fixed the SavingsReport to show accurate item counts relative to the full shoppi
 - **`components/SavingsReport.tsx`**: `StoreRow` receives `data.totalListItems` as the denominator. Expanded store view now shows unavailable items below the price breakdown with an `XCircle` icon and "unavailable" label.
 - **`constants/translations.ts`**: Added `unavailable` / `לא זמין` translation key.
 
+### Product Images in Shopping Mode (February 2026)
+
+Added product image support to the shopping mode search and selection flow. The API now returns an `image_url` field (Cloudinary URLs) for products that have images scraped.
+
+**Changes**:
+- **`types.ts`**: Added `image_url: string | null` to `DbProduct` interface
+- **`components/ProductSearchInput.tsx`**:
+  - Added `ProductThumb` helper component with graceful fallback (shows `Package` icon when no image or on load error)
+  - Search dropdown results now show a 40x40 product thumbnail alongside name, manufacturer, and price
+  - Selected product chips now show a 24x24 round thumbnail before the product name
+- Products without images in the database display a neutral placeholder icon — no broken image states
+
 ---
 
 **Last Updated**: February 10, 2026
-**Version**: 3.0.1
+**Version**: 3.0.2
 **Status**: Production Ready
