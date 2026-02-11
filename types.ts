@@ -141,6 +141,7 @@ export interface ListPriceComparison {
   savingsAmount: number;
   savingsPercent: number;
   unmatchedItems: string[];
+  totalListItems: number;
 }
 
 // ============================================

@@ -1756,8 +1756,20 @@ if appMode === 'shopping':
 | `vite.config.ts` | Modified | Added CORS proxy for price API |
 | `services/priceDbService.ts` | Modified | Dev proxy support, fixed URL construction |
 
+### SavingsReport Per-Store Item Accuracy Fix (February 2026)
+
+Fixed the SavingsReport to show accurate item counts relative to the full shopping list, not per-store totals.
+
+**Problem**: When a user added 4 items, stores showed "3 of 3 matched" and "2 of 2 matched" instead of "3 of 4" and "2 of 4". The user couldn't tell which items were unavailable at each store.
+
+**Changes**:
+- **`types.ts`**: Added `totalListItems: number` to `ListPriceComparison` interface
+- **`services/priceDbService.ts`**: `compareListPrices` now computes per-store `unmatchedItems` (all list items minus items this store carries) instead of copying the global unmatched list. Returns `totalListItems` in the result.
+- **`components/SavingsReport.tsx`**: `StoreRow` receives `data.totalListItems` as the denominator. Expanded store view now shows unavailable items below the price breakdown with an `XCircle` icon and "unavailable" label.
+- **`constants/translations.ts`**: Added `unavailable` / `לא זמין` translation key.
+
 ---
 
 **Last Updated**: February 10, 2026
-**Version**: 3.0.0
+**Version**: 3.0.1
 **Status**: Production Ready

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingDown, ChevronDown, ChevronUp, Award, AlertTriangle } from 'lucide-react';
+import { TrendingDown, ChevronDown, ChevronUp, Award, AlertTriangle, XCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListPriceComparison, StorePriceSummary } from '../types';
 
@@ -42,7 +42,7 @@ const SavingsReport: React.FC<SavingsReportProps> = ({ data }) => {
             isCheapest={index === 0 && data.stores.length > 1}
             isExpanded={expandedStore === store.supermarketName}
             onToggle={() => toggleStore(store.supermarketName)}
-            totalItems={store.matchedItems + store.unmatchedItems.length}
+            totalItems={data.totalListItems}
           />
         ))}
       </div>
@@ -136,18 +136,31 @@ const StoreRow: React.FC<StoreRowProps> = ({
       </button>
 
       {/* Expanded Item Breakdown */}
-      {isExpanded && store.itemPrices.length > 0 && (
+      {isExpanded && (
         <div className="px-4 pb-3 border-t border-slate-100">
-          <div className="mt-2 space-y-1">
-            {store.itemPrices.map((ip, i) => (
-              <div key={i} className="flex items-center justify-between text-xs">
-                <span className="text-slate-600 truncate max-w-[60%]">
-                  {ip.itemName} {ip.amount > 1 ? `x${ip.amount}` : ''}
-                </span>
-                <span className="text-slate-800 font-medium">₪{ip.total.toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
+          {store.itemPrices.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {store.itemPrices.map((ip, i) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className="text-slate-600 truncate max-w-[60%]">
+                    {ip.itemName} {ip.amount > 1 ? `x${ip.amount}` : ''}
+                  </span>
+                  <span className="text-slate-800 font-medium">₪{ip.total.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {store.unmatchedItems.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-dashed border-slate-200 space-y-1">
+              {store.unmatchedItems.map((name, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-xs text-red-400">
+                  <XCircle className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate">{name}</span>
+                  <span className="ms-auto text-[10px] italic">{t('priceComparison.unavailable')}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

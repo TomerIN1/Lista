@@ -138,7 +138,8 @@ export const TRANSLATIONS = {
       storeBreakdown: "Store Breakdown",
       matched: "matched",
       of: "of",
-      items: "items"
+      items: "items",
+      unavailable: "unavailable"
     },
     appMode: {
       organize: "Organize",
@@ -298,7 +299,8 @@ export const TRANSLATIONS = {
       storeBreakdown: "פירוט לפי חנות",
       matched: "מותאמים",
       of: "מתוך",
-      items: "פריטים"
+      items: "פריטים",
+      unavailable: "לא זמין"
     },
     appMode: {
       organize: "ארגון",

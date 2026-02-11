@@ -310,9 +310,13 @@ export async function compareListPrices(
     }
   }
 
-  // Add unmatched items to each store
+  // Build the full list of item names for per-store unavailable tracking
+  const allItemNames = items.map((item) => item.name);
+
+  // For each store, compute unavailable items (items NOT carried by this store)
   for (const [, summary] of storeMap) {
-    summary.unmatchedItems = [...unmatchedItems];
+    const matchedSet = new Set(summary.itemPrices.map((ip) => ip.itemName));
+    summary.unmatchedItems = allItemNames.filter((name) => !matchedSet.has(name));
   }
 
   const stores = Array.from(storeMap.values()).sort((a, b) => a.totalCost - b.totalCost);
@@ -333,6 +337,7 @@ export async function compareListPrices(
     savingsAmount,
     savingsPercent,
     unmatchedItems,
+    totalListItems: items.length,
   };
 }
 
