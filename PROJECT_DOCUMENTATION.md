@@ -1780,8 +1780,26 @@ Added product image support to the shopping mode search and selection flow. The 
   - Selected product chips now show a 24x24 round thumbnail before the product name
 - Products without images in the database display a neutral placeholder icon — no broken image states
 
+### Shopping Mode UX Improvements (February 2026)
+
+#### Product Search Dropdown — Manufacturer & Barcode
+- Search results now show manufacturer (when available) and barcode alongside name, image, and price
+
+#### Selected Products — List View
+- Replaced small chips with a proper list layout: 56x56 product images, product name, manufacturer, barcode, and price range per row
+- Clean dividers between items with a remove button on each row
+
+#### Price Comparison — Coverage-Based Ranking
+Fixed a logic issue where stores with fewer items appeared "cheapest" simply because their partial total was lower.
+
+**New logic**:
+- **`services/priceDbService.ts`**: Stores now sorted by most matched items first, then cheapest within the same coverage tier. Savings are calculated only among stores in the top coverage tier.
+- **`components/SavingsReport.tsx`**: Recommended badge goes to the store with best coverage + lowest price. Stores with full item coverage show match count in green; partial coverage stores appear dimmed with amber match count.
+
+**Example**: If only Rami Levy has all 3 items at ₪32.30, it's recommended even though H. Cohen has 1 item at ₪9.00.
+
 ---
 
 **Last Updated**: February 10, 2026
-**Version**: 3.0.2
+**Version**: 3.1.0
 **Status**: Production Ready

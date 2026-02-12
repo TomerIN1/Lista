@@ -205,25 +205,34 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
         </div>
       )}
 
-      {/* Selected Product Chips */}
+      {/* Selected Products List */}
       {selectedProducts.length > 0 && (
-        <div className="flex flex-wrap gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
+        <div className="divide-y divide-slate-100 border-b border-slate-100">
           {selectedProducts.map((product) => (
             <div
               key={product.barcode}
-              className="inline-flex items-center gap-1.5 ps-1 pe-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium"
+              className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50/50 transition-colors"
             >
-              <ProductThumb src={product.image_url} alt={product.name} size="w-6 h-6" />
-              <span className="truncate max-w-[150px]">{product.name}</span>
-              {product.min_price > 0 && (
-                <span className="text-indigo-500">₪{product.min_price.toFixed(2)}</span>
-              )}
+              <ProductThumb src={product.image_url} alt={product.name} size="w-14 h-14" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-slate-800 truncate">{product.name}</div>
+                <div className="text-xs text-slate-400 truncate mt-0.5">
+                  {product.manufacturer && <span className="text-slate-500">{product.manufacturer}</span>}
+                  {product.manufacturer && ' · '}
+                  {product.barcode}
+                </div>
+                {product.min_price > 0 && (
+                  <div className="text-sm font-bold text-emerald-600 mt-0.5">
+                    {formatPrice(product.min_price, product.max_price)}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => onRemoveProduct(product.barcode)}
-                className="p-0.5 hover:bg-indigo-200 rounded-full transition-colors"
+                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
               >
-                <X className="w-3 h-3" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           ))}

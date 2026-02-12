@@ -317,10 +317,18 @@ export async function compareListPrices(
     summary.unmatchedItems = allItemNames.filter((name) => !matchedSet.has(name));
   }
 
-  const stores = Array.from(storeMap.values()).sort((a, b) => a.totalCost - b.totalCost);
+  // Sort: most matched items first, then cheapest within same match count
+  const stores = Array.from(storeMap.values()).sort((a, b) => {
+    if (b.matchedItems !== a.matchedItems) return b.matchedItems - a.matchedItems;
+    return a.totalCost - b.totalCost;
+  });
 
-  const cheapestStore = stores[0];
-  const mostExpensiveStore = stores[stores.length - 1];
+  // Savings: compare only within the top coverage tier (stores with the most items)
+  const topTierMatched = stores[0]?.matchedItems ?? 0;
+  const topTierStores = stores.filter((s) => s.matchedItems === topTierMatched);
+
+  const cheapestStore = topTierStores[0];
+  const mostExpensiveStore = topTierStores[topTierStores.length - 1];
 
   const cheapestTotal = cheapestStore?.totalCost ?? 0;
   const mostExpensiveTotal = mostExpensiveStore?.totalCost ?? 0;

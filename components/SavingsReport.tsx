@@ -39,7 +39,7 @@ const SavingsReport: React.FC<SavingsReportProps> = ({ data }) => {
           <StoreRow
             key={store.supermarketName}
             store={store}
-            isCheapest={index === 0 && data.stores.length > 1}
+            isRecommended={index === 0}
             isExpanded={expandedStore === store.supermarketName}
             onToggle={() => toggleStore(store.supermarketName)}
             totalItems={data.totalListItems}
@@ -75,7 +75,7 @@ const SavingsReport: React.FC<SavingsReportProps> = ({ data }) => {
 // Store Row sub-component
 interface StoreRowProps {
   store: StorePriceSummary;
-  isCheapest: boolean;
+  isRecommended: boolean;
   isExpanded: boolean;
   onToggle: () => void;
   totalItems: number;
@@ -83,19 +83,23 @@ interface StoreRowProps {
 
 const StoreRow: React.FC<StoreRowProps> = ({
   store,
-  isCheapest,
+  isRecommended,
   isExpanded,
   onToggle,
   totalItems,
 }) => {
   const { t } = useLanguage();
+  const hasAllItems = store.matchedItems === totalItems;
+  const isPartial = !hasAllItems;
 
   return (
     <div
       className={`rounded-xl border transition-all ${
-        isCheapest
+        isRecommended
           ? 'border-emerald-300 bg-emerald-50/50'
-          : 'border-slate-200 bg-white'
+          : isPartial
+            ? 'border-slate-200 bg-slate-50/30 opacity-75'
+            : 'border-slate-200 bg-white'
       }`}
     >
       <button
@@ -104,27 +108,27 @@ const StoreRow: React.FC<StoreRowProps> = ({
         className="w-full flex items-center justify-between px-4 py-3 text-start"
       >
         <div className="flex items-center gap-2.5">
-          {isCheapest && (
+          {isRecommended && (
             <Award className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           )}
           <div>
             <div className="flex items-center gap-2">
-              <span className={`text-sm font-semibold ${isCheapest ? 'text-emerald-800' : 'text-slate-700'}`}>
+              <span className={`text-sm font-semibold ${isRecommended ? 'text-emerald-800' : 'text-slate-700'}`}>
                 {store.supermarketName}
               </span>
-              {isCheapest && (
+              {isRecommended && (
                 <span className="px-1.5 py-0.5 bg-emerald-200 text-emerald-800 text-[10px] font-bold rounded-md uppercase">
                   {t('priceComparison.cheapestStore')}
                 </span>
               )}
             </div>
-            <span className="text-xs text-slate-500">
+            <span className={`text-xs ${hasAllItems ? 'text-emerald-600' : 'text-amber-600'}`}>
               {store.matchedItems} {t('priceComparison.of')} {totalItems} {t('priceComparison.items')} {t('priceComparison.matched')}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-base font-bold ${isCheapest ? 'text-emerald-700' : 'text-slate-800'}`}>
+          <span className={`text-base font-bold ${isRecommended ? 'text-emerald-700' : 'text-slate-800'}`}>
             ₪{store.totalCost.toFixed(2)}
           </span>
           {isExpanded ? (
