@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct, AppMode, ShoppingFlowStep, ShoppingMode, ListPriceComparison } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
-import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe } from './services/firestoreService';
+import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe, createShoppingList, updateShoppingListProducts } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
 
 import Header from './components/Header';
@@ -61,6 +61,9 @@ const App: React.FC = () => {
   const [selectedShoppingMode, setSelectedShoppingMode] = useState<ShoppingMode | null>(null);
   const [storeRecommendation, setStoreRecommendation] = useState<{ storeName: string; savingsAmount: number } | null>(null);
   const [isShoppingComparing, setIsShoppingComparing] = useState(false);
+
+  // Ref to guard against circular auto-save from sync effect
+  const shoppingProductsRef = useRef<DbProduct[]>([]);
 
   // Language Context
   const { language, t } = useLanguage();
@@ -148,12 +151,26 @@ const App: React.FC = () => {
       const current = lists.find(l => l.id === activeListId);
       console.log('[Sync Effect] Found current list:', !!current);
       if (current) {
-        console.log('[Sync Effect] Syncing state from Firestore - groups:', current.groups.length, 'recipes:', current.recipes?.length, 'mode:', current.inputMode);
-        setLocalGroups(current.groups);
-        setInputMode(current.inputMode || 'items');
-        setRecipes(current.recipes || []);
-        setAppMode(current.appMode || 'organize');
-        setStatus(current.groups.length > 0 ? 'success' : 'idle');
+        const listMode = current.appMode || 'organize';
+        console.log('[Sync Effect] Syncing state from Firestore - groups:', current.groups.length, 'recipes:', current.recipes?.length, 'mode:', current.inputMode, 'appMode:', listMode);
+        setAppMode(listMode);
+
+        if (listMode === 'shopping') {
+          // Shopping list: restore products, reset shopping flow
+          shoppingProductsRef.current = current.shoppingProducts || [];
+          setShoppingProducts(current.shoppingProducts || []);
+          setShoppingStep('build_list');
+          setPriceComparison(null);
+          setSelectedShoppingMode(null);
+          setStoreRecommendation(null);
+          setStatus('idle');
+        } else {
+          // Organize list: restore groups/recipes
+          setLocalGroups(current.groups);
+          setInputMode(current.inputMode || 'items');
+          setRecipes(current.recipes || []);
+          setStatus(current.groups.length > 0 ? 'success' : 'idle');
+        }
       } else {
         console.log('[Sync Effect] List not found in lists array yet');
       }
@@ -514,15 +531,74 @@ const App: React.FC = () => {
   // ============================================
 
   const handleAppModeSwitch = (mode: AppMode) => {
+    // Deselect active list if it belongs to the other mode
+    if (activeListId) {
+      const current = lists.find(l => l.id === activeListId);
+      if (current && (current.appMode || 'organize') !== mode) {
+        setActiveListId(null);
+        setLocalGroups([]);
+        setStatus('idle');
+      }
+    }
+
     setAppMode(mode);
-    // Reset shopping state when switching
+    // Reset shopping state when switching to organize
     if (mode === 'organize') {
       setShoppingStep('build_list');
       setShoppingProducts([]);
+      shoppingProductsRef.current = [];
       setPriceComparison(null);
       setSelectedShoppingMode(null);
       setStoreRecommendation(null);
     }
+  };
+
+  const handleShoppingProductsChange = useCallback(async (products: DbProduct[]) => {
+    setShoppingProducts(products);
+    shoppingProductsRef.current = products;
+
+    if (!user || !user.email) return;
+
+    if (!activeListId && products.length > 0) {
+      // First product added — create the shopping list
+      try {
+        const newId = await createShoppingList(
+          language === 'he' ? 'רשימת קניות חדשה' : 'New Shopping List',
+          user.uid,
+          user.email,
+          products
+        );
+        setActiveListId(newId);
+      } catch (e) {
+        console.error('Failed to create shopping list:', e);
+      }
+    }
+  }, [user, activeListId, language]);
+
+  // Auto-save shopping products to Firestore
+  useEffect(() => {
+    if (!user || !activeListId) return;
+    const current = lists.find(l => l.id === activeListId);
+    if (!current || current.appMode !== 'shopping') return;
+
+    // Compare with Firestore data to avoid circular saves
+    const firestoreProducts = current.shoppingProducts || [];
+    const localProducts = shoppingProductsRef.current;
+    if (JSON.stringify(firestoreProducts) === JSON.stringify(localProducts)) return;
+
+    updateShoppingListProducts(activeListId, localProducts).catch(console.error);
+  }, [shoppingProducts, user, activeListId, lists]);
+
+  const handleCreateShoppingList = () => {
+    // Switch to shopping mode with empty state (no Firestore doc until first product added)
+    setAppMode('shopping');
+    setActiveListId(null);
+    setShoppingProducts([]);
+    shoppingProductsRef.current = [];
+    setShoppingStep('build_list');
+    setPriceComparison(null);
+    setSelectedShoppingMode(null);
+    setStoreRecommendation(null);
   };
 
   const handleShoppingCompare = async () => {
@@ -618,13 +694,21 @@ const App: React.FC = () => {
         setIsOpen={setSidebarOpen}
         lists={lists}
         activeListId={activeListId}
-        onSelect={(l) => setActiveListId(l.id)}
+        onSelect={(l) => {
+          setActiveListId(l.id);
+          // Auto-switch appMode based on the selected list's mode
+          const listMode = l.appMode || 'organize';
+          if (listMode !== appMode) {
+            setAppMode(listMode);
+          }
+        }}
         onCreate={handleCreateList}
         onDelete={handleDeleteList}
         user={user}
         onLogin={handleLogin}
         onLoadRecipe={handleLoadRecipe}
         onCreateRecipe={handleCreateRecipe}
+        onCreateShoppingList={handleCreateShoppingList}
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative scroll-smooth">
@@ -753,9 +837,11 @@ const App: React.FC = () => {
                     {(shoppingStep === 'build_list' || shoppingStep === 'comparing') && (
                       <ShoppingInputArea
                         products={shoppingProducts}
-                        onProductsChange={setShoppingProducts}
+                        onProductsChange={handleShoppingProductsChange}
                         onCompare={handleShoppingCompare}
                         isLoading={isShoppingComparing}
+                        title={activeList?.title}
+                        onTitleChange={user && activeListId ? handleTitleUpdate : undefined}
                       />
                     )}
 

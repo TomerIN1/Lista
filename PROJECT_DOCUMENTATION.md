@@ -1798,8 +1798,71 @@ Fixed a logic issue where stores with fewer items appeared "cheapest" simply bec
 
 **Example**: If only Rami Levy has all 3 items at ₪32.30, it's recommended even though H. Cohen has 1 item at ₪9.00.
 
+### Shopping List Persistence & Sidebar Grouping (February 2026)
+
+#### Overview
+
+Shopping mode products (`shoppingProducts: DbProduct[]`) previously existed only as local React state — lost on page refresh. This update adds full Firestore persistence for shopping lists and reorganizes the sidebar to separate organize/recipe lists from shopping lists.
+
+Price comparison results are **not** saved — they're recalculated on demand.
+
+#### Types Changes
+
+- **`types.ts`**: Added `shoppingProducts?: DbProduct[]` to `ListDocument` (backward-compatible optional field)
+
+#### Firestore Service
+
+- **`services/firestoreService.ts`**: Two new functions:
+  - `createShoppingList(title, ownerId, ownerEmail, shoppingProducts)` — creates a list with `appMode: 'shopping'` and `shoppingProducts`
+  - `updateShoppingListProducts(listId, shoppingProducts, title?)` — updates products and timestamp on an existing shopping list
+
+#### Sidebar Grouping
+
+- **`components/Sidebar.tsx`**: Restructured into three collapsible sections:
+  - **"My Lists"** (Sparkles icon, indigo) — organize/recipe lists + "Create New List" button
+  - **"Shopping Lists"** (ShoppingCart icon, emerald) — shopping lists + "New Shopping List" button; items show product count instead of category count
+  - **"Saved Recipes"** (ChefHat icon) — unchanged behavior
+  - Added `onCreateShoppingList` prop
+  - Lists split using `list.appMode` field: `appMode === 'shopping'` vs everything else
+
+#### Shopping List Rename
+
+- **`components/ShoppingInputArea.tsx`**: Header now displays the list title (falls back to "Build Your List"). When the list is saved:
+  - Hover reveals a pencil icon
+  - Click opens inline text input for renaming
+  - Enter/blur commits, Escape cancels
+  - Added `title` and `onTitleChange` optional props
+
+#### App.tsx Wiring
+
+- **Save logic**: `handleShoppingProductsChange(products)` — sets local state; on first product add (no active list), creates a Firestore shopping list via `createShoppingList()` and sets `activeListId`
+- **Auto-save effect**: watches `shoppingProducts` changes and persists to Firestore with a ref-based guard to prevent circular saves from the sync effect
+- **Load logic**: sync effect now detects shopping lists — restores `shoppingProducts`, resets `shoppingStep` to `'build_list'`, clears stale comparison state
+- **Mode switching**: `handleAppModeSwitch` deselects the active list if it belongs to the other mode; sidebar `onSelect` auto-switches `appMode` based on the selected list's mode
+- **`handleCreateShoppingList`**: switches to shopping mode with empty state (lazy Firestore creation — no doc until first product added)
+- **Title**: passes `title` and `onTitleChange` (reuses existing `handleTitleUpdate`) to `ShoppingInputArea`
+
+#### Translations
+
+- **`constants/translations.ts`**: Added 4 sidebar keys (en + he):
+  - `organizeLists` / `הרשימות שלי`
+  - `shoppingLists` / `רשימות קניות`
+  - `products` / `מוצרים`
+  - `createNewShoppingList` / `רשימת קניות חדשה`
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `types.ts` | Modified | Added `shoppingProducts?: DbProduct[]` to `ListDocument` |
+| `services/firestoreService.ts` | Modified | Added `createShoppingList`, `updateShoppingListProducts` |
+| `constants/translations.ts` | Modified | Added sidebar section labels (en + he) |
+| `components/Sidebar.tsx` | Modified | Split lists into two grouped sections, added `onCreateShoppingList` |
+| `components/ShoppingInputArea.tsx` | Modified | Added editable title with `title`/`onTitleChange` props |
+| `App.tsx` | Modified | Save/load/auto-save shopping lists, mode switching, new handlers, title prop wiring |
+
 ---
 
-**Last Updated**: February 10, 2026
-**Version**: 3.1.0
+**Last Updated**: February 12, 2026
+**Version**: 3.2.0
 **Status**: Production Ready

@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowRight, ArrowLeft, ShoppingCart, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ArrowRight, ArrowLeft, ShoppingCart, Trash2, Pencil, Check } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DbProduct } from '../types';
 import ProductSearchInput from './ProductSearchInput';
@@ -9,6 +9,8 @@ interface ShoppingInputAreaProps {
   onProductsChange: (products: DbProduct[]) => void;
   onCompare: () => void;
   isLoading: boolean;
+  title?: string;
+  onTitleChange?: (title: string) => void;
 }
 
 const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
@@ -16,8 +18,32 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   onProductsChange,
   onCompare,
   isLoading,
+  title,
+  onTitleChange,
 }) => {
   const { t, isRTL } = useLanguage();
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState(title || '');
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setEditTitle(title || '');
+  }, [title]);
+
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  const commitTitle = () => {
+    const trimmed = editTitle.trim();
+    if (trimmed && trimmed !== title && onTitleChange) {
+      onTitleChange(trimmed);
+    }
+    setIsEditingTitle(false);
+  };
 
   const hasContent = products.length > 0;
   const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
@@ -39,7 +65,36 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
       {/* Header */}
       <div className="flex items-center justify-center gap-2 px-6 py-4 border-b border-slate-100 bg-emerald-50/30 rounded-t-3xl">
         <ShoppingCart className="w-5 h-5 text-emerald-600" />
-        <span className="text-sm font-semibold text-emerald-800">{t('appMode.buildList')}</span>
+        {isEditingTitle ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              ref={titleInputRef}
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitTitle();
+                if (e.key === 'Escape') { setEditTitle(title || ''); setIsEditingTitle(false); }
+              }}
+              className="text-sm font-semibold text-emerald-800 bg-white border border-emerald-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-emerald-300 w-48"
+            />
+            <button onClick={commitTitle} className="p-1 text-emerald-600 hover:text-emerald-800">
+              <Check className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => onTitleChange && setIsEditingTitle(true)}
+            className="flex items-center gap-1.5 group"
+            title={onTitleChange ? (isRTL ? 'שנה שם' : 'Rename') : undefined}
+          >
+            <span className="text-sm font-semibold text-emerald-800">{title || t('appMode.buildList')}</span>
+            {onTitleChange && (
+              <Pencil className="w-3 h-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* Product Search (prominent) */}

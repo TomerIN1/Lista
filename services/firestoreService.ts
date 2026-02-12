@@ -11,7 +11,7 @@ import {
   onSnapshot,
   arrayUnion
 } from 'firebase/firestore';
-import { ListDocument, CategoryGroup, Recipe, InputMode, SavedRecipe } from '../types';
+import { ListDocument, CategoryGroup, Recipe, InputMode, SavedRecipe, DbProduct } from '../types';
 
 const COLLECTION_NAME = 'lists';
 
@@ -96,6 +96,47 @@ export const updateListGroupsAndRecipes = async (
 
   await updateDoc(listRef, updateData);
   console.log('[updateListGroupsAndRecipes] Update complete');
+};
+
+export const createShoppingList = async (
+  title: string,
+  ownerId: string,
+  ownerEmail: string,
+  shoppingProducts: DbProduct[]
+) => {
+  const newListRef = doc(collection(db, COLLECTION_NAME));
+  const newList: ListDocument = {
+    id: newListRef.id,
+    title,
+    ownerId,
+    memberEmails: [ownerEmail],
+    groups: [],
+    appMode: 'shopping',
+    shoppingProducts,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  await setDoc(newListRef, newList);
+  return newList.id;
+};
+
+export const updateShoppingListProducts = async (
+  listId: string,
+  shoppingProducts: DbProduct[],
+  title?: string
+) => {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+  const updateData: any = {
+    shoppingProducts,
+    updatedAt: Date.now()
+  };
+
+  if (title !== undefined) {
+    updateData.title = title;
+  }
+
+  await updateDoc(listRef, updateData);
 };
 
 export const updateListTitle = async (listId: string, title: string) => {

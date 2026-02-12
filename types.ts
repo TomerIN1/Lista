@@ -63,6 +63,7 @@ export interface ListDocument {
   recipes?: Recipe[]; // Array of recipes used in this list
   inputMode?: InputMode; // Current mode ('items' or 'recipe')
   appMode?: AppMode; // Top-level mode ('organize' or 'shopping') — undefined defaults to 'organize'
+  shoppingProducts?: DbProduct[]; // Products for shopping mode lists
   createdAt?: any;
   updatedAt?: any;
 }

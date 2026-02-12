@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ListDocument, UserProfile, SavedRecipe } from '../types';
-import { Plus, List, Trash2, Layout, Lock, ChefHat, ChevronDown, ChevronRight, ChevronLeft, Eye, PenLine } from 'lucide-react';
+import { Plus, List, Trash2, Layout, Lock, ChefHat, ChevronDown, ChevronRight, ChevronLeft, Eye, PenLine, Sparkles, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { subscribeToSavedRecipes, deleteSavedRecipe, updateSavedRecipe } from '../services/firestoreService';
 import RecipeBreakdownModal from './RecipeBreakdownModal';
@@ -17,6 +17,7 @@ interface SidebarProps {
   onLogin: () => void;
   onLoadRecipe: (recipe: SavedRecipe) => void;
   onCreateRecipe: () => void;
+  onCreateShoppingList: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -30,12 +31,19 @@ const Sidebar: React.FC<SidebarProps> = ({
   user,
   onLogin,
   onLoadRecipe,
-  onCreateRecipe
+  onCreateRecipe,
+  onCreateShoppingList
 }) => {
   const { t, isRTL } = useLanguage();
   const [savedRecipes, setSavedRecipes] = useState<SavedRecipe[]>([]);
   const [recipesExpanded, setRecipesExpanded] = useState(true);
+  const [organizeExpanded, setOrganizeExpanded] = useState(true);
+  const [shoppingExpanded, setShoppingExpanded] = useState(true);
   const [viewingRecipe, setViewingRecipe] = useState<SavedRecipe | null>(null);
+
+  // Split lists into organize and shopping
+  const organizeLists = lists.filter(l => l.appMode !== 'shopping');
+  const shoppingLists = lists.filter(l => l.appMode === 'shopping');
 
   const handleOverlayClick = () => setIsOpen(false);
 
@@ -144,96 +152,176 @@ const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ) : (
               <>
-                <button
-                  onClick={() => {
-                    onCreate();
-                    setIsOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all group"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-white transition-colors">
-                    <Plus className="w-4 h-4" />
-                  </div>
-                  <span className="font-medium text-sm">{t('sidebar.createNew')}</span>
-                </button>
-
-                {lists.length === 0 && (
-                  <div className="text-center py-8 text-xs text-slate-400">
-                    {t('sidebar.noLists')}
-                  </div>
-                )}
-
-                {lists.map(list => (
-                  <div
-                    key={list.id}
-                    className={`
-                      group relative flex items-center justify-between px-3 py-2.5 rounded-xl transition-all cursor-pointer
-                      ${activeListId === list.id
-                        ? 'bg-indigo-50 text-indigo-900'
-                        : 'text-slate-600 hover:bg-slate-50'
-                      }
-                    `}
-                    onClick={() => {
-                      onSelect(list);
-                      setIsOpen(false);
-                    }}
+                {/* ==================== My Lists Section ==================== */}
+                <div>
+                  <button
+                    onClick={() => setOrganizeExpanded(!organizeExpanded)}
+                    className="w-full flex items-center justify-between px-2 py-2 text-slate-700 hover:text-slate-900 transition-colors"
                   >
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${activeListId === list.id ? 'bg-white text-indigo-600 shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
-                        <List className="w-4 h-4" />
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-semibold truncate">{list.title || 'Untitled List'}</span>
-                        <span className="text-[10px] text-slate-400 truncate">
-                          {list.groups.length} {t('sidebar.categories')} • {list.memberEmails.length > 1 ? t('sidebar.shared') : t('sidebar.private')}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-indigo-600" />
+                      <span className="font-display font-bold text-sm">{t('sidebar.organizeLists')}</span>
+                      <span className="text-xs text-slate-400">({organizeLists.length})</span>
                     </div>
+                    {organizeExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      isRTL ? <ChevronLeft className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteClick(e, list.id)}
-                      className="lg:opacity-0 lg:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all focus:opacity-100 relative z-20"
-                      aria-label="Delete List"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                  {organizeExpanded && (
+                    <div className="mt-1 space-y-1">
+                      <button
+                        onClick={() => {
+                          onCreate();
+                          setIsOpen(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-white transition-colors">
+                          <Plus className="w-4 h-4" />
+                        </div>
+                        <span className="font-medium text-sm">{t('sidebar.createNew')}</span>
+                      </button>
 
-                {/* Saved Recipes Section - Always visible for logged in users */}
+                      {organizeLists.length === 0 && (
+                        <div className="text-center py-4 text-xs text-slate-400">
+                          {t('sidebar.noLists')}
+                        </div>
+                      )}
+
+                      {organizeLists.map(list => (
+                        <div
+                          key={list.id}
+                          className={`
+                            group relative flex items-center justify-between px-3 py-2.5 rounded-xl transition-all cursor-pointer
+                            ${activeListId === list.id
+                              ? 'bg-indigo-50 text-indigo-900'
+                              : 'text-slate-600 hover:bg-slate-50'
+                            }
+                          `}
+                          onClick={() => {
+                            onSelect(list);
+                            setIsOpen(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${activeListId === list.id ? 'bg-white text-indigo-600 shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
+                              <List className="w-4 h-4" />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-semibold truncate">{list.title || 'Untitled List'}</span>
+                              <span className="text-[10px] text-slate-400 truncate">
+                                {list.groups.length} {t('sidebar.categories')} • {list.memberEmails.length > 1 ? t('sidebar.shared') : t('sidebar.private')}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteClick(e, list.id)}
+                            className="lg:opacity-0 lg:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all focus:opacity-100 relative z-20"
+                            aria-label="Delete List"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ==================== Shopping Lists Section ==================== */}
+                <div className="mt-4 pt-4 border-t border-slate-200">
+                  <button
+                    onClick={() => setShoppingExpanded(!shoppingExpanded)}
+                    className="w-full flex items-center justify-between px-2 py-2 text-slate-700 hover:text-slate-900 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ShoppingCart className="w-4 h-4 text-emerald-600" />
+                      <span className="font-display font-bold text-sm">{t('sidebar.shoppingLists')}</span>
+                      <span className="text-xs text-slate-400">({shoppingLists.length})</span>
+                    </div>
+                    {shoppingExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      isRTL ? <ChevronLeft className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
+
+                  {shoppingExpanded && (
+                    <div className="mt-1 space-y-1">
+                      <button
+                        onClick={() => {
+                          onCreateShoppingList();
+                          setIsOpen(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-emerald-200 text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 transition-all group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:bg-white transition-colors">
+                          <Plus className="w-4 h-4" />
+                        </div>
+                        <span className="font-medium text-sm">{t('sidebar.createNewShoppingList')}</span>
+                      </button>
+
+                      {shoppingLists.map(list => (
+                        <div
+                          key={list.id}
+                          className={`
+                            group relative flex items-center justify-between px-3 py-2.5 rounded-xl transition-all cursor-pointer
+                            ${activeListId === list.id
+                              ? 'bg-emerald-50 text-emerald-900'
+                              : 'text-slate-600 hover:bg-slate-50'
+                            }
+                          `}
+                          onClick={() => {
+                            onSelect(list);
+                            setIsOpen(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${activeListId === list.id ? 'bg-white text-emerald-600 shadow-sm' : 'bg-emerald-100 text-emerald-500'}`}>
+                              <ShoppingCart className="w-4 h-4" />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-semibold truncate">{list.title || 'Untitled List'}</span>
+                              <span className="text-[10px] text-slate-400 truncate">
+                                {list.shoppingProducts?.length || 0} {t('sidebar.products')} • {list.memberEmails.length > 1 ? t('sidebar.shared') : t('sidebar.private')}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteClick(e, list.id)}
+                            className="lg:opacity-0 lg:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all focus:opacity-100 relative z-20"
+                            aria-label="Delete List"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ==================== Saved Recipes Section ==================== */}
                 {user && (
-                  <div className="mt-6 pt-4 border-t border-slate-200">
+                  <div className="mt-4 pt-4 border-t border-slate-200">
                     <button
                       onClick={() => setRecipesExpanded(!recipesExpanded)}
                       className="w-full flex items-center justify-between px-2 py-2 text-slate-700 hover:text-slate-900 transition-colors"
                     >
-                      {isRTL ? (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <ChefHat className="w-4 h-4 text-emerald-600" />
-                            <span className="font-display font-bold text-sm">{t('sidebar.savedRecipes')}</span>
-                            <span className="text-xs text-slate-400">({savedRecipes.length})</span>
-                          </div>
-                          {recipesExpanded ? (
-                            <ChevronDown className="w-4 h-4 text-slate-400" />
-                          ) : (
-                            <ChevronLeft className="w-4 h-4 text-slate-400" />
-                          )}
-                        </>
+                      <div className="flex items-center gap-2">
+                        <ChefHat className="w-4 h-4 text-emerald-600" />
+                        <span className="font-display font-bold text-sm">{t('sidebar.savedRecipes')}</span>
+                        <span className="text-xs text-slate-400">({savedRecipes.length})</span>
+                      </div>
+                      {recipesExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
                       ) : (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <ChefHat className="w-4 h-4 text-emerald-600" />
-                            <span className="font-display font-bold text-sm">{t('sidebar.savedRecipes')}</span>
-                            <span className="text-xs text-slate-400">({savedRecipes.length})</span>
-                          </div>
-                          {recipesExpanded ? (
-                            <ChevronDown className="w-4 h-4 text-slate-400" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-slate-400" />
-                          )}
-                        </>
+                        isRTL ? <ChevronLeft className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />
                       )}
                     </button>
 
