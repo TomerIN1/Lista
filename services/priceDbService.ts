@@ -13,10 +13,8 @@ import {
 // Configuration
 // ============================================
 
-// In dev, use Vite proxy to avoid CORS; in production, hit the API directly
-const API_BASE = import.meta.env.DEV
-  ? '/price-api'
-  : 'https://israeli-food-prices-database-and-ap-one.vercel.app';
+// Use /price-api proxy in both dev (Vite proxy) and production (Vercel rewrite) to avoid CORS
+const API_BASE = '/price-api';
 
 // Map English API names → Hebrew display names
 const SUPERMARKET_NAME_MAP: Record<string, string> = {
