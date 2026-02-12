@@ -180,7 +180,9 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
                   {product.name}
                 </div>
                 <div className="text-xs text-slate-500 truncate">
-                  {product.manufacturer}
+                  {product.manufacturer && <span>{product.manufacturer}</span>}
+                  {product.manufacturer && ' · '}
+                  <span className="text-slate-400">{product.barcode}</span>
                 </div>
               </div>
               <span className="text-xs font-semibold text-indigo-600 whitespace-nowrap">
