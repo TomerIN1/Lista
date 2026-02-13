@@ -156,14 +156,14 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
       {isDropdownOpen && results.length > 0 && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 w-full bg-white border border-slate-200 rounded-b-xl shadow-lg max-h-64 overflow-y-auto"
+          className="absolute z-50 w-full bg-white border border-slate-200 rounded-b-xl shadow-lg max-h-[28rem] overflow-y-auto"
         >
           {results.map((product, index) => (
             <button
               key={product.barcode}
               type="button"
               onClick={() => handleSelect(product)}
-              className={`w-full text-start px-4 py-2.5 flex items-center gap-3 transition-colors ${
+              className={`w-full text-start px-4 py-3.5 flex items-center gap-4 transition-colors border-b border-slate-50 last:border-b-0 ${
                 index === highlightedIndex
                   ? 'bg-indigo-50'
                   : 'hover:bg-slate-50'
@@ -174,18 +174,18 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
               }`}
               disabled={selectedProducts.some((p) => p.barcode === product.barcode)}
             >
-              <ProductThumb src={product.image_url} alt={product.name} />
+              <ProductThumb src={product.image_url} alt={product.name} size="w-14 h-14" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-slate-800 truncate">
+                <div className="text-base font-medium text-slate-800 truncate">
                   {product.name}
                 </div>
-                <div className="text-xs text-slate-500 truncate">
+                <div className="text-sm text-slate-500 truncate mt-0.5">
                   {product.manufacturer && <span>{product.manufacturer}</span>}
                   {product.manufacturer && ' · '}
                   <span className="text-slate-400">{product.barcode}</span>
                 </div>
               </div>
-              <span className="text-xs font-semibold text-indigo-600 whitespace-nowrap">
+              <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
                 {formatPrice(product.min_price, product.max_price)}
               </span>
             </button>
