@@ -1875,8 +1875,20 @@ Improved product search results ordering so that exact/closest matches appear fi
 **Client-side changes**:
 - **`hooks/useProductSearch.ts`**: Removed client-side ranking workaround (no longer needed). Simplified back to a clean fetch of 10 results from the API, which now returns them in relevance order.
 
+### Product Search Dropdown UX Improvement (February 2026)
+
+Enlarged the product search dropdown for easier scanning and selection.
+
+**Changes** (`components/ProductSearchInput.tsx`):
+- Product thumbnails enlarged from 40x40 to 56x56
+- Text bumped from `text-sm` to `text-base` for product names, `text-xs` to `text-sm` for metadata
+- Row padding increased (`py-2.5` → `py-3.5`, `gap-3` → `gap-4`)
+- Dropdown max height increased from `max-h-64` (16rem) to `max-h-[28rem]` (28rem)
+- Added subtle row dividers (`border-b border-slate-50`)
+- Price styled in emerald bold to match shopping mode theme
+
 ---
 
 **Last Updated**: February 12, 2026
-**Version**: 3.2.1
+**Version**: 3.2.2
 **Status**: Production Ready
