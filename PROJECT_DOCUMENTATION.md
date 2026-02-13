@@ -1861,8 +1861,22 @@ Price comparison results are **not** saved — they're recalculated on demand.
 | `components/ShoppingInputArea.tsx` | Modified | Added editable title with `title`/`onTitleChange` props |
 | `App.tsx` | Modified | Save/load/auto-save shopping lists, mode switching, new handlers, title prop wiring |
 
+### Product Search Relevance Ranking (February 2026)
+
+Improved product search results ordering so that exact/closest matches appear first.
+
+**Problem**: Searching "חלב" (milk) returned protein powders ("אבקת חלבון") and chocolate bars before actual milk products. The API returned results alphabetically, so real milk products (starting with "חלב ") didn't appear until offset ~100-150 out of 529 matches.
+
+**Fix**: API-side relevance sorting was added to `GET /api/products/search`. Results are now ranked:
+1. Name **starts with** the query (highest priority)
+2. Query appears as a **whole word** in the name
+3. Query appears as a **substring** only (lowest priority)
+
+**Client-side changes**:
+- **`hooks/useProductSearch.ts`**: Removed client-side ranking workaround (no longer needed). Simplified back to a clean fetch of 10 results from the API, which now returns them in relevance order.
+
 ---
 
 **Last Updated**: February 12, 2026
-**Version**: 3.2.0
+**Version**: 3.2.1
 **Status**: Production Ready

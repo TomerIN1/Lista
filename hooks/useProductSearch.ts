@@ -28,7 +28,7 @@ export function useProductSearch(minChars: number = 2, debounceMs: number = 300)
     let cancelled = false;
     setIsSearching(true);
 
-    searchProducts(debouncedQuery.trim(), 8)
+    searchProducts(debouncedQuery.trim(), 10)
       .then((result) => {
         if (!cancelled) {
           setResults(result.products || []);
