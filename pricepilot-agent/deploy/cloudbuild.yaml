@@ -1,0 +1,42 @@
+steps:
+  # Build container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/pricepilot-agent:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/pricepilot-agent:latest'
+      - '-f'
+      - 'deploy/Dockerfile'
+      - '.'
+
+  # Push to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/pricepilot-agent:$COMMIT_SHA']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/pricepilot-agent:latest']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'pricepilot-agent'
+      - '--image=gcr.io/$PROJECT_ID/pricepilot-agent:$COMMIT_SHA'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=2Gi'
+      - '--cpu=2'
+      - '--timeout=300'
+      - '--set-secrets=ANTHROPIC_API_KEY=anthropic-api-key:latest'
+
+substitutions:
+  _REGION: me-west1
+
+images:
+  - 'gcr.io/$PROJECT_ID/pricepilot-agent:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/pricepilot-agent:latest'

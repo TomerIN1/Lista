@@ -51,12 +51,12 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
     scrollToBottom();
   }, [messages]);
 
-  const initializeSession = () => {
+  const initializeSession = async () => {
     setIsLoading(true);
     setSelectedStoreIds([]);
     setCustomStores([]);
     try {
-      const { session: newSession, newMessages } = startAgentSession(
+      const { session: newSession, newMessages } = await startAgentSession(
         userId,
         listId,
         groceryList,
@@ -75,12 +75,12 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputText.trim() || !session || isLoading) return;
 
     setIsLoading(true);
     try {
-      const { session: updatedSession, newMessages } = processUserMessage(
+      const { session: updatedSession, newMessages } = await processUserMessage(
         session.id,
         inputText.trim(),
         language
@@ -95,7 +95,7 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
     }
   };
 
-  const handleButtonClick = (action: string) => {
+  const handleButtonClick = async (action: string) => {
     if (!session || isLoading) return;
 
     // Handle restart action specially
@@ -108,7 +108,7 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
 
     setIsLoading(true);
     try {
-      const { session: updatedSession, newMessages } = handleButtonAction(
+      const { session: updatedSession, newMessages } = await handleButtonAction(
         session.id,
         action,
         language
@@ -151,7 +151,7 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
     }
   };
 
-  const handleStoreSelectionComplete = () => {
+  const handleStoreSelectionComplete = async () => {
     if (!session || selectedStoreIds.length === 0) return;
 
     // Update session with selected stores and trigger the flow
@@ -161,7 +161,7 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
       session.selectedStores = selectedStoreIds;
 
       // Then trigger the done_stores action
-      const { session: updatedSession, newMessages } = handleButtonAction(
+      const { session: updatedSession, newMessages } = await handleButtonAction(
         session.id,
         'done_stores:done',
         language

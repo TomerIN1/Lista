@@ -1,0 +1,37 @@
+# Vertex AI Agent Engine deployment configuration
+# Deploy with: python -c "from deploy_vertex import deploy; deploy()"
+
+agent:
+  display_name: PricePilot Agent
+  description: Autonomous online grocery shopping agent for Israeli supermarkets
+
+deployment:
+  project_id: ${GCP_PROJECT_ID}
+  region: me-west1
+
+  requirements:
+    - google-adk>=1.0
+    - litellm
+    - playwright
+    - pydantic>=2.0
+    - fastapi
+    - uvicorn
+    - google-cloud-aiplatform
+    - python-dotenv
+
+  secrets:
+    - name: ANTHROPIC_API_KEY
+      secret_manager_key: anthropic-api-key
+
+  resources:
+    memory: 2Gi
+    cpu: "2"
+
+  scaling:
+    min_instances: 0
+    max_instances: 10
+
+  session:
+    # Use Vertex AI managed sessions for production
+    type: vertex_ai
+    ttl_seconds: 3600  # 1 hour session timeout

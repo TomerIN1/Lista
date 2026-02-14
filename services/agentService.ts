@@ -18,6 +18,8 @@ import {
 // Configuration
 // ============================================
 
+const AGENT_API_URL = process.env.NEXT_PUBLIC_AGENT_API_URL || 'http://localhost:8000';
+
 // Real Israeli supermarket chains from the DB
 const ISRAELI_SUPERMARKETS: AgentStore[] = [
   { id: 'shufersal', name: 'שופרסל', nameHe: 'שופרסל', deliveryFee: 30 },
@@ -39,7 +41,244 @@ const STORE_CATEGORIES: StoreCategory[] = [
 const ALL_STORES = ISRAELI_SUPERMARKETS;
 
 // ============================================
-// Messages / i18n
+// Message Helpers
+// ============================================
+
+export function generateId(): string {
+  return crypto.randomUUID();
+}
+
+function createBotMessage(
+  text: string,
+  buttons?: ChatButton[],
+  extras?: Partial<ChatMessage>
+): ChatMessage {
+  return {
+    id: generateId(),
+    type: 'bot',
+    text,
+    timestamp: Date.now(),
+    buttons,
+    ...extras,
+  };
+}
+
+function createUserMessage(text: string): ChatMessage {
+  return {
+    id: generateId(),
+    type: 'user',
+    text,
+    timestamp: Date.now(),
+  };
+}
+
+// ============================================
+// Session Management (via PricePilot Agent API)
+// ============================================
+
+const sessions = new Map<string, AgentSession>();
+
+export function getSession(sessionId: string): AgentSession | undefined {
+  return sessions.get(sessionId);
+}
+
+function updateSession(session: AgentSession): void {
+  session.updatedAt = Date.now();
+  sessions.set(session.id, session);
+}
+
+// ============================================
+// API Communication
+// ============================================
+
+async function apiCreateSession(
+  userId: string,
+  listId: string,
+  groceryList: AgentShoppingItem[]
+): Promise<{ session_id: string; messages: Array<{ id: string; type: string; text: string; timestamp: number }> }> {
+  const res = await fetch(`${AGENT_API_URL}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      list_id: listId,
+      grocery_list: groceryList,
+    }),
+  });
+  if (!res.ok) throw new Error(`Agent API error: ${res.status}`);
+  return res.json();
+}
+
+async function apiSendMessage(
+  sessionId: string,
+  userId: string,
+  text: string
+): Promise<{ messages: Array<{ id: string; type: string; text: string; timestamp: number }>; workflow_phase?: string }> {
+  const res = await fetch(`${AGENT_API_URL}/sessions/${sessionId}/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, text }),
+  });
+  if (!res.ok) throw new Error(`Agent API error: ${res.status}`);
+  return res.json();
+}
+
+// ============================================
+// Main Agent Service
+// ============================================
+
+export interface AgentResponse {
+  session: AgentSession;
+  newMessages: ChatMessage[];
+}
+
+/**
+ * Start a new agent session.
+ * Creates a session via the PricePilot Agent API and returns the initial messages.
+ */
+export async function startAgentSession(
+  userId: string,
+  listId: string,
+  groceryList: AgentShoppingItem[],
+  language: Language
+): Promise<AgentResponse> {
+  const now = Date.now();
+
+  try {
+    // Call the PricePilot Agent API
+    const apiResponse = await apiCreateSession(userId, listId, groceryList);
+
+    // Create local session for state tracking
+    const session: AgentSession = {
+      id: apiResponse.session_id,
+      userId,
+      listId,
+      state: 'CONFIRMING_CONTEXT',
+      groceryList,
+      selectedStores: ISRAELI_SUPERMARKETS.map((s) => s.id),
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // Convert API messages to ChatMessage format
+    const newMessages: ChatMessage[] = apiResponse.messages.map((msg) => ({
+      id: msg.id || generateId(),
+      type: msg.type as ChatMessage['type'],
+      text: msg.text,
+      timestamp: msg.timestamp || now,
+    }));
+
+    session.messages.push(...newMessages);
+    sessions.set(session.id, session);
+
+    return { session, newMessages };
+  } catch (error) {
+    console.error('Failed to create agent session via API, falling back to local:', error);
+    // Fallback to local session if API is unavailable
+    return startAgentSessionLocal(userId, listId, groceryList, language);
+  }
+}
+
+/**
+ * Process a button action from the user.
+ * Sends the action as a text message to the agent API.
+ */
+export async function handleButtonAction(
+  sessionId: string,
+  action: string,
+  language: Language
+): Promise<AgentResponse> {
+  const session = getSession(sessionId);
+  if (!session) {
+    throw new Error('Session not found');
+  }
+
+  const newMessages: ChatMessage[] = [];
+
+  // Add user action as a message locally
+  const userMessage = createUserMessage(action);
+  session.messages.push(userMessage);
+  newMessages.push(userMessage);
+
+  try {
+    // Send to agent API
+    const apiResponse = await apiSendMessage(sessionId, session.userId, action);
+
+    // Convert API response messages
+    const botMessages: ChatMessage[] = apiResponse.messages.map((msg) => ({
+      id: msg.id || generateId(),
+      type: msg.type as ChatMessage['type'],
+      text: msg.text,
+      timestamp: msg.timestamp || Date.now(),
+    }));
+
+    session.messages.push(...botMessages);
+    newMessages.push(...botMessages);
+    updateSession(session);
+
+    return { session, newMessages };
+  } catch (error) {
+    console.error('Failed to send button action via API, falling back to local:', error);
+    return handleButtonActionLocal(session, action, language, newMessages);
+  }
+}
+
+/**
+ * Process a text message from the user.
+ * Sends the message to the agent API.
+ */
+export async function processUserMessage(
+  sessionId: string,
+  text: string,
+  language: Language
+): Promise<AgentResponse> {
+  const session = getSession(sessionId);
+  if (!session) {
+    throw new Error('Session not found');
+  }
+
+  const newMessages: ChatMessage[] = [];
+
+  // Add user message locally
+  const userMessage = createUserMessage(text);
+  session.messages.push(userMessage);
+  newMessages.push(userMessage);
+
+  try {
+    // Send to agent API
+    const apiResponse = await apiSendMessage(sessionId, session.userId, text);
+
+    // Convert API response messages
+    const botMessages: ChatMessage[] = apiResponse.messages.map((msg) => ({
+      id: msg.id || generateId(),
+      type: msg.type as ChatMessage['type'],
+      text: msg.text,
+      timestamp: msg.timestamp || Date.now(),
+    }));
+
+    session.messages.push(...botMessages);
+    newMessages.push(...botMessages);
+    updateSession(session);
+
+    return { session, newMessages };
+  } catch (error) {
+    console.error('Failed to send message via API, falling back to local:', error);
+    // Fallback: prompt to use buttons
+    const promptMessage = createBotMessage(
+      language === 'he'
+        ? 'שגיאה בתקשורת עם השרת. נסו שוב.'
+        : 'Error communicating with server. Please try again.'
+    );
+    session.messages.push(promptMessage);
+    newMessages.push(promptMessage);
+    updateSession(session);
+    return { session, newMessages };
+  }
+}
+
+// ============================================
+// Local Fallback (when API is unavailable)
 // ============================================
 
 const messages = {
@@ -78,98 +317,6 @@ const messages = {
   },
 };
 
-// ============================================
-// Simplified State Transitions
-// ============================================
-
-const STATE_TRANSITIONS: Record<AgentWorkflowState, AgentWorkflowState[]> = {
-  IDLE: ['CONFIRMING_CONTEXT'],
-  ONBOARDING: ['CONFIRMING_CONTEXT', 'IDLE'],
-  COLLECTING_LIST: ['CONFIRMING_CONTEXT', 'IDLE'],
-  CONFIRMING_CONTEXT: ['SCANNING_PRICES', 'IDLE'],
-  SELECTING_STORES: ['SCANNING_PRICES', 'IDLE'],
-  SCANNING_PRICES: ['BUILDING_CART', 'ERROR'],
-  DISAMBIGUATING_ITEMS: ['BUILDING_CART', 'ERROR'],
-  BUILDING_CART: ['COMPLETED', 'ERROR'],
-  AWAITING_APPROVAL: ['GENERATING_CHECKOUT', 'IDLE'],
-  GENERATING_CHECKOUT: ['COMPLETED', 'ERROR'],
-  COMPLETED: ['IDLE'],
-  ERROR: ['IDLE'],
-};
-
-// ============================================
-// Session Management
-// ============================================
-
-const sessions = new Map<string, AgentSession>();
-
-export function generateId(): string {
-  return crypto.randomUUID();
-}
-
-export function createAgentSession(
-  userId: string,
-  listId: string,
-  groceryList: AgentShoppingItem[]
-): AgentSession {
-  const now = Date.now();
-  const session: AgentSession = {
-    id: generateId(),
-    userId,
-    listId,
-    state: 'IDLE',
-    groceryList,
-    selectedStores: ISRAELI_SUPERMARKETS.map((s) => s.id),
-    messages: [],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  sessions.set(session.id, session);
-  return session;
-}
-
-export function getSession(sessionId: string): AgentSession | undefined {
-  return sessions.get(sessionId);
-}
-
-export function updateSession(session: AgentSession): void {
-  session.updatedAt = Date.now();
-  sessions.set(session.id, session);
-}
-
-// ============================================
-// Message Helpers
-// ============================================
-
-function createBotMessage(
-  text: string,
-  buttons?: ChatButton[],
-  extras?: Partial<ChatMessage>
-): ChatMessage {
-  return {
-    id: generateId(),
-    type: 'bot',
-    text,
-    timestamp: Date.now(),
-    buttons,
-    ...extras,
-  };
-}
-
-function createUserMessage(text: string): ChatMessage {
-  return {
-    id: generateId(),
-    type: 'user',
-    text,
-    timestamp: Date.now(),
-  };
-}
-
-// ============================================
-// Format Helpers
-// ============================================
-
 function formatCurrency(amount: number): string {
   return `₪${amount.toFixed(2)}`;
 }
@@ -189,30 +336,25 @@ function formatShoppingList(items: AgentShoppingItem[], _language: Language): st
     .join('\n');
 }
 
-// ============================================
-// Main Agent Service
-// ============================================
-
-export interface AgentResponse {
-  session: AgentSession;
-  newMessages: ChatMessage[];
-}
-
-/**
- * Start a new agent session - simplified flow, skips onboarding
- * Goes straight to confirming the list
- */
-export function startAgentSession(
+function startAgentSessionLocal(
   userId: string,
   listId: string,
   groceryList: AgentShoppingItem[],
   language: Language
 ): AgentResponse {
-  const session = createAgentSession(userId, listId, groceryList);
+  const now = Date.now();
   const m = messages[language];
-
-  // Skip onboarding - go straight to confirming list
-  session.state = 'CONFIRMING_CONTEXT';
+  const session: AgentSession = {
+    id: generateId(),
+    userId,
+    listId,
+    state: 'CONFIRMING_CONTEXT',
+    groceryList,
+    selectedStores: ISRAELI_SUPERMARKETS.map((s) => s.id),
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+  };
 
   const listText = formatShoppingList(groceryList, language);
   const welcomeMessage = createBotMessage(
@@ -225,154 +367,55 @@ export function startAgentSession(
   );
 
   session.messages.push(welcomeMessage);
-  updateSession(session);
+  sessions.set(session.id, session);
 
   return { session, newMessages: [welcomeMessage] };
 }
 
-/**
- * Process a button action from the user
- */
-export function handleButtonAction(
-  sessionId: string,
-  action: string,
-  language: Language
-): AgentResponse {
-  const session = getSession(sessionId);
-  if (!session) {
-    throw new Error('Session not found');
-  }
-
-  const m = messages[language];
-  const newMessages: ChatMessage[] = [];
-  const [actionType, actionValue] = action.split(':');
-
-  // Add user action as a message
-  const userMessage = createUserMessage(
-    actionValue === 'yes' ? m.approve :
-    actionValue === 'no' ? m.decline :
-    action
-  );
-  session.messages.push(userMessage);
-  newMessages.push(userMessage);
-
-  switch (actionType) {
-    case 'approve':
-      return handleApproval(session, actionValue === 'yes', language, newMessages);
-
-    case 'cancel':
-      return handleCancel(session, language, newMessages);
-
-    default:
-      const errorMessage = createBotMessage(m.error);
-      session.messages.push(errorMessage);
-      newMessages.push(errorMessage);
-      return { session, newMessages };
-  }
-}
-
-/**
- * Process a text message from the user
- */
-export function processUserMessage(
-  sessionId: string,
-  text: string,
-  language: Language
-): AgentResponse {
-  const session = getSession(sessionId);
-  if (!session) {
-    throw new Error('Session not found');
-  }
-
-  const newMessages: ChatMessage[] = [];
-
-  const userMessage = createUserMessage(text);
-  session.messages.push(userMessage);
-  newMessages.push(userMessage);
-
-  const promptMessage = createBotMessage(
-    language === 'he'
-      ? 'השתמש בכפתורים כדי להמשיך.'
-      : 'Please use the buttons to proceed.'
-  );
-  session.messages.push(promptMessage);
-  newMessages.push(promptMessage);
-
-  updateSession(session);
-  return { session, newMessages };
-}
-
-// ============================================
-// Action Handlers
-// ============================================
-
-function handleApproval(
+function handleButtonActionLocal(
   session: AgentSession,
-  approved: boolean,
+  action: string,
   language: Language,
   newMessages: ChatMessage[]
 ): AgentResponse {
   const m = messages[language];
+  const [actionType, actionValue] = action.split(':');
 
-  if (!approved) {
+  if (actionType === 'approve' && actionValue === 'yes') {
+    session.state = 'BUILDING_CART';
+    const buildingMessage = createBotMessage(m.buildingCart);
+    session.messages.push(buildingMessage);
+    newMessages.push(buildingMessage);
+
+    const cartLines = session.groceryList.map((item) =>
+      m.cartItem(item.name, formatCurrency(0), item.quantity)
+    );
+
+    session.state = 'COMPLETED';
+    const cartMessage = createBotMessage(
+      `${m.completed}\n\n${cartLines.join('\n')}`,
+      [{ id: 'restart', label: m.restart, action: 'cancel:restart', variant: 'secondary' }]
+    );
+    session.messages.push(cartMessage);
+    newMessages.push(cartMessage);
+  } else if (actionType === 'approve' && actionValue === 'no') {
     session.state = 'IDLE';
     const declineMessage = createBotMessage(
-      language === 'he' ? 'הבנתי. אפשר להתחיל מחדש מתי שתרצו.' : 'Got it. You can start again whenever you\'re ready.',
-      [
-        { id: 'restart', label: m.restart, action: 'cancel:restart', variant: 'secondary' },
-      ]
+      language === 'he' ? 'הבנתי. אפשר להתחיל מחדש מתי שתרצו.' : "Got it. You can start again whenever you're ready.",
+      [{ id: 'restart', label: m.restart, action: 'cancel:restart', variant: 'secondary' }]
     );
     session.messages.push(declineMessage);
     newMessages.push(declineMessage);
-    updateSession(session);
-    return { session, newMessages };
+  } else {
+    session.state = 'IDLE';
+    const resetMessage = createBotMessage(
+      language === 'he'
+        ? 'הפעולה בוטלה. לחצו על "מצא מחירים" כדי להתחיל מחדש.'
+        : 'Action cancelled. Click "Find Best Prices" to start again.'
+    );
+    session.messages.push(resetMessage);
+    newMessages.push(resetMessage);
   }
-
-  // User approved - build cart
-  session.state = 'BUILDING_CART';
-
-  const buildingMessage = createBotMessage(m.buildingCart);
-  session.messages.push(buildingMessage);
-  newMessages.push(buildingMessage);
-
-  // Build structured cart data from grocery list with barcode info
-  const cartLines = session.groceryList.map((item) => {
-    return m.cartItem(item.name, formatCurrency(0), item.quantity);
-  });
-
-  session.state = 'COMPLETED';
-
-  const cartMessage = createBotMessage(
-    `${m.completed}\n\n${cartLines.join('\n')}`,
-    [
-      { id: 'restart', label: m.restart, action: 'cancel:restart', variant: 'secondary' },
-    ]
-  );
-  session.messages.push(cartMessage);
-  newMessages.push(cartMessage);
-
-  updateSession(session);
-  return { session, newMessages };
-}
-
-function handleCancel(
-  session: AgentSession,
-  language: Language,
-  newMessages: ChatMessage[]
-): AgentResponse {
-  session.state = 'IDLE';
-  session.selectedStores = [];
-  session.savingsReport = undefined;
-  session.disambiguation = undefined;
-  session.checkoutUrls = undefined;
-
-  const resetMessage = createBotMessage(
-    language === 'he'
-      ? 'הפעולה בוטלה. לחצו על "מצא מחירים" כדי להתחיל מחדש.'
-      : 'Action cancelled. Click "Find Best Prices" to start again.'
-  );
-  session.messages.push(resetMessage);
-  newMessages.push(resetMessage);
 
   updateSession(session);
   return { session, newMessages };

@@ -1887,8 +1887,111 @@ Enlarged the product search dropdown for easier scanning and selection.
 - Added subtle row dividers (`border-b border-slate-50`)
 - Price styled in emerald bold to match shopping mode theme
 
+### PricePilot: Google ADK Agent Conversion (February 2026)
+
+#### Overview
+
+Converted PricePilot from a TypeScript multi-module system (`packages_for_online_buying_agent/`) to a **Google ADK (Agent Development Kit) Python agent** designed for deployment on **Vertex AI Agent Engine**, using **Anthropic Claude** as the LLM.
+
+The agent's mission: take a user's shopping list from Lista, navigate supermarket websites autonomously via Playwright, handle the entire shopping flow, and return checkout links to the user in the Lista app's PricePilot sidebar.
+
+Telegram bot integration was removed — all communication happens through the Lista app chat UI.
+
+#### Architecture: Multi-Agent Orchestrator
+
+The system uses an orchestrator agent with four specialized sub-agents, leveraging ADK's native agent transfer:
+
+```
+                    ┌─────────────────────┐
+                    │   OrchestratorAgent  │  (LlmAgent - Claude)
+                    │   Routes workflow    │
+                    └──────────┬──────────┘
+                               │ agent transfer
+          ┌────────────────────┼────────────────────┐
+          │                    │                     │
+    ┌─────▼─────┐      ┌──────▼──────┐      ┌──────▼──────┐
+    │   List     │      │   Store     │      │  Checkout   │
+    │ Interpreter│      │  Navigator  │      │  Builder    │
+    │ (LlmAgent) │      │ (LlmAgent)  │      │ (LlmAgent)  │
+    └───────────┘      └──────┬──────┘      └─────────────┘
+                               │
+                        ┌──────▼──────┐
+                        │   Browser   │
+                        │   Agent     │
+                        │ (LlmAgent)  │
+                        │ + Playwright│
+                        └─────────────┘
+```
+
+#### New Directory: `pricepilot-agent/`
+
+Complete Python project with ADK agents, Playwright browser tools, FastAPI server, and Vertex AI deployment config. See `pricepilot-agent/PRICEPILOT.md` for full details.
+
+Key directories:
+- `pricepilot/agents/` — 5 ADK agent definitions (orchestrator, list_interpreter, store_navigator, browser_agent, checkout_builder)
+- `pricepilot/tools/` — 14 tool functions (browser automation, store search, cart management, checkout)
+- `pricepilot/api/` — FastAPI REST server for Lista integration
+- `tests/` — Unit tests for tools and agents
+- `deploy/` — Dockerfile, Cloud Build, Vertex AI config
+
+#### Lista App Changes
+
+##### `services/agentService.ts` — Async API Integration
+
+All three main functions converted from synchronous to async, now calling the PricePilot Agent API:
+
+| Function | Before | After |
+|----------|--------|-------|
+| `startAgentSession()` | Synchronous, in-memory | Async, calls `POST /sessions` |
+| `handleButtonAction()` | Synchronous, in-memory | Async, calls `POST /sessions/{id}/message` |
+| `processUserMessage()` | Synchronous, in-memory | Async, calls `POST /sessions/{id}/message` |
+
+Each function includes automatic fallback to local logic when the API is unavailable.
+
+New internal functions:
+- `apiCreateSession()` — HTTP call to create agent session
+- `apiSendMessage()` — HTTP call to send message to agent
+
+##### `components/PriceAgentChat.tsx` — Async Handlers
+
+Updated all event handlers to be async to work with the new async service:
+- `initializeSession()` — now `async`, awaits `startAgentSession()`
+- `handleSendMessage()` — now `async`, awaits `processUserMessage()`
+- `handleButtonClick()` — now `async`, awaits `handleButtonAction()`
+- `handleStoreSelectionComplete()` — now `async`, awaits `handleButtonAction()`
+
+UI and layout unchanged.
+
+##### `.env` — New Variable
+
+Added `NEXT_PUBLIC_AGENT_API_URL=http://localhost:8000` — configurable per environment (local dev vs Vertex AI production).
+
+#### Migration Reference
+
+| TypeScript Module | Python Equivalent | Notes |
+|---|---|---|
+| `orchestrator.ts` (15-state FSM) | `agents/orchestrator.py` | FSM replaced by LLM-driven routing with `session.state` |
+| `ListInterpreterAgent` | `agents/list_interpreter.py` | Same logic, Pydantic output |
+| `AutonomousBrowserAgent` + `SmartBrowserAgent` | `agents/browser_agent.py` | Unified into single ADK agent with Playwright tools |
+| `VisionModule` + `DOMParser` + `ActionPlanner` | Built into browser_agent prompt + tools | Claude vision handles screenshots natively |
+| `CatalogSearchAgent` | Absorbed into browser_agent | Browser agent searches directly on store websites |
+| `CartBuilderAgent` | `agents/checkout_builder.py` | Cart state in `session.state` |
+| `SavingsCalculatorAgent` | `tools/cart_tools.py` | Pure function tool |
+| `CheckoutLinkAgent` | `tools/checkout_tools.py` | Pure function tool |
+| `StoreAdapter` interface | Not needed | Browser agent navigates any store directly |
+| Telegram agents | Removed | Lista chat UI handles conversation |
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `pricepilot-agent/` (25 files) | **New** | Complete Python ADK agent project |
+| `services/agentService.ts` | Modified | Async API calls with local fallback |
+| `components/PriceAgentChat.tsx` | Modified | Async event handlers |
+| `.env` | Modified | Added `NEXT_PUBLIC_AGENT_API_URL` |
+
 ---
 
-**Last Updated**: February 12, 2026
-**Version**: 3.2.2
+**Last Updated**: February 14, 2026
+**Version**: 3.3.0
 **Status**: Production Ready
