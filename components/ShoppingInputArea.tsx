@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowRight, ArrowLeft, ShoppingCart, Trash2, Pencil, Check } from 'lucide-react';
+import { ArrowRight, ArrowLeft, ShoppingCart, Trash2, Pencil, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DbProduct } from '../types';
 import ProductSearchInput from './ProductSearchInput';
@@ -11,6 +11,9 @@ interface ShoppingInputAreaProps {
   isLoading: boolean;
   title?: string;
   onTitleChange?: (title: string) => void;
+  city?: string;
+  storeType?: string;
+  onBack?: () => void;
 }
 
 const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
@@ -20,6 +23,9 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   isLoading,
   title,
   onTitleChange,
+  city,
+  storeType,
+  onBack,
 }) => {
   const { t, isRTL } = useLanguage();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -63,7 +69,17 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   return (
     <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-visible transition-shadow focus-within:shadow-[0_8px_40px_rgb(99,102,241,0.12)] focus-within:border-emerald-100">
       {/* Header */}
-      <div className="flex items-center justify-center gap-2 px-6 py-4 border-b border-slate-100 bg-emerald-50/30 rounded-t-3xl">
+      <div className="flex items-center justify-center gap-2 px-6 py-4 border-b border-slate-100 bg-emerald-50/30 rounded-t-3xl relative">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="absolute start-4 flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            {isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            <span>{t('appMode.backToSetup')}</span>
+          </button>
+        )}
         <ShoppingCart className="w-5 h-5 text-emerald-600" />
         {isEditingTitle ? (
           <div className="flex items-center gap-1.5">
@@ -104,6 +120,8 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         onRemoveProduct={handleRemoveProduct}
         disabled={isLoading}
         prominent
+        city={city}
+        storeType={storeType}
       />
 
       {/* Empty state hint */}

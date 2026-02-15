@@ -31,6 +31,8 @@ interface ProductSearchInputProps {
   onRemoveProduct: (barcode: string) => void;
   disabled?: boolean;
   prominent?: boolean;
+  city?: string;
+  storeType?: string;
 }
 
 const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
@@ -39,9 +41,11 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   onRemoveProduct,
   disabled = false,
   prominent = false,
+  city,
+  storeType,
 }) => {
   const { t, isRTL } = useLanguage();
-  const { results, isSearching, query, setQuery, clearResults } = useProductSearch();
+  const { results, isSearching, query, setQuery, clearResults } = useProductSearch(2, 300, city, storeType);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);

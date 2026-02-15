@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { TrendingDown, ChevronDown, ChevronUp, Award, AlertTriangle, XCircle } from 'lucide-react';
+import { TrendingDown, ChevronDown, ChevronUp, Award, AlertTriangle, XCircle, MapPin } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ListPriceComparison, StorePriceSummary } from '../types';
+import { ListPriceComparison, StorePriceSummary, StoreBranch } from '../types';
 
 interface SavingsReportProps {
   data: ListPriceComparison;
@@ -89,8 +89,26 @@ const StoreRow: React.FC<StoreRowProps> = ({
   totalItems,
 }) => {
   const { t } = useLanguage();
-  const hasAllItems = store.matchedItems === totalItems;
+  const [selectedBranchIndex, setSelectedBranchIndex] = useState(0);
+  const [showBranches, setShowBranches] = useState(false);
+
+  const branches = store.availableBranches;
+  const hasMultipleBranches = branches && branches.length > 1;
+  const activeBranch = branches?.[selectedBranchIndex];
+
+  // Use the selected branch's data if available, otherwise fall back to store defaults
+  const displayTotal = activeBranch?.totalCost ?? store.totalCost;
+  const displayItemPrices = activeBranch?.itemPrices ?? store.itemPrices;
+  const displayAddress = activeBranch?.address ?? store.storeAddress;
+  const displayMatchedItems = activeBranch ? activeBranch.itemPrices.length : store.matchedItems;
+
+  const hasAllItems = displayMatchedItems === totalItems;
   const isPartial = !hasAllItems;
+
+  const handleBranchSelect = (index: number) => {
+    setSelectedBranchIndex(index);
+    setShowBranches(false);
+  };
 
   return (
     <div
@@ -122,14 +140,20 @@ const StoreRow: React.FC<StoreRowProps> = ({
                 </span>
               )}
             </div>
+            {displayAddress && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                <span className="text-xs text-slate-500">{displayAddress}</span>
+              </div>
+            )}
             <span className={`text-xs ${hasAllItems ? 'text-emerald-600' : 'text-amber-600'}`}>
-              {store.matchedItems} {t('priceComparison.of')} {totalItems} {t('priceComparison.items')} {t('priceComparison.matched')}
+              {displayMatchedItems} {t('priceComparison.of')} {totalItems} {t('priceComparison.items')} {t('priceComparison.matched')}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-base font-bold ${isRecommended ? 'text-emerald-700' : 'text-slate-800'}`}>
-            ₪{store.totalCost.toFixed(2)}
+            ₪{displayTotal.toFixed(2)}
           </span>
           {isExpanded ? (
             <ChevronUp className="w-4 h-4 text-slate-400" />
@@ -142,9 +166,43 @@ const StoreRow: React.FC<StoreRowProps> = ({
       {/* Expanded Item Breakdown */}
       {isExpanded && (
         <div className="px-4 pb-3 border-t border-slate-100">
-          {store.itemPrices.length > 0 && (
+          {/* Branch Selector */}
+          {hasMultipleBranches && (
+            <div className="mt-2 mb-2">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowBranches((v) => !v); }}
+                className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                {showBranches ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                <span>{branches!.length - 1} {t('priceComparison.otherBranches')}</span>
+              </button>
+              {showBranches && (
+                <div className="mt-1.5 space-y-1 ps-1">
+                  {branches!.map((branch, idx) => (
+                    idx !== selectedBranchIndex && (
+                      <button
+                        key={branch.storeId}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleBranchSelect(idx); }}
+                        className="w-full flex items-center justify-between text-xs px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors text-start"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                          <span className="text-slate-600">{branch.address || branch.storeId}</span>
+                        </div>
+                        <span className="text-slate-800 font-medium">₪{branch.totalCost.toFixed(2)}</span>
+                      </button>
+                    )
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {displayItemPrices.length > 0 && (
             <div className="mt-2 space-y-1">
-              {store.itemPrices.map((ip, i) => (
+              {displayItemPrices.map((ip, i) => (
                 <div key={i} className="flex items-center justify-between text-xs">
                   <span className="text-slate-600 truncate max-w-[60%]">
                     {ip.itemName} {ip.amount > 1 ? `x${ip.amount}` : ''}

@@ -11,7 +11,12 @@ interface UseProductSearchResult {
   clearResults: () => void;
 }
 
-export function useProductSearch(minChars: number = 2, debounceMs: number = 300): UseProductSearchResult {
+export function useProductSearch(
+  minChars: number = 2,
+  debounceMs: number = 300,
+  city?: string,
+  storeType?: string
+): UseProductSearchResult {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<DbProduct[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -28,7 +33,7 @@ export function useProductSearch(minChars: number = 2, debounceMs: number = 300)
     let cancelled = false;
     setIsSearching(true);
 
-    searchProducts(debouncedQuery.trim(), 10)
+    searchProducts(debouncedQuery.trim(), 10, 0, city, storeType)
       .then((result) => {
         if (!cancelled) {
           setResults(result.products || []);
@@ -48,7 +53,7 @@ export function useProductSearch(minChars: number = 2, debounceMs: number = 300)
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, minChars]);
+  }, [debouncedQuery, minChars, city, storeType]);
 
   const clearResults = () => {
     setQuery('');

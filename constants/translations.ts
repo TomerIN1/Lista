@@ -143,7 +143,9 @@ export const TRANSLATIONS = {
       matched: "matched",
       of: "of",
       items: "items",
-      unavailable: "unavailable"
+      unavailable: "unavailable",
+      otherBranches: "More branches",
+      branch: "Branch"
     },
     appMode: {
       organize: "Organize",
@@ -158,7 +160,15 @@ export const TRANSLATIONS = {
       proceedToCompare: "Compare Prices",
       backToBuildList: "Back to List",
       organizeForStore: "Organize for Store",
-      shoppingListEmpty: "Add products to start comparing prices"
+      shoppingListEmpty: "Add products to start comparing prices",
+      setupTitle: "Choose Location & Method",
+      selectCity: "Select City",
+      cityPlaceholder: "Search for a city...",
+      noCity: "No cities found",
+      loadingCities: "Loading cities...",
+      continueToList: "Continue",
+      backToSetup: "Back to Setup",
+      comparingIn: "Comparing in"
     },
     errors: {
       organizeFailed: "Failed to organize list.",
@@ -308,7 +318,9 @@ export const TRANSLATIONS = {
       matched: "מותאמים",
       of: "מתוך",
       items: "פריטים",
-      unavailable: "לא זמין"
+      unavailable: "לא זמין",
+      otherBranches: "סניפים נוספים",
+      branch: "סניף"
     },
     appMode: {
       organize: "ארגון",
@@ -323,7 +335,15 @@ export const TRANSLATIONS = {
       proceedToCompare: "השווה מחירים",
       backToBuildList: "חזרה לרשימה",
       organizeForStore: "ארגן לחנות",
-      shoppingListEmpty: "הוסף מוצרים כדי להתחיל להשוות מחירים"
+      shoppingListEmpty: "הוסף מוצרים כדי להתחיל להשוות מחירים",
+      setupTitle: "בחר מיקום ושיטת קנייה",
+      selectCity: "בחר עיר",
+      cityPlaceholder: "חפש עיר...",
+      noCity: "לא נמצאו ערים",
+      loadingCities: "טוען ערים...",
+      continueToList: "המשך",
+      backToSetup: "חזרה להגדרות",
+      comparingIn: "משווה ב"
     },
     errors: {
       organizeFailed: "נכשל בסידור הרשימה.",

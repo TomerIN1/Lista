@@ -2,7 +2,7 @@ export type Unit = 'pcs' | 'g' | 'kg' | 'L' | 'ml';
 export type Language = 'en' | 'he';
 export type InputMode = 'items' | 'recipe';
 export type AppMode = 'organize' | 'shopping';
-export type ShoppingFlowStep = 'build_list' | 'comparing' | 'mode_select' | 'ready';
+export type ShoppingFlowStep = 'setup' | 'build_list' | 'comparing' | 'results' | 'ready';
 
 export interface Recipe {
   id: string;
@@ -64,6 +64,8 @@ export interface ListDocument {
   inputMode?: InputMode; // Current mode ('items' or 'recipe')
   appMode?: AppMode; // Top-level mode ('organize' or 'shopping') — undefined defaults to 'organize'
   shoppingProducts?: DbProduct[]; // Products for shopping mode lists
+  shoppingCity?: string;
+  shoppingMode?: ShoppingMode;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -91,9 +93,18 @@ export interface DbProductSearchResult {
   products: DbProduct[];
 }
 
+export interface DbStoreDetail {
+  store_id: string;
+  store_name: string;
+  city: string;
+  address: string | null;
+  is_online: boolean;
+}
+
 export interface DbStorePrice {
   supermarket: string;
   price: number;
+  store?: DbStoreDetail;
 }
 
 export interface DbPriceComparison {
@@ -127,12 +138,22 @@ export interface ItemPriceDetail {
   total: number;
 }
 
+export interface StoreBranch {
+  storeId: string;
+  address: string | null;
+  totalCost: number;
+  itemPrices: ItemPriceDetail[];
+}
+
 export interface StorePriceSummary {
   supermarketName: string;
   totalCost: number;
   matchedItems: number;
   unmatchedItems: string[];
   itemPrices: ItemPriceDetail[];
+  storeAddress?: string;
+  selectedStoreId?: string;
+  availableBranches?: StoreBranch[];
 }
 
 export interface ListPriceComparison {

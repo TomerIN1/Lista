@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, ShoppingCart, Laptop, Loader2 } from 'lucide-react';
+import React from 'react';
+import { ArrowLeft, ArrowRight, ShoppingCart, Laptop, Loader2, MapPin } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListPriceComparison, ShoppingMode } from '../types';
 import SavingsReport from './SavingsReport';
-import ModeSelector from './ModeSelector';
-import LocationInput from './LocationInput';
 
 interface ShoppingPriceStepProps {
   comparison: ListPriceComparison;
-  selectedMode: ShoppingMode | null;
-  onSelectMode: (mode: ShoppingMode) => void;
+  shoppingMode: ShoppingMode;
+  cityName: string;
   onBack: () => void;
   onOrganizeForStore: () => void;
   onStartOnlineAgent: () => void;
@@ -18,23 +16,14 @@ interface ShoppingPriceStepProps {
 
 const ShoppingPriceStep: React.FC<ShoppingPriceStepProps> = ({
   comparison,
-  selectedMode,
-  onSelectMode,
+  shoppingMode,
+  cityName,
   onBack,
   onOrganizeForStore,
   onStartOnlineAgent,
   isOrganizing,
 }) => {
   const { t, language, isRTL } = useLanguage();
-  const [userLocation, setUserLocation] = useState(() => {
-    return localStorage.getItem('lista_user_location') || '';
-  });
-
-  useEffect(() => {
-    if (userLocation) {
-      localStorage.setItem('lista_user_location', userLocation);
-    }
-  }, [userLocation]);
 
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
@@ -54,30 +43,44 @@ const ShoppingPriceStep: React.FC<ShoppingPriceStepProps> = ({
       </div>
 
       <div className="p-6 space-y-6">
+        {/* City info chip */}
+        {cityName && (
+          <div className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-full w-fit mx-auto">
+            <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="text-sm font-medium text-emerald-700">
+              {t('appMode.comparingIn')} {cityName}
+            </span>
+          </div>
+        )}
+
         {/* Savings Report */}
         <SavingsReport data={comparison} />
 
-        {/* Mode Selection */}
-        <div>
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">{t('appMode.selectMode')}</h3>
-          <ModeSelector selectedMode={selectedMode} onSelectMode={onSelectMode} />
-        </div>
-
-        {/* Physical Mode: Location + Action */}
-        {selectedMode === 'physical' && (
+        {/* Action based on mode */}
+        {shoppingMode === 'physical' && (
           <div className="space-y-3">
-            <LocationInput value={userLocation} onChange={setUserLocation} />
-
-            {comparison.cheapestStoreId && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-                <ShoppingCart className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-emerald-800">
-                  {language === 'he'
-                    ? `קנו ב-${comparison.cheapestStoreId} וחסכו ₪${comparison.savingsAmount.toFixed(2)}!`
-                    : `Shop at ${comparison.cheapestStoreId} and save ₪${comparison.savingsAmount.toFixed(2)}!`}
-                </p>
-              </div>
-            )}
+            {comparison.cheapestStoreId && (() => {
+              const cheapestStore = comparison.stores.find(
+                (s) => s.supermarketName === comparison.cheapestStoreId
+              );
+              const address = cheapestStore?.storeAddress;
+              return (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+                  <ShoppingCart className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-emerald-800">
+                    {language === 'he'
+                      ? `קנו ב-${comparison.cheapestStoreId} וחסכו ₪${comparison.savingsAmount.toFixed(2)}!`
+                      : `Shop at ${comparison.cheapestStoreId} and save ₪${comparison.savingsAmount.toFixed(2)}!`}
+                  </p>
+                  {address && (
+                    <p className="text-xs text-emerald-600 mt-1 flex items-center justify-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      {address}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             <button
               type="button"
@@ -100,8 +103,7 @@ const ShoppingPriceStep: React.FC<ShoppingPriceStepProps> = ({
           </div>
         )}
 
-        {/* Online Mode: Start Agent */}
-        {selectedMode === 'online' && (
+        {shoppingMode === 'online' && (
           <button
             type="button"
             onClick={onStartOnlineAgent}

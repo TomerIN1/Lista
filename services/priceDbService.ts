@@ -4,8 +4,11 @@ import {
   DbPriceComparison,
   DbPromotion,
   DbSupermarket,
+  DbStorePrice,
   ListPriceComparison,
   StorePriceSummary,
+  StoreBranch,
+  ItemPriceDetail,
   CategoryGroup,
 } from '../types';
 
@@ -22,6 +25,7 @@ const SUPERMARKET_NAME_MAP: Record<string, string> = {
   'Victory': 'ויקטורי',
   'Market Warehouses': 'מחסני השוק',
   'H. Cohen': 'ח. כהן',
+  'Rami Levy': 'רמי לוי',
 };
 
 // ============================================
@@ -111,17 +115,19 @@ async function apiFetch<T>(path: string, params?: Record<string, string | number
 export async function searchProducts(
   query: string,
   limit: number = 20,
-  offset: number = 0
+  offset: number = 0,
+  city?: string,
+  storeType?: string
 ): Promise<DbProductSearchResult> {
-  const cacheKey = `search:${query}:${limit}:${offset}`;
+  const cacheKey = `search:${query}:${limit}:${offset}:${city || ''}:${storeType || ''}`;
   const cached = cache.get<DbProductSearchResult>(cacheKey);
   if (cached) return cached;
 
-  const result = await apiFetch<DbProductSearchResult>('/api/products/search', {
-    q: query,
-    limit,
-    offset,
-  });
+  const params: Record<string, string | number> = { q: query, limit, offset };
+  if (city) params.city = city;
+  if (storeType) params.store_type = storeType;
+
+  const result = await apiFetch<DbProductSearchResult>('/api/products/search', params);
 
   cache.set(cacheKey, result, SEARCH_TTL);
   return result;
@@ -141,14 +147,22 @@ export async function getProductByBarcode(barcode: string): Promise<DbProduct | 
   }
 }
 
-export async function comparePrices(barcode: string): Promise<DbPriceComparison | null> {
-  const cacheKey = `compare:${barcode}`;
+export async function comparePrices(
+  barcode: string,
+  city?: string,
+  storeType?: string
+): Promise<DbPriceComparison | null> {
+  const cacheKey = `compare:${barcode}:${city || ''}:${storeType || ''}`;
   const cached = cache.get<DbPriceComparison | null>(cacheKey);
   if (cached !== null) return cached;
 
   try {
+    const params: Record<string, string | number> = {};
+    if (city) params.city = city;
+    if (storeType) params.store_type = storeType;
+
     // The price data comes from the product detail endpoint (not a separate /prices route)
-    const result = await apiFetch<DbPriceComparison>(`/api/products/${barcode}`);
+    const result = await apiFetch<DbPriceComparison>(`/api/products/${barcode}`, params);
     cache.set(cacheKey, result, PRICES_TTL);
     return result;
   } catch {
@@ -180,6 +194,16 @@ export async function getSupermarkets(): Promise<DbSupermarket[]> {
   const result = await apiFetch<DbSupermarket[]>('/api/supermarkets');
   cache.set(cacheKey, result, SUPERMARKETS_TTL);
   return result;
+}
+
+export async function getCities(): Promise<string[]> {
+  const cacheKey = 'cities';
+  const cached = cache.get<string[]>(cacheKey);
+  if (cached) return cached;
+
+  const result = await apiFetch<{ cities: string[] }>('/api/cities');
+  cache.set(cacheKey, result.cities, SUPERMARKETS_TTL);
+  return result.cities;
 }
 
 // ============================================
@@ -231,7 +255,9 @@ async function withConcurrencyLimit<T>(
 }
 
 export async function compareListPrices(
-  groups: CategoryGroup[]
+  groups: CategoryGroup[],
+  city?: string,
+  storeType?: string
 ): Promise<ListPriceComparison> {
   // Flatten all items from groups
   const items: ItemForComparison[] = [];
@@ -253,7 +279,7 @@ export async function compareListPrices(
 
     // If no barcode, search by name and pick best match
     if (!barcode) {
-      const searchResult = await searchProducts(item.name, 1);
+      const searchResult = await searchProducts(item.name, 1, 0, city, storeType);
       if (searchResult.products && searchResult.products.length > 0) {
         barcode = searchResult.products[0].barcode;
       }
@@ -263,15 +289,29 @@ export async function compareListPrices(
       return { item, priceData: null };
     }
 
-    const priceData = await comparePrices(barcode);
+    const priceData = await comparePrices(barcode, city, storeType);
     return { item, priceData };
   });
 
   const results = await withConcurrencyLimit(tasks, 5);
 
+  // Determine if we have branch-level data (physical mode)
+  const hasBranchData = results.some(
+    (r) =>
+      r.status === 'fulfilled' &&
+      r.value.priceData?.prices?.some((sp: DbStorePrice) => sp.store && !sp.store.is_online)
+  );
+
   // Build per-store totals
   const storeMap = new Map<string, StorePriceSummary>();
   const unmatchedItems: string[] = [];
+
+  // For branch-aware mode: track per-branch item prices
+  // Key: "chainName::storeId", Value: { itemPrices, totalCost }
+  const branchMap = new Map<
+    string,
+    { chainName: string; storeId: string; address: string | null; totalCost: number; itemPrices: ItemPriceDetail[] }
+  >();
 
   for (const result of results) {
     if (result.status === 'rejected') continue;
@@ -282,28 +322,95 @@ export async function compareListPrices(
       continue;
     }
 
-    for (const storePrice of priceData.prices) {
-      const storeName = SUPERMARKET_NAME_MAP[storePrice.supermarket] || storePrice.supermarket;
-      if (!storeMap.has(storeName)) {
-        storeMap.set(storeName, {
-          supermarketName: storeName,
-          totalCost: 0,
-          matchedItems: 0,
-          unmatchedItems: [],
-          itemPrices: [],
+    if (hasBranchData) {
+      // Branch-aware grouping: group by chain+storeId
+      for (const sp of priceData.prices) {
+        const chainName = SUPERMARKET_NAME_MAP[sp.supermarket] || sp.supermarket;
+        const storeId = sp.store?.store_id || '_default';
+        const address = sp.store?.address || null;
+        const branchKey = `${chainName}::${storeId}`;
+
+        if (!branchMap.has(branchKey)) {
+          branchMap.set(branchKey, { chainName, storeId, address, totalCost: 0, itemPrices: [] });
+        }
+
+        const branch = branchMap.get(branchKey)!;
+        const itemTotal = sp.price * item.amount;
+        branch.totalCost += itemTotal;
+        branch.itemPrices.push({
+          itemName: item.name,
+          price: sp.price,
+          amount: item.amount,
+          total: itemTotal,
         });
       }
+    } else {
+      // Online / no-branch mode: original dedup (cheapest per chain)
+      const dedupedPrices = new Map<string, { supermarket: string; price: number }>();
+      for (const sp of priceData.prices) {
+        const name = SUPERMARKET_NAME_MAP[sp.supermarket] || sp.supermarket;
+        const existing = dedupedPrices.get(name);
+        if (!existing || sp.price < existing.price) {
+          dedupedPrices.set(name, { supermarket: name, price: sp.price });
+        }
+      }
 
-      const summary = storeMap.get(storeName)!;
-      const itemTotal = storePrice.price * item.amount;
+      for (const [storeName, storePrice] of dedupedPrices) {
+        if (!storeMap.has(storeName)) {
+          storeMap.set(storeName, {
+            supermarketName: storeName,
+            totalCost: 0,
+            matchedItems: 0,
+            unmatchedItems: [],
+            itemPrices: [],
+          });
+        }
 
-      summary.totalCost += itemTotal;
-      summary.matchedItems += 1;
-      summary.itemPrices.push({
-        itemName: item.name,
-        price: storePrice.price,
-        amount: item.amount,
-        total: itemTotal,
+        const summary = storeMap.get(storeName)!;
+        const itemTotal = storePrice.price * item.amount;
+        summary.totalCost += itemTotal;
+        summary.matchedItems += 1;
+        summary.itemPrices.push({
+          itemName: item.name,
+          price: storePrice.price,
+          amount: item.amount,
+          total: itemTotal,
+        });
+      }
+    }
+  }
+
+  // If branch-aware mode, collapse branches into StorePriceSummary entries
+  if (hasBranchData) {
+    // Group branches by chain name
+    const chainBranches = new Map<string, typeof branchMap extends Map<string, infer V> ? V[] : never>();
+    for (const branch of branchMap.values()) {
+      const existing = chainBranches.get(branch.chainName) || [];
+      existing.push(branch);
+      chainBranches.set(branch.chainName, existing);
+    }
+
+    for (const [chainName, branches] of chainBranches) {
+      // Sort branches: cheapest total first
+      branches.sort((a, b) => a.totalCost - b.totalCost);
+      const cheapest = branches[0];
+
+      const availableBranches: StoreBranch[] = branches.map((b) => ({
+        storeId: b.storeId,
+        address: b.address,
+        totalCost: b.totalCost,
+        itemPrices: b.itemPrices,
+      }));
+
+      storeMap.set(chainName, {
+        supermarketName: chainName,
+        totalCost: cheapest.totalCost,
+        matchedItems: cheapest.itemPrices.length,
+        unmatchedItems: [],
+        itemPrices: cheapest.itemPrices,
+        storeAddress: cheapest.address || undefined,
+        selectedStoreId: cheapest.storeId,
+        availableBranches,
       });
     }
   }

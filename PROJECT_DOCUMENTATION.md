@@ -1990,8 +1990,79 @@ Added `NEXT_PUBLIC_AGENT_API_URL=http://localhost:8000` — configurable per env
 | `components/PriceAgentChat.tsx` | Modified | Async event handlers |
 | `.env` | Modified | Added `NEXT_PUBLIC_AGENT_API_URL` |
 
+### Store Branch Selection in Price Comparison (February 2026)
+
+#### Overview
+
+Added branch-level price comparison for physical shopping mode. The price comparison API returns per-store prices with branch details (`store_id`, `address`, `city`). The same supermarket chain can have multiple branches in one city with different prices. Lista now:
+
+1. **Auto-selects the cheapest branch** per chain as the default display
+2. **Shows the branch address** under the store name with a MapPin icon
+3. **Lists other branches** of the same chain with their pre-computed totals
+4. **Lets users switch branches** — clicking a different branch recalculates the displayed prices locally (no new API calls)
+
+Online mode (no `store` objects in API response) is unaffected — chains dedup as before.
+
+#### New Types
+
+| Type | Definition | Purpose |
+|------|-----------|---------|
+| `DbStoreDetail` | `{ store_id, store_name, city, address, is_online }` | Branch metadata from API |
+| `StoreBranch` | `{ storeId, address, totalCost, itemPrices }` | Pre-computed totals for one branch |
+
+#### Extended Types
+
+| Type | New Fields | Purpose |
+|------|-----------|---------|
+| `DbStorePrice` | `store?: DbStoreDetail` | Optional branch info on each price entry |
+| `StorePriceSummary` | `storeAddress?`, `selectedStoreId?`, `availableBranches?: StoreBranch[]` | Branch selection state per chain |
+
+#### Price Service Changes (`services/priceDbService.ts`)
+
+The `compareListPrices()` function now detects whether the API returned branch-level data (physical mode) or flat chain data (online mode):
+
+- **Physical mode** (prices have `store` objects with `is_online: false`):
+  - Groups all prices by `chainName::storeId` (branch key)
+  - Computes per-branch totals across all items
+  - Sorts branches cheapest-first per chain
+  - Stores all branches in `availableBranches[]` on the `StorePriceSummary`
+  - Sets default display to cheapest branch (`selectedStoreId`, `storeAddress`)
+
+- **Online mode** (no `store` objects): Unchanged — keeps the original cheapest-per-chain dedup
+
+#### UI Changes
+
+##### `components/SavingsReport.tsx` — StoreRow
+
+- **Address display**: Shows `MapPin` icon + branch address under the store name when available
+- **Branch selector**: When `availableBranches` has >1 entry, an expandable "N more branches" toggle appears in the expanded item breakdown
+  - Each branch row shows address + total cost
+  - Clicking a branch updates the displayed total, item prices, and address using pre-computed data
+  - Local state only (`selectedBranchIndex`) — no API calls on branch switch
+
+##### `components/ShoppingPriceStep.tsx` — Cheapest Store Banner
+
+- The "Shop at X and save" recommendation banner now shows the branch address below the savings message when available
+
+#### Translations
+
+| Key | English | Hebrew |
+|-----|---------|--------|
+| `priceComparison.otherBranches` | More branches | סניפים נוספים |
+| `priceComparison.branch` | Branch | סניף |
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `types.ts` | Modified | Added `DbStoreDetail`, `StoreBranch`; extended `DbStorePrice`, `StorePriceSummary` |
+| `services/priceDbService.ts` | Modified | Branch-aware grouping in `compareListPrices()`, pre-compute per-branch totals |
+| `components/SavingsReport.tsx` | Modified | Address display, branch selector dropdown in StoreRow |
+| `constants/translations.ts` | Modified | 2 new keys (`otherBranches`, `branch`) |
+| `components/ShoppingPriceStep.tsx` | Modified | Show address in cheapest store banner |
+
 ---
 
-**Last Updated**: February 14, 2026
-**Version**: 3.3.0
+**Last Updated**: February 15, 2026
+**Version**: 3.4.0
 **Status**: Production Ready

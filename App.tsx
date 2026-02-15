@@ -15,10 +15,11 @@ import PriceAgentChat from './components/PriceAgentChat';
 import AppModeToggle from './components/AppModeToggle';
 import ShoppingInputArea from './components/ShoppingInputArea';
 import ShoppingPriceStep from './components/ShoppingPriceStep';
+import ShoppingSetupStep from './components/ShoppingSetupStep';
 import { LEGAL_TEXT, LegalDocType } from './constants/legalText';
 import { useLanguage } from './contexts/LanguageContext';
 import { groupsToShoppingItems } from './types';
-import { compareListPrices } from './services/priceDbService';
+import { compareListPrices, getCities } from './services/priceDbService';
 
 import { AlertCircle, Sparkles, Menu, ShieldAlert } from 'lucide-react';
 
@@ -55,12 +56,15 @@ const App: React.FC = () => {
 
   // App Mode State (Organize vs Shopping)
   const [appMode, setAppMode] = useState<AppMode>('organize');
-  const [shoppingStep, setShoppingStep] = useState<ShoppingFlowStep>('build_list');
+  const [shoppingStep, setShoppingStep] = useState<ShoppingFlowStep>('setup');
   const [shoppingProducts, setShoppingProducts] = useState<DbProduct[]>([]);
   const [priceComparison, setPriceComparison] = useState<ListPriceComparison | null>(null);
   const [selectedShoppingMode, setSelectedShoppingMode] = useState<ShoppingMode | null>(null);
   const [storeRecommendation, setStoreRecommendation] = useState<{ storeName: string; savingsAmount: number } | null>(null);
   const [isShoppingComparing, setIsShoppingComparing] = useState(false);
+  const [shoppingCity, setShoppingCity] = useState('');
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [isLoadingCities, setIsLoadingCities] = useState(false);
 
   // Ref to guard against circular auto-save from sync effect
   const shoppingProductsRef = useRef<DbProduct[]>([]);
@@ -156,14 +160,24 @@ const App: React.FC = () => {
         setAppMode(listMode);
 
         if (listMode === 'shopping') {
-          // Shopping list: restore products, reset shopping flow
+          // Shopping list: restore products and city/mode
           shoppingProductsRef.current = current.shoppingProducts || [];
           setShoppingProducts(current.shoppingProducts || []);
-          setShoppingStep('build_list');
           setPriceComparison(null);
-          setSelectedShoppingMode(null);
           setStoreRecommendation(null);
           setStatus('idle');
+
+          // Restore city and mode from document
+          if (current.shoppingCity) setShoppingCity(current.shoppingCity);
+          if (current.shoppingMode) setSelectedShoppingMode(current.shoppingMode);
+
+          // If city and mode exist, go to build_list; otherwise go to setup
+          if (current.shoppingCity && current.shoppingMode) {
+            setShoppingStep('build_list');
+          } else {
+            setShoppingStep('setup');
+            setSelectedShoppingMode(current.shoppingMode || null);
+          }
         } else {
           // Organize list: restore groups/recipes
           setLocalGroups(current.groups);
@@ -544,12 +558,13 @@ const App: React.FC = () => {
     setAppMode(mode);
     // Reset shopping state when switching to organize
     if (mode === 'organize') {
-      setShoppingStep('build_list');
+      setShoppingStep('setup');
       setShoppingProducts([]);
       shoppingProductsRef.current = [];
       setPriceComparison(null);
       setSelectedShoppingMode(null);
       setStoreRecommendation(null);
+      setShoppingCity('');
     }
   };
 
@@ -566,14 +581,16 @@ const App: React.FC = () => {
           language === 'he' ? 'רשימת קניות חדשה' : 'New Shopping List',
           user.uid,
           user.email,
-          products
+          products,
+          shoppingCity || undefined,
+          selectedShoppingMode || undefined
         );
         setActiveListId(newId);
       } catch (e) {
         console.error('Failed to create shopping list:', e);
       }
     }
-  }, [user, activeListId, language]);
+  }, [user, activeListId, language, shoppingCity, selectedShoppingMode]);
 
   // Auto-save shopping products to Firestore
   useEffect(() => {
@@ -589,16 +606,45 @@ const App: React.FC = () => {
     updateShoppingListProducts(activeListId, localProducts).catch(console.error);
   }, [shoppingProducts, user, activeListId, lists]);
 
+  // Fetch cities when entering shopping mode
+  useEffect(() => {
+    if (appMode === 'shopping' && availableCities.length === 0 && !isLoadingCities) {
+      setIsLoadingCities(true);
+      getCities()
+        .then((cities) => setAvailableCities(cities))
+        .catch((err) => console.error('Failed to fetch cities:', err))
+        .finally(() => setIsLoadingCities(false));
+    }
+  }, [appMode]);
+
+  // Persist shopping city to localStorage
+  useEffect(() => {
+    if (shoppingCity) {
+      localStorage.setItem('lista_shopping_city', shoppingCity);
+    }
+  }, [shoppingCity]);
+
+  // Initialize shopping city from localStorage
+  useEffect(() => {
+    const savedCity = localStorage.getItem('lista_shopping_city');
+    if (savedCity) setShoppingCity(savedCity);
+  }, []);
+
+  const handleSetupProceed = () => {
+    setShoppingStep('build_list');
+  };
+
   const handleCreateShoppingList = () => {
     // Switch to shopping mode with empty state (no Firestore doc until first product added)
     setAppMode('shopping');
     setActiveListId(null);
     setShoppingProducts([]);
     shoppingProductsRef.current = [];
-    setShoppingStep('build_list');
+    setShoppingStep('setup');
     setPriceComparison(null);
     setSelectedShoppingMode(null);
     setStoreRecommendation(null);
+    setShoppingCity('');
   };
 
   const handleShoppingCompare = async () => {
@@ -625,9 +671,10 @@ const App: React.FC = () => {
         { id: crypto.randomUUID(), category: 'Shopping List', items: tempItems },
       ];
 
-      const result = await compareListPrices(tempGroups);
+      const storeType = selectedShoppingMode === 'online' ? 'online' : selectedShoppingMode === 'physical' ? 'physical' : undefined;
+      const result = await compareListPrices(tempGroups, shoppingCity || undefined, storeType);
       setPriceComparison(result);
-      setShoppingStep('mode_select');
+      setShoppingStep('results');
     } catch (err) {
       console.error('Shopping compare failed:', err);
       setError(t('priceComparison.noData'));
@@ -833,6 +880,19 @@ const App: React.FC = () => {
                 {/* ==================== SHOPPING MODE ==================== */}
                 {appMode === 'shopping' && (
                   <>
+                    {/* Step 0: Setup (city + mode) */}
+                    {shoppingStep === 'setup' && (
+                      <ShoppingSetupStep
+                        selectedCity={shoppingCity}
+                        selectedMode={selectedShoppingMode}
+                        onCityChange={setShoppingCity}
+                        onSelectMode={setSelectedShoppingMode}
+                        onProceed={handleSetupProceed}
+                        cities={availableCities}
+                        isLoadingCities={isLoadingCities}
+                      />
+                    )}
+
                     {/* Step 1: Build List */}
                     {(shoppingStep === 'build_list' || shoppingStep === 'comparing') && (
                       <ShoppingInputArea
@@ -842,6 +902,11 @@ const App: React.FC = () => {
                         isLoading={isShoppingComparing}
                         title={activeList?.title}
                         onTitleChange={user && activeListId ? handleTitleUpdate : undefined}
+                        city={shoppingCity || undefined}
+                        storeType={selectedShoppingMode || undefined}
+                        onBack={() => {
+                          setShoppingStep('setup');
+                        }}
                       />
                     )}
 
@@ -852,16 +917,15 @@ const App: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Step 2: Mode Select (with SavingsReport) */}
-                    {shoppingStep === 'mode_select' && priceComparison && (
+                    {/* Step 2: Results (SavingsReport + action) */}
+                    {shoppingStep === 'results' && priceComparison && selectedShoppingMode && (
                       <ShoppingPriceStep
                         comparison={priceComparison}
-                        selectedMode={selectedShoppingMode}
-                        onSelectMode={setSelectedShoppingMode}
+                        shoppingMode={selectedShoppingMode}
+                        cityName={shoppingCity}
                         onBack={() => {
                           setShoppingStep('build_list');
                           setPriceComparison(null);
-                          setSelectedShoppingMode(null);
                         }}
                         onOrganizeForStore={handleShoppingPhysical}
                         onStartOnlineAgent={handleShoppingOnline}
