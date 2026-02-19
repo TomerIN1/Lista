@@ -145,7 +145,12 @@ export const TRANSLATIONS = {
       items: "items",
       unavailable: "unavailable",
       otherBranches: "More branches",
-      branch: "Branch"
+      branch: "Branch",
+      deliveryFee: "Delivery",
+      subtotal: "Products",
+      totalWithDelivery: "Total incl. delivery",
+      minimumOrder: "Minimum order",
+      belowMinimum: "Below minimum order"
     },
     appMode: {
       organize: "Organize",
@@ -320,7 +325,12 @@ export const TRANSLATIONS = {
       items: "פריטים",
       unavailable: "לא זמין",
       otherBranches: "סניפים נוספים",
-      branch: "סניף"
+      branch: "סניף",
+      deliveryFee: "משלוח",
+      subtotal: "מוצרים",
+      totalWithDelivery: "סה״כ כולל משלוח",
+      minimumOrder: "הזמנה מינימלית",
+      belowMinimum: "מתחת להזמנה מינימלית"
     },
     appMode: {
       organize: "ארגון",

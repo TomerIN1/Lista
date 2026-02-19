@@ -606,16 +606,20 @@ const App: React.FC = () => {
     updateShoppingListProducts(activeListId, localProducts).catch(console.error);
   }, [shoppingProducts, user, activeListId, lists]);
 
-  // Fetch cities when entering shopping mode
+  // Fetch cities when entering shopping mode or when shopping mode type changes
+  const lastCityFetchMode = React.useRef<string | null>(null);
   useEffect(() => {
-    if (appMode === 'shopping' && availableCities.length === 0 && !isLoadingCities) {
+    const storeType = selectedShoppingMode || undefined;
+    const modeKey = storeType || 'all';
+    if (appMode === 'shopping' && !isLoadingCities && (availableCities.length === 0 || lastCityFetchMode.current !== modeKey)) {
       setIsLoadingCities(true);
-      getCities()
+      lastCityFetchMode.current = modeKey;
+      getCities(storeType)
         .then((cities) => setAvailableCities(cities))
         .catch((err) => console.error('Failed to fetch cities:', err))
         .finally(() => setIsLoadingCities(false));
     }
-  }, [appMode]);
+  }, [appMode, selectedShoppingMode]);
 
   // Persist shopping city to localStorage
   useEffect(() => {

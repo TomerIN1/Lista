@@ -99,6 +99,8 @@ export interface DbStoreDetail {
   city: string;
   address: string | null;
   is_online: boolean;
+  delivery_fee?: number;
+  minimum_order?: number | null;
 }
 
 export interface DbStorePrice {
@@ -154,6 +156,9 @@ export interface StorePriceSummary {
   storeAddress?: string;
   selectedStoreId?: string;
   availableBranches?: StoreBranch[];
+  deliveryFee?: number;
+  minimumOrder?: number | null;
+  totalWithDelivery?: number;
 }
 
 export interface ListPriceComparison {

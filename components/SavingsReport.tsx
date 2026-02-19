@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingDown, ChevronDown, ChevronUp, Award, AlertTriangle, XCircle, MapPin } from 'lucide-react';
+import { TrendingDown, ChevronDown, ChevronUp, Award, AlertTriangle, XCircle, MapPin, Truck } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListPriceComparison, StorePriceSummary, StoreBranch } from '../types';
 
@@ -102,6 +102,10 @@ const StoreRow: React.FC<StoreRowProps> = ({
   const displayAddress = activeBranch?.address ?? store.storeAddress;
   const displayMatchedItems = activeBranch ? activeBranch.itemPrices.length : store.matchedItems;
 
+  const hasDelivery = store.deliveryFee != null;
+  const displayHeadlineTotal = store.totalWithDelivery ?? displayTotal;
+  const isBelowMinimum = store.minimumOrder != null && store.minimumOrder > 0 && displayTotal < store.minimumOrder;
+
   const hasAllItems = displayMatchedItems === totalItems;
   const isPartial = !hasAllItems;
 
@@ -153,7 +157,7 @@ const StoreRow: React.FC<StoreRowProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-base font-bold ${isRecommended ? 'text-emerald-700' : 'text-slate-800'}`}>
-            ₪{displayTotal.toFixed(2)}
+            ₪{displayHeadlineTotal.toFixed(2)}
           </span>
           {isExpanded ? (
             <ChevronUp className="w-4 h-4 text-slate-400" />
@@ -210,6 +214,31 @@ const StoreRow: React.FC<StoreRowProps> = ({
                   <span className="text-slate-800 font-medium">₪{ip.total.toFixed(2)}</span>
                 </div>
               ))}
+              {/* Delivery fee line for online stores */}
+              {hasDelivery && (
+                <div className="flex items-center justify-between text-xs pt-1.5 mt-1.5 border-t border-slate-100">
+                  <span className="text-slate-500 flex items-center gap-1">
+                    <Truck className="w-3 h-3" />
+                    {t('priceComparison.deliveryFee')}
+                  </span>
+                  <span className="text-slate-800 font-medium">₪{store.deliveryFee!.toFixed(2)}</span>
+                </div>
+              )}
+              {hasDelivery && (
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-slate-700">{t('priceComparison.totalWithDelivery')}</span>
+                  <span className="text-slate-900">₪{displayHeadlineTotal.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Minimum order warning */}
+          {isBelowMinimum && (
+            <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              <span className="text-xs text-amber-700">
+                {t('priceComparison.belowMinimum')} (₪{store.minimumOrder})
+              </span>
             </div>
           )}
           {store.unmatchedItems.length > 0 && (

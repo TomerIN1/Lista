@@ -196,12 +196,15 @@ export async function getSupermarkets(): Promise<DbSupermarket[]> {
   return result;
 }
 
-export async function getCities(): Promise<string[]> {
-  const cacheKey = 'cities';
+export async function getCities(storeType?: string): Promise<string[]> {
+  const cacheKey = `cities:${storeType || 'all'}`;
   const cached = cache.get<string[]>(cacheKey);
   if (cached) return cached;
 
-  const result = await apiFetch<{ cities: string[] }>('/api/cities');
+  const params: Record<string, string | number> = {};
+  if (storeType) params.store_type = storeType;
+
+  const result = await apiFetch<{ cities: string[] }>('/api/cities', params);
   cache.set(cacheKey, result.cities, SUPERMARKETS_TTL);
   return result.cities;
 }
@@ -346,12 +349,12 @@ export async function compareListPrices(
       }
     } else {
       // Online / no-branch mode: original dedup (cheapest per chain)
-      const dedupedPrices = new Map<string, { supermarket: string; price: number }>();
+      const dedupedPrices = new Map<string, { supermarket: string; price: number; store?: typeof priceData.prices[0]['store'] }>();
       for (const sp of priceData.prices) {
         const name = SUPERMARKET_NAME_MAP[sp.supermarket] || sp.supermarket;
         const existing = dedupedPrices.get(name);
         if (!existing || sp.price < existing.price) {
-          dedupedPrices.set(name, { supermarket: name, price: sp.price });
+          dedupedPrices.set(name, { supermarket: name, price: sp.price, store: sp.store });
         }
       }
 
@@ -363,6 +366,8 @@ export async function compareListPrices(
             matchedItems: 0,
             unmatchedItems: [],
             itemPrices: [],
+            deliveryFee: storePrice.store?.delivery_fee,
+            minimumOrder: storePrice.store?.minimum_order,
           });
         }
 
@@ -418,16 +423,25 @@ export async function compareListPrices(
   // Build the full list of item names for per-store unavailable tracking
   const allItemNames = items.map((item) => item.name);
 
-  // For each store, compute unavailable items (items NOT carried by this store)
+  // For each store, compute unavailable items and delivery-inclusive totals
+  const isOnlineMode = storeType === 'online';
   for (const [, summary] of storeMap) {
     const matchedSet = new Set(summary.itemPrices.map((ip) => ip.itemName));
     summary.unmatchedItems = allItemNames.filter((name) => !matchedSet.has(name));
+
+    // Compute total with delivery for online stores
+    if (isOnlineMode && summary.deliveryFee != null) {
+      summary.totalWithDelivery = summary.totalCost + summary.deliveryFee;
+    }
   }
 
   // Sort: most matched items first, then cheapest within same match count
+  // For online mode, use totalWithDelivery when available
   const stores = Array.from(storeMap.values()).sort((a, b) => {
     if (b.matchedItems !== a.matchedItems) return b.matchedItems - a.matchedItems;
-    return a.totalCost - b.totalCost;
+    const aCost = a.totalWithDelivery ?? a.totalCost;
+    const bCost = b.totalWithDelivery ?? b.totalCost;
+    return aCost - bCost;
   });
 
   // Savings: compare only within the top coverage tier (stores with the most items)
@@ -437,8 +451,9 @@ export async function compareListPrices(
   const cheapestStore = topTierStores[0];
   const mostExpensiveStore = topTierStores[topTierStores.length - 1];
 
-  const cheapestTotal = cheapestStore?.totalCost ?? 0;
-  const mostExpensiveTotal = mostExpensiveStore?.totalCost ?? 0;
+  // Use delivery-inclusive totals for savings in online mode
+  const cheapestTotal = cheapestStore?.totalWithDelivery ?? cheapestStore?.totalCost ?? 0;
+  const mostExpensiveTotal = mostExpensiveStore?.totalWithDelivery ?? mostExpensiveStore?.totalCost ?? 0;
   const savingsAmount = mostExpensiveTotal - cheapestTotal;
   const savingsPercent = mostExpensiveTotal > 0 ? (savingsAmount / mostExpensiveTotal) * 100 : 0;
 

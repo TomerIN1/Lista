@@ -2061,8 +2061,83 @@ The `compareListPrices()` function now detects whether the API returned branch-l
 | `constants/translations.ts` | Modified | 2 new keys (`otherBranches`, `branch`) |
 | `components/ShoppingPriceStep.tsx` | Modified | Show address in cheapest store banner |
 
+### Online Shopping Mode: Delivery Coverage Filtering (February 2026)
+
+#### Overview
+
+When a user compares prices in **online mode**, the system now only shows online supermarkets that actually deliver to their selected city. The DB API was updated with a `store_delivery_coverage` table (306 records across 3 online stores) and exposes delivery fee and minimum order data per store.
+
+#### API Changes Consumed
+
+| Endpoint | New Behavior |
+|----------|-------------|
+| `GET /api/cities?store_type=online` | Returns only cities where at least one online store delivers (306 proper city names) |
+| `GET /api/cities?store_type=physical` | Returns physical store cities, filtered to remove garbage entries |
+| `GET /api/products/{barcode}?city=...&store_type=online` | Store object now includes `delivery_fee` and `minimum_order` for online stores |
+
+#### New & Extended Types (`types.ts`)
+
+| Type | New Fields | Purpose |
+|------|-----------|---------|
+| `DbStoreDetail` | `delivery_fee?: number`, `minimum_order?: number \| null` | Delivery info from API per online store |
+| `StorePriceSummary` | `deliveryFee?: number`, `minimumOrder?: number \| null`, `totalWithDelivery?: number` | Delivery-inclusive comparison data |
+
+#### Price Service Changes (`services/priceDbService.ts`)
+
+- **`getCities(storeType?)`**: Now accepts optional `storeType` param, passes `?store_type=online` to the API so the city dropdown shows only delivery-covered cities in online mode
+- **`compareListPrices()`**:
+  - Captures `delivery_fee` and `minimum_order` from the API response per store in online/no-branch mode
+  - Computes `totalWithDelivery = totalCost + deliveryFee` for online stores
+  - Sorts stores by delivery-inclusive totals (`totalWithDelivery` when available)
+  - Savings calculation uses delivery-inclusive totals for accurate comparison
+
+#### UI Changes
+
+##### `components/SavingsReport.tsx` — StoreRow
+
+- **Headline total**: Shows `totalWithDelivery` (products + delivery) as the main price when delivery info is available
+- **Delivery line item**: Expanded view shows a delivery fee row with Truck icon below product prices, plus a "Total incl. delivery" summary line
+- **Minimum order warning**: Amber banner with AlertTriangle icon when the cart total is below the store's minimum order threshold
+
+##### `components/ShoppingPriceStep.tsx` — Online Mode
+
+- Online mode now shows a **recommendation box** (similar to physical mode) with:
+  - Products subtotal breakdown
+  - Delivery fee breakdown
+  - Total with delivery as the headline number
+  - Minimum order warning if applicable
+- "Build Cart" button preserved below the recommendation
+
+#### City Dropdown Filtering (`App.tsx`)
+
+- City list refetches when `selectedShoppingMode` changes (e.g. physical → online)
+- Online mode shows only the ~306 delivery-covered cities
+- Physical mode shows physical store cities (now cleaned of garbage entries by the API)
+- Uses a ref (`lastCityFetchMode`) to avoid redundant fetches
+
+#### Translations (`constants/translations.ts`)
+
+| Key | English | Hebrew |
+|-----|---------|--------|
+| `priceComparison.deliveryFee` | Delivery | משלוח |
+| `priceComparison.subtotal` | Products | מוצרים |
+| `priceComparison.totalWithDelivery` | Total incl. delivery | סה״כ כולל משלוח |
+| `priceComparison.minimumOrder` | Minimum order | הזמנה מינימלית |
+| `priceComparison.belowMinimum` | Below minimum order | מתחת להזמנה מינימלית |
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `types.ts` | Modified | Added `delivery_fee`, `minimum_order` to `DbStoreDetail`; added `deliveryFee`, `minimumOrder`, `totalWithDelivery` to `StorePriceSummary` |
+| `services/priceDbService.ts` | Modified | `getCities()` accepts `storeType`; `compareListPrices()` captures delivery data, computes delivery-inclusive totals and sorting |
+| `components/SavingsReport.tsx` | Modified | Delivery fee line, total-with-delivery headline, minimum order warning |
+| `components/ShoppingPriceStep.tsx` | Modified | Online mode recommendation box with delivery breakdown |
+| `constants/translations.ts` | Modified | 5 new delivery-related keys (en + he) |
+| `App.tsx` | Modified | City list refetches per shopping mode type |
+
 ---
 
-**Last Updated**: February 15, 2026
-**Version**: 3.4.0
+**Last Updated**: February 19, 2026
+**Version**: 3.5.0
 **Status**: Production Ready
