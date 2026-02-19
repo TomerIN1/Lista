@@ -5,6 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { subscribeToSavedRecipes, deleteSavedRecipe, updateSavedRecipe } from '../services/firestoreService';
 import RecipeBreakdownModal from './RecipeBreakdownModal';
 import ShoppingListBreakdownModal from './ShoppingListBreakdownModal';
+import OrganizeListBreakdownModal from './OrganizeListBreakdownModal';
 
 interface SidebarProps {
   lists: ListDocument[];
@@ -42,6 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [shoppingExpanded, setShoppingExpanded] = useState(true);
   const [viewingRecipe, setViewingRecipe] = useState<SavedRecipe | null>(null);
   const [viewingShoppingList, setViewingShoppingList] = useState<{ products: ShoppingProduct[]; title: string } | null>(null);
+  const [viewingOrganizeList, setViewingOrganizeList] = useState<ListDocument | null>(null);
 
   // Split lists into organize and shopping
   const organizeLists = lists.filter(l => l.appMode !== 'shopping');
@@ -197,37 +199,57 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <div
                           key={list.id}
                           className={`
-                            group relative flex items-center justify-between px-3 py-2.5 rounded-xl transition-all cursor-pointer
+                            group relative flex flex-col px-3 py-2.5 rounded-xl transition-all
                             ${activeListId === list.id
                               ? 'bg-indigo-50 text-indigo-900'
                               : 'text-slate-600 hover:bg-slate-50'
                             }
                           `}
-                          onClick={() => {
-                            onSelect(list);
-                            setIsOpen(false);
-                          }}
                         >
-                          <div className="flex items-center gap-3 overflow-hidden">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${activeListId === list.id ? 'bg-white text-indigo-600 shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
-                              <List className="w-4 h-4" />
+                          {/* List header row */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${activeListId === list.id ? 'bg-white text-indigo-600 shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
+                                <List className="w-4 h-4" />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-semibold truncate">{list.title || 'Untitled List'}</span>
+                                <span className="text-[10px] text-slate-400 truncate">
+                                  {list.groups.length} {t('sidebar.categories')} • {list.memberEmails.length > 1 ? t('sidebar.shared') : t('sidebar.private')}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-sm font-semibold truncate">{list.title || 'Untitled List'}</span>
-                              <span className="text-[10px] text-slate-400 truncate">
-                                {list.groups.length} {t('sidebar.categories')} • {list.memberEmails.length > 1 ? t('sidebar.shared') : t('sidebar.private')}
-                              </span>
-                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteClick(e, list.id)}
+                              className="lg:opacity-0 lg:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all focus:opacity-100 relative z-20"
+                              aria-label="Delete List"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteClick(e, list.id)}
-                            className="lg:opacity-0 lg:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all focus:opacity-100 relative z-20"
-                            aria-label="Delete List"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Action Buttons */}
+                          <div className="flex gap-2 mt-1.5 ms-11">
+                            <button
+                              onClick={() => setViewingOrganizeList(list)}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors"
+                            >
+                              <Eye className="w-3 h-3" />
+                              {t('sidebar.view')}
+                            </button>
+                            <button
+                              onClick={() => {
+                                onSelect(list);
+                                setIsOpen(false);
+                              }}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded-lg transition-colors"
+                            >
+                              <PenLine className="w-3 h-3" />
+                              {t('sidebar.use')}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -267,9 +289,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <span className="font-medium text-sm">{t('sidebar.createNewShoppingList')}</span>
                       </button>
 
-                      {shoppingLists.map(list => {
-                        const hasProducts = (list.shoppingProducts?.length || 0) > 0;
-                        return (
+                      {shoppingLists.map(list => (
                           <div
                             key={list.id}
                             className={`
@@ -280,14 +300,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                               }
                             `}
                           >
-                            {/* List header row (clickable to select) */}
-                            <div
-                              className="flex items-center justify-between cursor-pointer"
-                              onClick={() => {
-                                onSelect(list);
-                                setIsOpen(false);
-                              }}
-                            >
+                            {/* List header row */}
+                            <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3 overflow-hidden">
                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${activeListId === list.id ? 'bg-white text-emerald-600 shadow-sm' : 'bg-emerald-100 text-emerald-500'}`}>
                                   <ShoppingCart className="w-4 h-4" />
@@ -310,29 +324,35 @@ const Sidebar: React.FC<SidebarProps> = ({
                               </button>
                             </div>
 
-                            {/* View button (only when list has products) */}
-                            {hasProducts && (
-                              <div className="flex gap-2 mt-1.5 ms-11">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const products: ShoppingProduct[] = (list.shoppingProducts || []).map(p => ({
-                                      ...p,
-                                      amount: p.amount ?? 1,
-                                      unit: p.unit ?? 'pcs',
-                                    }));
-                                    setViewingShoppingList({ products, title: list.title || 'Shopping List' });
-                                  }}
-                                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                  {t('sidebar.viewProducts')}
-                                </button>
-                              </div>
-                            )}
+                            {/* Action Buttons */}
+                            <div className="flex gap-2 mt-1.5 ms-11">
+                              <button
+                                onClick={() => {
+                                  const products: ShoppingProduct[] = (list.shoppingProducts || []).map(p => ({
+                                    ...p,
+                                    amount: p.amount ?? 1,
+                                    unit: p.unit ?? 'pcs',
+                                  }));
+                                  setViewingShoppingList({ products, title: list.title || 'Shopping List' });
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors"
+                              >
+                                <Eye className="w-3 h-3" />
+                                {t('sidebar.view')}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  onSelect(list);
+                                  setIsOpen(false);
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded-lg transition-colors"
+                              >
+                                <PenLine className="w-3 h-3" />
+                                {t('sidebar.use')}
+                              </button>
+                            </div>
                           </div>
-                        );
-                      })}
+                        ))}
                     </div>
                   )}
                 </div>
@@ -407,14 +427,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors"
                               >
                                 <Eye className="w-3 h-3" />
-                                {t('sidebar.viewRecipe')}
+                                {t('sidebar.view')}
                               </button>
                               <button
                                 onClick={() => handleUseRecipe(recipe)}
                                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded-lg transition-colors"
                               >
                                 <PenLine className="w-3 h-3" />
-                                {t('sidebar.useRecipe')}
+                                {t('sidebar.use')}
                               </button>
                             </div>
                           </div>
@@ -453,6 +473,15 @@ const Sidebar: React.FC<SidebarProps> = ({
           onClose={() => setViewingShoppingList(null)}
           products={viewingShoppingList.products}
           listTitle={viewingShoppingList.title}
+        />
+      )}
+
+      {/* Organize List View Modal */}
+      {viewingOrganizeList && (
+        <OrganizeListBreakdownModal
+          isOpen={!!viewingOrganizeList}
+          onClose={() => setViewingOrganizeList(null)}
+          list={viewingOrganizeList}
         />
       )}
     </>

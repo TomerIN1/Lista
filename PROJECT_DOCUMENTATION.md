@@ -190,6 +190,7 @@ Lista/
 │   ├── Logo.tsx                 # App logo
 │   ├── ResultCard.tsx           # Results display
 │   ├── ShareModal.tsx           # Share dialog
+│   ├── OrganizeListBreakdownModal.tsx  # Modal for viewing organize list categories & items
 │   └── Sidebar.tsx              # Navigation sidebar
 │
 ├── constants/                   # Static data
@@ -387,18 +388,17 @@ Navigation panel for managing multiple lists.
 - Login prompt for guests
 - Responsive drawer on mobile
 - Close on outside click (mobile)
-- **Saved Recipes Section**: Collapsible list of saved recipes with:
-  - Real-time Firestore subscription
-  - View recipe button (opens modal, no AI cost)
-  - Use recipe button (loads into input for organizing)
-  - Delete recipe with confirmation
-  - RTL support for Hebrew
+- **Consistent View + Use buttons** across all three sections:
+  - **My Lists (Organize)**: View opens `OrganizeListBreakdownModal` (categories & items), Use navigates to the list
+  - **Shopping Lists**: View opens `ShoppingListBreakdownModal` (products), Use navigates to the list
+  - **Saved Recipes**: View opens `RecipeBreakdownModal` (ingredients & instructions), Use loads recipe into input
+  - All use the same card layout: icon + name + delete row, then View (emerald, Eye icon) + Use (indigo, PenLine icon) button row
 
 **States**:
 - Open/closed animation
 - Loading states
 - Empty state for no lists
-- Recipe section expanded/collapsed
+- Recipe/organize/shopping sections expanded/collapsed
 
 ---
 
@@ -2228,8 +2228,65 @@ Fixed the "Back to Setup" button overlapping the title on mobile:
 | `constants/translations.ts` | Modified | Added `sidebar.viewProducts` (en + he) |
 | `App.tsx` | Modified | `ShoppingProduct` state type; backward-compat defaults on load; actual amounts in comparison; sync effect fix with `prevActiveListIdRef` |
 
+### Consistent Sidebar Actions: View & Use for All List Types (February 2026)
+
+#### Overview
+
+Made the sidebar card layout consistent across all three list sections (My Lists, Shopping Lists, Saved Recipes). Previously, only recipes had both View and Use buttons — organize lists had click-to-select only, and shopping lists had View only. Now all three sections use the same card pattern with View + Use action buttons.
+
+#### New Component: `components/OrganizeListBreakdownModal.tsx`
+
+Modal for viewing organize list contents, following the same pattern as `ShoppingListBreakdownModal`:
+
+- **Header**: List icon + title + category/item count + close button (indigo color scheme)
+- **Body**: Scrollable. For each `CategoryGroup`:
+  - Category name as section header (indigo, with item count)
+  - Items shown as rows: checked status (indigo circle), name (with strikethrough if checked), amount + unit badge (indigo), recipe labels (colored pills)
+- **Footer**: Close button (indigo)
+
+Props: `{ isOpen, onClose, list: ListDocument }`
+
+#### Sidebar Changes (`components/Sidebar.tsx`)
+
+All three sections now use the same card layout:
+
+```
+┌─────────────────────────────────────┐
+│  [icon] Item Name            🗑 (hover)
+│         subtitle info
+│  ┌──────────┐ ┌──────────────┐
+│  │ 👁 צפה  │ │ ✏️ השתמש   │
+│  └──────────┘ └──────────────┘
+└─────────────────────────────────────┘
+```
+
+- **View button**: emerald-100/200 bg, emerald-700 text, Eye icon
+- **Use button**: indigo-100/200 bg, indigo-700 text, PenLine icon
+
+Changes per section:
+- **My Lists (Organize)**: Removed click-to-select on entire row. Added View (opens `OrganizeListBreakdownModal`) and Use (selects list + closes sidebar) buttons
+- **Shopping Lists**: Added Use button next to existing View. Both buttons now always shown (previously View was conditional on `hasProducts`)
+- **Saved Recipes**: Switched from `sidebar.viewRecipe`/`sidebar.useRecipe` to generic `sidebar.view`/`sidebar.use` translation keys (same display text, unified keys)
+
+Added `viewingOrganizeList` state for the new modal.
+
+#### Translations (`constants/translations.ts`)
+
+| Key | English | Hebrew |
+|-----|---------|--------|
+| `sidebar.view` | View | צפה |
+| `sidebar.use` | Use | השתמש |
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `constants/translations.ts` | Modified | Added generic `sidebar.view` and `sidebar.use` keys (en + he) |
+| `components/OrganizeListBreakdownModal.tsx` | **New** | Modal for viewing organize list categories & items |
+| `components/Sidebar.tsx` | Modified | Consistent View+Use buttons across all sections; imported new modal; added `viewingOrganizeList` state |
+
 ---
 
 **Last Updated**: February 19, 2026
-**Version**: 3.6.0
+**Version**: 3.7.0
 **Status**: Production Ready

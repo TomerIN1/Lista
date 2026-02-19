@@ -77,6 +77,8 @@ export const TRANSLATIONS = {
       createNewRecipe: "Create New Recipe",
       viewRecipe: "View",
       useRecipe: "Use",
+      view: "View",
+      use: "Use",
       deleteRecipeConfirm: "Are you sure you want to delete this recipe?",
       viewProducts: "View"
     },
@@ -258,6 +260,8 @@ export const TRANSLATIONS = {
       createNewRecipe: "צור מתכון חדש",
       viewRecipe: "צפה",
       useRecipe: "השתמש",
+      view: "צפה",
+      use: "השתמש",
       deleteRecipeConfirm: "האם אתה בטוח שברצונך למחוק מתכון זה?",
       viewProducts: "צפה"
     },
