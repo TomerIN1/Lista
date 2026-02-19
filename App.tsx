@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct, AppMode, ShoppingFlowStep, ShoppingMode, ListPriceComparison } from './types';
+import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct, ShoppingProduct, AppMode, ShoppingFlowStep, ShoppingMode, ListPriceComparison } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
 import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe, createShoppingList, updateShoppingListProducts } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
@@ -57,7 +57,7 @@ const App: React.FC = () => {
   // App Mode State (Organize vs Shopping)
   const [appMode, setAppMode] = useState<AppMode>('organize');
   const [shoppingStep, setShoppingStep] = useState<ShoppingFlowStep>('setup');
-  const [shoppingProducts, setShoppingProducts] = useState<DbProduct[]>([]);
+  const [shoppingProducts, setShoppingProducts] = useState<ShoppingProduct[]>([]);
   const [priceComparison, setPriceComparison] = useState<ListPriceComparison | null>(null);
   const [selectedShoppingMode, setSelectedShoppingMode] = useState<ShoppingMode | null>(null);
   const [storeRecommendation, setStoreRecommendation] = useState<{ storeName: string; savingsAmount: number } | null>(null);
@@ -67,7 +67,9 @@ const App: React.FC = () => {
   const [isLoadingCities, setIsLoadingCities] = useState(false);
 
   // Ref to guard against circular auto-save from sync effect
-  const shoppingProductsRef = useRef<DbProduct[]>([]);
+  const shoppingProductsRef = useRef<ShoppingProduct[]>([]);
+  // Track previous activeListId to distinguish list switches from Firestore echoes
+  const prevActiveListIdRef = useRef<string | null>(null);
 
   // Language Context
   const { language, t } = useLanguage();
@@ -150,7 +152,10 @@ const App: React.FC = () => {
 
   // Sync active list change when selection changes or lists update
   useEffect(() => {
-    console.log('[Sync Effect] Running - activeListId:', activeListId, 'user:', !!user, 'lists count:', lists.length);
+    const listChanged = activeListId !== prevActiveListIdRef.current;
+    prevActiveListIdRef.current = activeListId;
+
+    console.log('[Sync Effect] Running - activeListId:', activeListId, 'user:', !!user, 'lists count:', lists.length, 'listChanged:', listChanged);
     if (activeListId && user) {
       const current = lists.find(l => l.id === activeListId);
       console.log('[Sync Effect] Found current list:', !!current);
@@ -160,23 +165,33 @@ const App: React.FC = () => {
         setAppMode(listMode);
 
         if (listMode === 'shopping') {
-          // Shopping list: restore products and city/mode
-          shoppingProductsRef.current = current.shoppingProducts || [];
-          setShoppingProducts(current.shoppingProducts || []);
-          setPriceComparison(null);
-          setStoreRecommendation(null);
-          setStatus('idle');
+          // Shopping list: restore products with backward compat defaults
+          const productsWithDefaults: ShoppingProduct[] = (current.shoppingProducts || []).map((p) => ({
+            ...p,
+            amount: p.amount ?? 1,
+            unit: p.unit ?? 'pcs',
+          }));
+          shoppingProductsRef.current = productsWithDefaults;
+          setShoppingProducts(productsWithDefaults);
 
-          // Restore city and mode from document
-          if (current.shoppingCity) setShoppingCity(current.shoppingCity);
-          if (current.shoppingMode) setSelectedShoppingMode(current.shoppingMode);
+          // Only reset UI navigation state when actually switching lists,
+          // not on Firestore echoes from our own product saves
+          if (listChanged) {
+            setPriceComparison(null);
+            setStoreRecommendation(null);
+            setStatus('idle');
 
-          // If city and mode exist, go to build_list; otherwise go to setup
-          if (current.shoppingCity && current.shoppingMode) {
-            setShoppingStep('build_list');
-          } else {
-            setShoppingStep('setup');
-            setSelectedShoppingMode(current.shoppingMode || null);
+            // Restore city and mode from document
+            if (current.shoppingCity) setShoppingCity(current.shoppingCity);
+            if (current.shoppingMode) setSelectedShoppingMode(current.shoppingMode);
+
+            // If city and mode exist, go to build_list; otherwise go to setup
+            if (current.shoppingCity && current.shoppingMode) {
+              setShoppingStep('build_list');
+            } else {
+              setShoppingStep('setup');
+              setSelectedShoppingMode(current.shoppingMode || null);
+            }
           }
         } else {
           // Organize list: restore groups/recipes
@@ -568,7 +583,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleShoppingProductsChange = useCallback(async (products: DbProduct[]) => {
+  const handleShoppingProductsChange = useCallback(async (products: ShoppingProduct[]) => {
     setShoppingProducts(products);
     shoppingProductsRef.current = products;
 
@@ -663,8 +678,8 @@ const App: React.FC = () => {
         id: crypto.randomUUID(),
         name: p.name,
         checked: false,
-        amount: 1 as number,
-        unit: 'pcs' as const,
+        amount: p.amount,
+        unit: p.unit,
         barcode: p.barcode,
         dbProductId: p.id,
         manufacturer: p.manufacturer,
@@ -713,8 +728,8 @@ const App: React.FC = () => {
       id: crypto.randomUUID(),
       name: p.name,
       checked: false,
-      amount: 1 as number,
-      unit: 'pcs' as const,
+      amount: p.amount,
+      unit: p.unit,
       barcode: p.barcode,
       dbProductId: p.id,
       manufacturer: p.manufacturer,

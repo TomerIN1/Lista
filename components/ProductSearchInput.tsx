@@ -2,7 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, Loader2, X, Package } from 'lucide-react';
 import { useProductSearch } from '../hooks/useProductSearch';
 import { useLanguage } from '../contexts/LanguageContext';
-import { DbProduct } from '../types';
+import { DbProduct, ShoppingProduct, Unit } from '../types';
+
+const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
 const ProductThumb: React.FC<{ src: string | null; alt: string; size?: string }> = ({ src, alt, size = 'w-10 h-10' }) => {
   const [failed, setFailed] = useState(false);
@@ -26,9 +28,10 @@ const ProductThumb: React.FC<{ src: string | null; alt: string; size?: string }>
 };
 
 interface ProductSearchInputProps {
-  selectedProducts: DbProduct[];
-  onSelectProduct: (product: DbProduct) => void;
+  selectedProducts: ShoppingProduct[];
+  onSelectProduct: (product: ShoppingProduct) => void;
   onRemoveProduct: (barcode: string) => void;
+  onUpdateProduct?: (barcode: string, updates: { amount?: number; unit?: Unit }) => void;
   disabled?: boolean;
   prominent?: boolean;
   city?: string;
@@ -39,12 +42,13 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   selectedProducts,
   onSelectProduct,
   onRemoveProduct,
+  onUpdateProduct,
   disabled = false,
   prominent = false,
   city,
   storeType,
 }) => {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, tUnit } = useLanguage();
   const { results, isSearching, query, setQuery, clearResults } = useProductSearch(2, 300, city, storeType);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -80,7 +84,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   const handleSelect = (product: DbProduct) => {
     // Don't add duplicates
     if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
-    onSelectProduct(product);
+    onSelectProduct({ ...product, amount: 1, unit: 'pcs' });
     clearResults();
     setIsDropdownOpen(false);
   };
@@ -231,6 +235,39 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
                   </div>
                 )}
               </div>
+              {/* Amount & Unit Controls */}
+              {onUpdateProduct && (
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <input
+                    type="number"
+                    min={product.unit === 'pcs' ? 1 : 0.5}
+                    max="100"
+                    step={product.unit === 'pcs' ? 1 : 0.5}
+                    value={product.amount}
+                    onChange={(e) => {
+                      const raw = parseFloat(e.target.value);
+                      if (isNaN(raw) || raw <= 0) return;
+                      const val = product.unit === 'pcs' ? Math.round(raw) : Math.round(raw * 2) / 2;
+                      onUpdateProduct(product.barcode, { amount: val });
+                    }}
+                    className="w-14 h-7 text-xs font-semibold text-center border border-slate-200 focus:border-indigo-400 rounded-md outline-none bg-white focus:bg-white text-slate-600 focus:text-indigo-600 transition-all"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <select
+                    value={product.unit}
+                    onChange={(e) => {
+                      const newUnit = e.target.value as Unit;
+                      const snappedAmount = newUnit === 'pcs' ? Math.max(1, Math.round(product.amount)) : product.amount;
+                      onUpdateProduct(product.barcode, { unit: newUnit, amount: snappedAmount });
+                    }}
+                    className="h-7 ps-1.5 pe-5 text-[11px] font-bold uppercase tracking-wider bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-md border border-slate-200 focus:border-indigo-400 outline-none appearance-none cursor-pointer text-end w-14"
+                  >
+                    {UNITS.map(u => (
+                      <option key={u} value={u}>{tUnit(u)}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => onRemoveProduct(product.barcode)}

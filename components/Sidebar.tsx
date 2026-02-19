@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ListDocument, UserProfile, SavedRecipe } from '../types';
+import { ListDocument, UserProfile, SavedRecipe, ShoppingProduct } from '../types';
 import { Plus, List, Trash2, Layout, Lock, ChefHat, ChevronDown, ChevronRight, ChevronLeft, Eye, PenLine, Sparkles, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { subscribeToSavedRecipes, deleteSavedRecipe, updateSavedRecipe } from '../services/firestoreService';
 import RecipeBreakdownModal from './RecipeBreakdownModal';
+import ShoppingListBreakdownModal from './ShoppingListBreakdownModal';
 
 interface SidebarProps {
   lists: ListDocument[];
@@ -40,6 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [organizeExpanded, setOrganizeExpanded] = useState(true);
   const [shoppingExpanded, setShoppingExpanded] = useState(true);
   const [viewingRecipe, setViewingRecipe] = useState<SavedRecipe | null>(null);
+  const [viewingShoppingList, setViewingShoppingList] = useState<{ products: ShoppingProduct[]; title: string } | null>(null);
 
   // Split lists into organize and shopping
   const organizeLists = lists.filter(l => l.appMode !== 'shopping');
@@ -265,43 +267,72 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <span className="font-medium text-sm">{t('sidebar.createNewShoppingList')}</span>
                       </button>
 
-                      {shoppingLists.map(list => (
-                        <div
-                          key={list.id}
-                          className={`
-                            group relative flex items-center justify-between px-3 py-2.5 rounded-xl transition-all cursor-pointer
-                            ${activeListId === list.id
-                              ? 'bg-emerald-50 text-emerald-900'
-                              : 'text-slate-600 hover:bg-slate-50'
-                            }
-                          `}
-                          onClick={() => {
-                            onSelect(list);
-                            setIsOpen(false);
-                          }}
-                        >
-                          <div className="flex items-center gap-3 overflow-hidden">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${activeListId === list.id ? 'bg-white text-emerald-600 shadow-sm' : 'bg-emerald-100 text-emerald-500'}`}>
-                              <ShoppingCart className="w-4 h-4" />
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-sm font-semibold truncate">{list.title || 'Untitled List'}</span>
-                              <span className="text-[10px] text-slate-400 truncate">
-                                {list.shoppingProducts?.length || 0} {t('sidebar.products')} • {list.memberEmails.length > 1 ? t('sidebar.shared') : t('sidebar.private')}
-                              </span>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteClick(e, list.id)}
-                            className="lg:opacity-0 lg:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all focus:opacity-100 relative z-20"
-                            aria-label="Delete List"
+                      {shoppingLists.map(list => {
+                        const hasProducts = (list.shoppingProducts?.length || 0) > 0;
+                        return (
+                          <div
+                            key={list.id}
+                            className={`
+                              group relative flex flex-col px-3 py-2.5 rounded-xl transition-all
+                              ${activeListId === list.id
+                                ? 'bg-emerald-50 text-emerald-900'
+                                : 'text-slate-600 hover:bg-slate-50'
+                              }
+                            `}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
+                            {/* List header row (clickable to select) */}
+                            <div
+                              className="flex items-center justify-between cursor-pointer"
+                              onClick={() => {
+                                onSelect(list);
+                                setIsOpen(false);
+                              }}
+                            >
+                              <div className="flex items-center gap-3 overflow-hidden">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${activeListId === list.id ? 'bg-white text-emerald-600 shadow-sm' : 'bg-emerald-100 text-emerald-500'}`}>
+                                  <ShoppingCart className="w-4 h-4" />
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-sm font-semibold truncate">{list.title || 'Untitled List'}</span>
+                                  <span className="text-[10px] text-slate-400 truncate">
+                                    {list.shoppingProducts?.length || 0} {t('sidebar.products')} • {list.memberEmails.length > 1 ? t('sidebar.shared') : t('sidebar.private')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteClick(e, list.id)}
+                                className="lg:opacity-0 lg:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all focus:opacity-100 relative z-20"
+                                aria-label="Delete List"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* View button (only when list has products) */}
+                            {hasProducts && (
+                              <div className="flex gap-2 mt-1.5 ms-11">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const products: ShoppingProduct[] = (list.shoppingProducts || []).map(p => ({
+                                      ...p,
+                                      amount: p.amount ?? 1,
+                                      unit: p.unit ?? 'pcs',
+                                    }));
+                                    setViewingShoppingList({ products, title: list.title || 'Shopping List' });
+                                  }}
+                                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  {t('sidebar.viewProducts')}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -412,6 +443,16 @@ const Sidebar: React.FC<SidebarProps> = ({
           recipes={[viewingRecipe]}
           canEdit={true}
           onUpdate={handleUpdateRecipe}
+        />
+      )}
+
+      {/* Shopping List View Modal */}
+      {viewingShoppingList && (
+        <ShoppingListBreakdownModal
+          isOpen={!!viewingShoppingList}
+          onClose={() => setViewingShoppingList(null)}
+          products={viewingShoppingList.products}
+          listTitle={viewingShoppingList.title}
         />
       )}
     </>

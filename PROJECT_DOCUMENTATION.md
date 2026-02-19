@@ -2136,8 +2136,100 @@ When a user compares prices in **online mode**, the system now only shows online
 | `constants/translations.ts` | Modified | 5 new delivery-related keys (en + he) |
 | `App.tsx` | Modified | City list refetches per shopping mode type |
 
+### Shopping Mode: Amount & Unit Editing (February 2026)
+
+#### Overview
+
+Shopping mode products were previously read-only after selection — users could only remove items, not adjust quantities or units. The price comparison hardcoded `amount: 1` and `unit: 'pcs'` for every product. This update adds full amount/unit editing to the shopping list, matching the UX from Organize mode's `CategoryItem`.
+
+#### New Type: `ShoppingProduct` (`types.ts`)
+
+```typescript
+interface ShoppingProduct extends DbProduct {
+  amount: number;  // default 1
+  unit: Unit;      // default 'pcs'
+}
+```
+
+- `ListDocument.shoppingProducts` type changed from `DbProduct[]` to `ShoppingProduct[]`
+- Backward compatible: existing Firestore docs without `amount`/`unit` get defaults on load via `p.amount ?? 1, p.unit ?? 'pcs'`
+
+#### Amount/Unit Controls (`components/ProductSearchInput.tsx`)
+
+- Added `onUpdateProduct(barcode, { amount?, unit? })` callback prop
+- Each selected product row now shows:
+  - **Amount input**: number field with unit-aware stepping
+  - **Unit selector**: native `<select>` with options [pcs, g, kg, L, ml], localized via `tUnit()`
+- When a product is selected from search, it's wrapped with `{ ...product, amount: 1, unit: 'pcs' }`
+
+#### Unit-Type-Specific Stepping
+
+- **pcs**: step `1`, min `1`, values snap to whole numbers (1, 2, 3...)
+- **g, kg, L, ml**: step `0.5`, min `0.5`, values snap to 0.5 increments (0.5, 1, 1.5, 2...)
+- Switching unit to pcs auto-snaps the amount (e.g. 1.5 → 2)
+
+#### Price Comparison Uses Actual Amounts (`App.tsx`)
+
+- `handleShoppingCompare()` and `handleShoppingOnline()` now use `p.amount` and `p.unit` instead of hardcoded `1` / `'pcs'`
+- Products with `amount: 3` correctly show 3x multiplied prices in the comparison report
+
+#### Per-Unit Price Breakdown in Report (`components/SavingsReport.tsx`)
+
+Updated the item breakdown rows in the expanded store view:
+- **Single item** (amount = 1): Shows unit price only — `item name    ₪7.90    ₪7.90`
+- **Multiple items** (amount > 1): Shows unit price × quantity — `item name    ₪7.90 × 6    ₪47.40`
+- Three-column layout: item name (truncates), per-unit price (with multiplier), total price (bold)
+
+#### Firestore Sync Fix (`App.tsx`)
+
+Fixed a bug where editing amount/unit kicked the user back to the setup step:
+- **Root cause**: Every product edit triggered Firestore save → snapshot → sync effect → `setShoppingStep('setup')`
+- **Fix**: Added `prevActiveListIdRef` to distinguish list switches from Firestore echoes. Shopping UI navigation state (`shoppingStep`, `priceComparison`, city/mode) only resets when the user actually switches lists.
+
+#### Shopping List View in Sidebar
+
+Added the ability to view shopping list products directly from the sidebar, matching the recipe view pattern.
+
+##### New Component: `components/ShoppingListBreakdownModal.tsx`
+- Modal showing all products in a shopping list
+- Each product displays: image thumbnail, name, manufacturer, barcode, price range, and an emerald badge with amount + localized unit
+- Responsive layout with scrollable product list
+
+##### Sidebar Changes (`components/Sidebar.tsx`)
+- Each shopping list with products now shows a "View" button (Eye icon) below the list name
+- Clicking opens `ShoppingListBreakdownModal` with the list's products
+- The list row itself remains clickable to select/load (unchanged behavior)
+- Backward compat: defaults `amount: 1, unit: 'pcs'` for older products
+
+#### Mobile Header Layout Fix (`components/ShoppingInputArea.tsx`)
+
+Fixed the "Back to Setup" button overlapping the title on mobile:
+- Replaced `absolute` positioning with a proper 3-column flex layout: `[back button] [centered title] [spacer]`
+- On mobile, back button text is hidden (`hidden sm:inline`) — only the chevron arrow shows
+- Matching spacer keeps the title centered
+
+#### Translations (`constants/translations.ts`)
+
+| Key | English | Hebrew |
+|-----|---------|--------|
+| `sidebar.viewProducts` | View | צפה |
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `types.ts` | Modified | Added `ShoppingProduct` interface; updated `ListDocument.shoppingProducts` type |
+| `components/ProductSearchInput.tsx` | Modified | Added `onUpdateProduct` prop; amount input + unit select per product row; unit-aware stepping |
+| `components/ShoppingInputArea.tsx` | Modified | Updated prop types to `ShoppingProduct[]`; added `handleUpdateProduct`; fixed mobile header layout |
+| `components/SavingsReport.tsx` | Modified | Per-unit price + total columns in item breakdown |
+| `components/ShoppingListBreakdownModal.tsx` | **New** | Modal for viewing shopping list products with full details |
+| `components/Sidebar.tsx` | Modified | Added "View" button for shopping lists; wired up `ShoppingListBreakdownModal` |
+| `services/firestoreService.ts` | Modified | Updated param types from `DbProduct[]` to `ShoppingProduct[]` |
+| `constants/translations.ts` | Modified | Added `sidebar.viewProducts` (en + he) |
+| `App.tsx` | Modified | `ShoppingProduct` state type; backward-compat defaults on load; actual amounts in comparison; sync effect fix with `prevActiveListIdRef` |
+
 ---
 
 **Last Updated**: February 19, 2026
-**Version**: 3.5.0
+**Version**: 3.6.0
 **Status**: Production Ready

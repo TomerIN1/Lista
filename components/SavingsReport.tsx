@@ -207,11 +207,22 @@ const StoreRow: React.FC<StoreRowProps> = ({
           {displayItemPrices.length > 0 && (
             <div className="mt-2 space-y-1">
               {displayItemPrices.map((ip, i) => (
-                <div key={i} className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 truncate max-w-[60%]">
-                    {ip.itemName} {ip.amount > 1 ? `x${ip.amount}` : ''}
+                <div key={i} className="flex items-center justify-between text-xs gap-2">
+                  <span className="text-slate-600 truncate min-w-0 flex-1">
+                    {ip.itemName}
                   </span>
-                  <span className="text-slate-800 font-medium">₪{ip.total.toFixed(2)}</span>
+                  {ip.amount > 1 ? (
+                    <span className="text-slate-400 whitespace-nowrap flex-shrink-0">
+                      ₪{ip.price.toFixed(2)} × {ip.amount}
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 whitespace-nowrap flex-shrink-0">
+                      ₪{ip.price.toFixed(2)}
+                    </span>
+                  )}
+                  <span className="text-slate-800 font-medium whitespace-nowrap flex-shrink-0">
+                    ₪{ip.total.toFixed(2)}
+                  </span>
                 </div>
               ))}
               {/* Delivery fee line for online stores */}

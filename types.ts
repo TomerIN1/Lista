@@ -63,7 +63,7 @@ export interface ListDocument {
   recipes?: Recipe[]; // Array of recipes used in this list
   inputMode?: InputMode; // Current mode ('items' or 'recipe')
   appMode?: AppMode; // Top-level mode ('organize' or 'shopping') — undefined defaults to 'organize'
-  shoppingProducts?: DbProduct[]; // Products for shopping mode lists
+  shoppingProducts?: ShoppingProduct[]; // Products for shopping mode lists
   shoppingCity?: string;
   shoppingMode?: ShoppingMode;
   createdAt?: any;
@@ -84,6 +84,11 @@ export interface DbProduct {
   min_price: number;
   max_price: number;
   savings: number;
+}
+
+export interface ShoppingProduct extends DbProduct {
+  amount: number;
+  unit: Unit;
 }
 
 export interface DbProductSearchResult {

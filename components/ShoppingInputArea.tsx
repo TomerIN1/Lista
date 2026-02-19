@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowRight, ArrowLeft, ShoppingCart, Trash2, Pencil, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { DbProduct } from '../types';
+import { DbProduct, ShoppingProduct, Unit } from '../types';
 import ProductSearchInput from './ProductSearchInput';
 
 interface ShoppingInputAreaProps {
-  products: DbProduct[];
-  onProductsChange: (products: DbProduct[]) => void;
+  products: ShoppingProduct[];
+  onProductsChange: (products: ShoppingProduct[]) => void;
   onCompare: () => void;
   isLoading: boolean;
   title?: string;
@@ -54,12 +54,16 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   const hasContent = products.length > 0;
   const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
 
-  const handleSelectProduct = (product: DbProduct) => {
+  const handleSelectProduct = (product: ShoppingProduct) => {
     onProductsChange([...products, product]);
   };
 
   const handleRemoveProduct = (barcode: string) => {
     onProductsChange(products.filter((p) => p.barcode !== barcode));
+  };
+
+  const handleUpdateProduct = (barcode: string, updates: { amount?: number; unit?: Unit }) => {
+    onProductsChange(products.map((p) => p.barcode === barcode ? { ...p, ...updates } : p));
   };
 
   const handleClear = () => {
@@ -69,18 +73,21 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   return (
     <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-visible transition-shadow focus-within:shadow-[0_8px_40px_rgb(99,102,241,0.12)] focus-within:border-emerald-100">
       {/* Header */}
-      <div className="flex items-center justify-center gap-2 px-6 py-4 border-b border-slate-100 bg-emerald-50/30 rounded-t-3xl relative">
-        {onBack && (
+      <div className="flex items-center px-4 py-4 border-b border-slate-100 bg-emerald-50/30 rounded-t-3xl">
+        {onBack ? (
           <button
             type="button"
             onClick={onBack}
-            className="absolute start-4 flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors flex-shrink-0"
           >
             {isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            <span>{t('appMode.backToSetup')}</span>
+            <span className="hidden sm:inline">{t('appMode.backToSetup')}</span>
           </button>
+        ) : (
+          <div className="w-0" />
         )}
-        <ShoppingCart className="w-5 h-5 text-emerald-600" />
+        <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
+          <ShoppingCart className="w-5 h-5 text-emerald-600 flex-shrink-0" />
         {isEditingTitle ? (
           <div className="flex items-center gap-1.5">
             <input
@@ -111,6 +118,9 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
             )}
           </button>
         )}
+        </div>
+        {/* Spacer to balance the back button */}
+        {onBack ? <div className="w-[68px] sm:w-[120px] flex-shrink-0" /> : <div className="w-0" />}
       </div>
 
       {/* Product Search (prominent) */}
@@ -118,6 +128,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         selectedProducts={products}
         onSelectProduct={handleSelectProduct}
         onRemoveProduct={handleRemoveProduct}
+        onUpdateProduct={handleUpdateProduct}
         disabled={isLoading}
         prominent
         city={city}
