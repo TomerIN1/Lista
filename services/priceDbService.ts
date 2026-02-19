@@ -124,7 +124,9 @@ export async function searchProducts(
   if (cached) return cached;
 
   const params: Record<string, string | number> = { q: query, limit, offset };
-  if (city) params.city = city;
+  // Note: city is NOT passed to the search endpoint — the API's /api/products/search
+  // does not support city filtering (returns 0 results). City filtering is handled
+  // by the price comparison endpoints instead. storeType works and filters by store kind.
   if (storeType) params.store_type = storeType;
 
   const result = await apiFetch<DbProductSearchResult>('/api/products/search', params);

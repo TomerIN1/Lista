@@ -2285,8 +2285,34 @@ Added `viewingOrganizeList` state for the new modal.
 | `components/OrganizeListBreakdownModal.tsx` | **New** | Modal for viewing organize list categories & items |
 | `components/Sidebar.tsx` | Modified | Consistent View+Use buttons across all sections; imported new modal; added `viewingOrganizeList` state |
 
+### Product Search: City Filter Fix (February 2026)
+
+#### Problem
+
+After the delivery coverage filtering feature was added, product search in shopping mode returned 0 results whenever a city was selected in the setup step. Typing in the search box (e.g. "חלב") showed nothing — no spinner, no results, no error.
+
+#### Root Cause
+
+The `searchProducts()` function in `priceDbService.ts` was passing the `city` parameter to the `/api/products/search` endpoint, but that endpoint does not support city filtering — it returns 0 results for any `city` value. The `city` parameter is only supported by the price comparison endpoints (`/api/prices/compare/{barcode}` and `/api/products/{barcode}`).
+
+The `store_type` parameter works correctly on the search endpoint (filters by online/physical stores).
+
+#### Fix
+
+Stopped passing `city` to the search API call in `searchProducts()`. The `city` parameter is kept in the function signature and cache key (for future API support), and continues flowing through the component hierarchy for use by price comparison.
+
+#### Known API-Side Issue: Physical Store City Codes
+
+During investigation, a separate API/DB issue was identified: some physical stores have **city codes** (e.g. `"3000"`) in their `city` field instead of proper names (e.g. `"ירושלים"`). This causes the `city` filter on price comparison endpoints to miss physical stores. Example: Rami Levy Talpiot (Jerusalem) has `city="3000"` in the DB, so `?city=ירושלים` doesn't match it. This needs a DB-side fix to normalize city codes to names.
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `services/priceDbService.ts` | Modified | Removed `city` param from search API call; `store_type` still passed |
+
 ---
 
 **Last Updated**: February 19, 2026
-**Version**: 3.7.0
+**Version**: 3.7.1
 **Status**: Production Ready
