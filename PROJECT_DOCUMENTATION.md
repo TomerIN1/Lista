@@ -2390,8 +2390,103 @@ New keys in `appMode` section (EN/HE):
 | `vite.config.ts` | Modified | Added `/gov-data-api` dev proxy |
 | `vercel.json` | Modified | Added `/gov-data-api` production rewrite |
 
+### Single-Endpoint Price Comparison with Promotions (February 2026)
+
+#### Overview
+
+Replaced the N+1 per-product price comparison calls with a **single `POST /api/shopping-list/compare`** endpoint. The API now handles all comparison logic server-side — store matching, branch grouping, promotion application, delivery fees — and returns a fully computed result. Lista just renders it.
+
+Also surfaces **promotion data** in the price breakdown UI: strikethrough original prices, promotion descriptions, and expiration warnings.
+
+#### API Contract
+
+**Request**: `POST /api/shopping-list/compare`
+```json
+{
+  "items": [{ "barcode": "7290000066318", "quantity": 2 }],
+  "city": "ירושלים",
+  "city_code": 3000,
+  "store_type": "online"
+}
+```
+
+**Response** (per store): `store_ref_id`, `store_name`, `city`, `address`, `is_online`, `matched_items`, `total_items`, `subtotal`, `delivery_fee`, `minimum_order`, `below_minimum_order`, `total`, `items[]` (with `unit_price`, `effective_unit_price`, `promotion`), `missing_items[]`
+
+**Top-level**: `cheapest_store`, `cheapest_per_item`, `savings_vs_most_expensive`
+
+#### Type Changes (`types.ts`)
+
+| Type | Change |
+|------|--------|
+| `ItemPromotion` | **New** — `{ description, type, endsAt }` |
+| `ItemPriceDetail` | Added `originalPrice?: number` and `promotion?: ItemPromotion` |
+
+#### Price Service Changes (`services/priceDbService.ts`)
+
+- **Removed**: `withConcurrencyLimit` helper, `ItemForComparison` interface, entire N+1 comparison logic (~150 lines)
+- **Added**: `ShoppingListCompareRequest` interface, `ApiStore`/`ApiStoreItem`/`ApiCompareResponse` types for the new endpoint
+- **`compareListPrices()`**: Now accepts `ShoppingListCompareRequest` (items, city, city_code, store_type) instead of `CategoryGroup[]`. Makes a single POST call, maps response to `ListPriceComparison`. Includes promotion data in `ItemPriceDetail` mapping.
+- Passes `city_code` from address autocomplete for better store matching
+
+#### App.tsx Changes
+
+- `handleShoppingCompare()`: Simplified — builds `{ items, city, city_code, store_type }` directly from `shoppingProducts` instead of constructing temporary `CategoryGroup[]`
+
+#### UI Changes (`components/SavingsReport.tsx`)
+
+Per-item price breakdown now shows:
+- **Strikethrough original price** when a promotion applies (e.g., ~~₪6.90~~ ₪5.90)
+- **Promotion badge** with Tag icon and description text (rose color)
+- **Expiration warning** for promos ending within 48h: "Ends today" / "Ends tomorrow" / "Ends soon"
+
+#### Translation Changes (`constants/translations.ts`)
+
+New keys in `priceComparison` section (EN/HE):
+- `endsToday` — "Ends today" / "מסתיים היום"
+- `endsTomorrow` — "Ends tomorrow" / "מסתיים מחר"
+- `endsSoon` — "Ends soon" / "מסתיים בקרוב"
+
+#### Known Limitation
+
+Only Rami Levy has delivery coverage data in the DB. Shufersal, Victory, H. Cohen, and Market Warehouses online stores have no delivery rows yet — so `store_type: "online"` only returns Rami Levy results.
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `services/priceDbService.ts` | Modified | Replaced N+1 calls with single POST; added promotion mapping |
+| `types.ts` | Modified | Added `ItemPromotion`, extended `ItemPriceDetail` |
+| `App.tsx` | Modified | Simplified `handleShoppingCompare` |
+| `components/SavingsReport.tsx` | Modified | Promotion badges, strikethrough prices, expiration warnings |
+| `constants/translations.ts` | Modified | Added 3 promotion-related keys (EN + HE) |
+
+---
+
+### Service Worker POST Fix & City Name Normalization (February 2026)
+
+#### Service Worker Fix
+
+The service worker was intercepting `POST` requests to `/price-api/api/shopping-list/compare` and attempting to cache them via `Cache.put()`, which only supports `GET`. This caused the request to silently fail — the comparison returned no results.
+
+**Fix**: Added `method !== 'GET'` early-return in the service worker's fetch handler. Bumped cache version to `v4` to force update.
+
+#### City Name Normalization (קרית vs קריית)
+
+data.gov.il uses the spelling `קרית` (single yod) for cities like קרית אונו, while the food prices DB delivery coverage table uses `קריית` (double yod). This mismatch caused online stores to not appear for affected cities.
+
+**Fix**: Added a normalization map in `govDataService.ts` that converts data.gov.il's spelling to match the DB convention for all `קרית/קריית` city variants (13 cities covered).
+
+**Affected cities**: קרית אונו, קרית גת, קרית טבעון, קרית יערים, קרית ספר, קרית אתא, קרית ביאליק, קרית חיים, קרית ים, קרית מוצקין, קרית מלאכי, קרית שמונה, קרית עקרון
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `service-worker.js` | Modified | Skip non-GET requests; bump cache to v4 |
+| `services/govDataService.ts` | Modified | Added `CITY_NAME_NORMALIZATIONS` map for קרית→קריית |
+
 ---
 
 **Last Updated**: February 22, 2026
-**Version**: 3.8.0
+**Version**: 3.9.0
 **Status**: Production Ready

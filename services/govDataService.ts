@@ -24,6 +24,28 @@ interface GovDataResponse {
   };
 }
 
+// data.gov.il uses "קרית" while the food prices DB uses "קריית" (double yod).
+// Normalize to match the DB convention.
+const CITY_NAME_NORMALIZATIONS: Record<string, string> = {
+  'קרית אונו': 'קריית אונו',
+  'קרית גת': 'קריית גת',
+  'קרית טבעון': 'קריית טבעון',
+  'קרית יערים': 'קריית יערים',
+  'קרית ספר': 'קריית ספר',
+  'קרית אתא': 'קריית אתא',
+  'קרית ביאליק': 'קריית ביאליק',
+  'קרית חיים': 'קריית חיים',
+  'קרית ים': 'קריית ים',
+  'קרית מוצקין': 'קריית מוצקין',
+  'קרית מלאכי': 'קריית מלאכי',
+  'קרית שמונה': 'קריית שמונה',
+  'קרית עקרון': 'קריית עקרון',
+};
+
+function normalizeCityName(city: string): string {
+  return CITY_NAME_NORMALIZATIONS[city] || city;
+}
+
 export async function searchAddresses(query: string, limit = 10): Promise<AddressSuggestion[]> {
   if (!query.trim()) return [];
 
@@ -44,9 +66,10 @@ export async function searchAddresses(query: string, limit = 10): Promise<Addres
   const suggestions: AddressSuggestion[] = [];
 
   for (const record of data.result.records) {
-    const city = record.שם_ישוב?.trim();
+    const rawCity = record.שם_ישוב?.trim();
     const street = record.שם_רחוב?.trim();
-    if (!city) continue;
+    if (!rawCity) continue;
+    const city = normalizeCityName(rawCity);
 
     const key = `${street || ''}|${city}`;
     if (seen.has(key)) continue;

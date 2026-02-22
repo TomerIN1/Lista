@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lista-cache-v3';
+const CACHE_NAME = 'lista-cache-v4';
 
 // Assets to cache immediately
 const PRECACHE_ASSETS = [
@@ -36,6 +36,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests like Google APIs or Firebase for basic caching
   if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  // Skip non-GET requests (POST, PUT, etc.) — Cache API only supports GET
+  if (event.request.method !== 'GET') {
     return;
   }
 
