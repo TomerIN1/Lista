@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct, ShoppingProduct, AppMode, ShoppingFlowStep, ShoppingMode, ListPriceComparison } from './types';
+import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct, ShoppingProduct, AppMode, ShoppingFlowStep, ShoppingMode, ListPriceComparison, UserLocation } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
 import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe, createShoppingList, updateShoppingListProducts } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
@@ -63,6 +63,7 @@ const App: React.FC = () => {
   const [storeRecommendation, setStoreRecommendation] = useState<{ storeName: string; savingsAmount: number } | null>(null);
   const [isShoppingComparing, setIsShoppingComparing] = useState(false);
   const [shoppingCity, setShoppingCity] = useState('');
+  const [shoppingLocation, setShoppingLocation] = useState<UserLocation | null>(null);
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
 
@@ -181,8 +182,9 @@ const App: React.FC = () => {
             setStoreRecommendation(null);
             setStatus('idle');
 
-            // Restore city and mode from document
+            // Restore city, location, and mode from document
             if (current.shoppingCity) setShoppingCity(current.shoppingCity);
+            if (current.shoppingLocation) setShoppingLocation(current.shoppingLocation);
             if (current.shoppingMode) setSelectedShoppingMode(current.shoppingMode);
 
             // If city and mode exist, go to build_list; otherwise go to setup
@@ -580,6 +582,7 @@ const App: React.FC = () => {
       setSelectedShoppingMode(null);
       setStoreRecommendation(null);
       setShoppingCity('');
+      setShoppingLocation(null);
     }
   };
 
@@ -598,14 +601,15 @@ const App: React.FC = () => {
           user.email,
           products,
           shoppingCity || undefined,
-          selectedShoppingMode || undefined
+          selectedShoppingMode || undefined,
+          shoppingLocation || undefined
         );
         setActiveListId(newId);
       } catch (e) {
         console.error('Failed to create shopping list:', e);
       }
     }
-  }, [user, activeListId, language, shoppingCity, selectedShoppingMode]);
+  }, [user, activeListId, language, shoppingCity, selectedShoppingMode, shoppingLocation]);
 
   // Auto-save shopping products to Firestore
   useEffect(() => {
@@ -636,17 +640,29 @@ const App: React.FC = () => {
     }
   }, [appMode, selectedShoppingMode]);
 
-  // Persist shopping city to localStorage
+  // Persist shopping city & location to localStorage
   useEffect(() => {
     if (shoppingCity) {
       localStorage.setItem('lista_shopping_city', shoppingCity);
     }
   }, [shoppingCity]);
 
-  // Initialize shopping city from localStorage
+  useEffect(() => {
+    if (shoppingLocation) {
+      localStorage.setItem('lista_shopping_location', JSON.stringify(shoppingLocation));
+    } else {
+      localStorage.removeItem('lista_shopping_location');
+    }
+  }, [shoppingLocation]);
+
+  // Initialize shopping city & location from localStorage
   useEffect(() => {
     const savedCity = localStorage.getItem('lista_shopping_city');
     if (savedCity) setShoppingCity(savedCity);
+    const savedLocation = localStorage.getItem('lista_shopping_location');
+    if (savedLocation) {
+      try { setShoppingLocation(JSON.parse(savedLocation)); } catch {}
+    }
   }, []);
 
   const handleSetupProceed = () => {
@@ -664,6 +680,7 @@ const App: React.FC = () => {
     setSelectedShoppingMode(null);
     setStoreRecommendation(null);
     setShoppingCity('');
+    setShoppingLocation(null);
   };
 
   const handleShoppingCompare = async () => {
@@ -905,10 +922,12 @@ const App: React.FC = () => {
                         selectedCity={shoppingCity}
                         selectedMode={selectedShoppingMode}
                         onCityChange={setShoppingCity}
+                        onLocationChange={setShoppingLocation}
                         onSelectMode={setSelectedShoppingMode}
                         onProceed={handleSetupProceed}
                         cities={availableCities}
                         isLoadingCities={isLoadingCities}
+                        selectedLocation={shoppingLocation}
                       />
                     )}
 

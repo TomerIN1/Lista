@@ -14,6 +14,11 @@ export default defineConfig(({ mode }) => {
             changeOrigin: true,
             rewrite: (path: string) => path.replace(/^\/price-api/, ''),
           },
+          '/gov-data-api': {
+            target: 'https://data.gov.il',
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/gov-data-api/, ''),
+          },
         },
       },
       plugins: [react()],

@@ -203,7 +203,8 @@ Lista/
 │
 ├── services/                    # External services
 │   ├── firestoreService.ts     # Firestore operations
-│   └── geminiService.ts        # OpenAI API integration
+│   ├── geminiService.ts        # OpenAI API integration
+│   └── govDataService.ts       # data.gov.il address autocomplete
 │
 └── node_modules/                # Dependencies (not in git)
 ```
@@ -2311,8 +2312,86 @@ During investigation, a separate API/DB issue was identified: some physical stor
 |------|--------|-------------|
 | `services/priceDbService.ts` | Modified | Removed `city` param from search API call; `store_type` still passed |
 
+### Street-Level Address Autocomplete via data.gov.il (February 2026)
+
+#### Overview
+
+Replaced the city-only dropdown in the Shopping Mode setup step with a **street-level address autocomplete** powered by the free Israeli government **data.gov.il** API. This provides finer-grained location selection (street + city) and returns city codes (`סמל_ישוב`) which can help resolve city code mismatches in the food prices database.
+
+**Architecture**: User types address → data.gov.il autocomplete → picks suggestion → city extracted automatically → passed to food prices API.
+
+#### API Details
+
+- **Endpoint**: `GET https://data.gov.il/api/3/action/datastore_search`
+- **Resource**: `9ad3862c-8391-4b2f-84a4-2d4c68625f4b` (Israeli streets dataset, 63,257 records)
+- **Auth**: None required (free, public API)
+- **Proxied via**: `/gov-data-api` (Vite dev proxy + Vercel rewrite for CORS)
+
+#### New Files
+
+| File | Purpose |
+|------|---------|
+| `services/govDataService.ts` | data.gov.il API client. `searchAddresses(query, limit)` returns `AddressSuggestion[]` with `streetName`, `cityName`, `cityCode`, `streetCode`, `displayText`. Deduplicates by street+city pair. |
+| `hooks/useAddressAutocomplete.ts` | React hook following the `useProductSearch` pattern. Uses `useDebounce(300ms)`, manages query/suggestions/selectedAddress state. Provides `selectAddress()` and `clearSelection()`. |
+
+#### Type Changes (`types.ts`)
+
+| Type | Change |
+|------|--------|
+| `UserLocation` | Added `cityCode?: number` (סמל_ישוב) and `streetName?: string` (שם_רחוב) |
+| `ListDocument` | Added `shoppingLocation?: UserLocation` for full location persistence |
+
+#### Component Changes
+
+**`ShoppingSetupStep.tsx`** — Fully rewritten:
+- Replaced city dropdown with address autocomplete input (Search icon, emerald accents)
+- Suggestions dropdown shows: **street name** (bold) + city name (secondary text)
+- After selection: shows address badge with city subtitle and a clear/change button
+- Fallback mode: if data.gov.il returns no results, user can switch to the old city list from the prices API
+- New props: `onLocationChange`, `selectedLocation`
+
+#### App.tsx Changes
+
+- New state: `shoppingLocation: UserLocation | null`
+- localStorage persistence for `shoppingLocation` (alongside existing `shoppingCity`)
+- Firestore restore: reads `shoppingLocation` from `ListDocument` on list switch
+- Passes `onLocationChange` and `selectedLocation` to `ShoppingSetupStep`
+- Resets `shoppingLocation` on mode switch and new list creation
+
+#### Infrastructure Changes
+
+- **`vite.config.ts`**: Added `/gov-data-api` dev proxy → `https://data.gov.il`
+- **`vercel.json`**: Added `/gov-data-api` production rewrite → `https://data.gov.il`
+
+#### Firestore Changes
+
+- **`firestoreService.ts`**: `createShoppingList()` now accepts and persists `shoppingLocation`
+
+#### Translation Changes (`constants/translations.ts`)
+
+New keys in `appMode` section (EN/HE):
+- `searchAddress` — "Search for street or city..." / "...חפש רחוב או עיר"
+- `selectedLocation` — "Selected location" / "מיקום נבחר"
+- `changeLocation` — "Change" / "שנה"
+- `noAddressResults` — "No addresses found" / "לא נמצאו כתובות"
+- `searchingAddresses` — "Searching..." / "...מחפש"
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `services/govDataService.ts` | **New** | data.gov.il address autocomplete service |
+| `hooks/useAddressAutocomplete.ts` | **New** | React hook with debounce for address search |
+| `types.ts` | Modified | `UserLocation` expanded with `cityCode`/`streetName`; `ListDocument` gets `shoppingLocation` |
+| `components/ShoppingSetupStep.tsx` | Modified | Replaced city dropdown with address autocomplete UI |
+| `App.tsx` | Modified | Added `shoppingLocation` state, persistence, props wiring |
+| `services/firestoreService.ts` | Modified | `createShoppingList()` accepts `shoppingLocation` |
+| `constants/translations.ts` | Modified | Added 5 address-related keys (EN + HE) |
+| `vite.config.ts` | Modified | Added `/gov-data-api` dev proxy |
+| `vercel.json` | Modified | Added `/gov-data-api` production rewrite |
+
 ---
 
-**Last Updated**: February 19, 2026
-**Version**: 3.7.1
+**Last Updated**: February 22, 2026
+**Version**: 3.8.0
 **Status**: Production Ready

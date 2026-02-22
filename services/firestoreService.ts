@@ -11,7 +11,7 @@ import {
   onSnapshot,
   arrayUnion
 } from 'firebase/firestore';
-import { ListDocument, CategoryGroup, Recipe, InputMode, SavedRecipe, ShoppingProduct, ShoppingMode } from '../types';
+import { ListDocument, CategoryGroup, Recipe, InputMode, SavedRecipe, ShoppingProduct, ShoppingMode, UserLocation } from '../types';
 
 const COLLECTION_NAME = 'lists';
 
@@ -104,7 +104,8 @@ export const createShoppingList = async (
   ownerEmail: string,
   shoppingProducts: ShoppingProduct[],
   shoppingCity?: string,
-  shoppingMode?: ShoppingMode
+  shoppingMode?: ShoppingMode,
+  shoppingLocation?: UserLocation
 ) => {
   const newListRef = doc(collection(db, COLLECTION_NAME));
   const newList: ListDocument = {
@@ -117,6 +118,7 @@ export const createShoppingList = async (
     shoppingProducts,
     ...(shoppingCity && { shoppingCity }),
     ...(shoppingMode && { shoppingMode }),
+    ...(shoppingLocation && { shoppingLocation }),
     createdAt: Date.now(),
     updatedAt: Date.now()
   };

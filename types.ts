@@ -65,6 +65,7 @@ export interface ListDocument {
   appMode?: AppMode; // Top-level mode ('organize' or 'shopping') — undefined defaults to 'organize'
   shoppingProducts?: ShoppingProduct[]; // Products for shopping mode lists
   shoppingCity?: string;
+  shoppingLocation?: UserLocation;
   shoppingMode?: ShoppingMode;
   createdAt?: any;
   updatedAt?: any;
@@ -186,6 +187,8 @@ export type ShoppingMode = 'physical' | 'online';
 export interface UserLocation {
   city: string;
   address?: string;
+  cityCode?: number;   // סמל_ישוב from gov data (e.g., 3000 = Jerusalem)
+  streetName?: string;  // שם_רחוב
 }
 
 // ============================================

@@ -5,6 +5,10 @@
       "destination": "https://israeli-food-prices-database-and-ap-one.vercel.app/:path*"
     },
     {
+      "source": "/gov-data-api/:path*",
+      "destination": "https://data.gov.il/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

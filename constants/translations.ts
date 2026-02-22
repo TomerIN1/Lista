@@ -174,6 +174,11 @@ export const TRANSLATIONS = {
       cityPlaceholder: "Search for a city...",
       noCity: "No cities found",
       loadingCities: "Loading cities...",
+      searchAddress: "Search for street or city...",
+      selectedLocation: "Selected location",
+      changeLocation: "Change",
+      noAddressResults: "No addresses found",
+      searchingAddresses: "Searching...",
       continueToList: "Continue",
       backToSetup: "Back to Setup",
       comparingIn: "Comparing in"
@@ -357,6 +362,11 @@ export const TRANSLATIONS = {
       cityPlaceholder: "חפש עיר...",
       noCity: "לא נמצאו ערים",
       loadingCities: "טוען ערים...",
+      searchAddress: "חפש רחוב או עיר...",
+      selectedLocation: "מיקום נבחר",
+      changeLocation: "שנה",
+      noAddressResults: "לא נמצאו כתובות",
+      searchingAddresses: "מחפש...",
       continueToList: "המשך",
       backToSetup: "חזרה להגדרות",
       comparingIn: "משווה ב"
