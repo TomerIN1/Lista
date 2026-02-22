@@ -139,11 +139,19 @@ export interface DbSupermarket {
 // Price Comparison Results
 // ============================================
 
+export interface ItemPromotion {
+  description: string;
+  type: string;
+  endsAt: string | null;
+}
+
 export interface ItemPriceDetail {
   itemName: string;
   price: number;
+  originalPrice?: number;  // regular price before promo (if discounted)
   amount: number;
   total: number;
+  promotion?: ItemPromotion;
 }
 
 export interface StoreBranch {

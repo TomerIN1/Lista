@@ -690,25 +690,13 @@ const App: React.FC = () => {
     setShoppingStep('comparing');
 
     try {
-      // Build temporary groups from DB products for comparison
-      const tempItems = shoppingProducts.map((p) => ({
-        id: crypto.randomUUID(),
-        name: p.name,
-        checked: false,
-        amount: p.amount,
-        unit: p.unit,
-        barcode: p.barcode,
-        dbProductId: p.id,
-        manufacturer: p.manufacturer,
-        dbPrice: p.min_price,
-      }));
-
-      const tempGroups: CategoryGroup[] = [
-        { id: crypto.randomUUID(), category: 'Shopping List', items: tempItems },
-      ];
-
       const storeType = selectedShoppingMode === 'online' ? 'online' : selectedShoppingMode === 'physical' ? 'physical' : undefined;
-      const result = await compareListPrices(tempGroups, shoppingCity || undefined, storeType);
+      const result = await compareListPrices({
+        items: shoppingProducts.map((p) => ({ barcode: p.barcode, quantity: p.amount })),
+        city: shoppingCity || undefined,
+        city_code: shoppingLocation?.cityCode,
+        store_type: storeType,
+      });
       setPriceComparison(result);
       setShoppingStep('results');
     } catch (err) {

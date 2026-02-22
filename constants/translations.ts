@@ -153,7 +153,10 @@ export const TRANSLATIONS = {
       subtotal: "Products",
       totalWithDelivery: "Total incl. delivery",
       minimumOrder: "Minimum order",
-      belowMinimum: "Below minimum order"
+      belowMinimum: "Below minimum order",
+      endsToday: "Ends today",
+      endsTomorrow: "Ends tomorrow",
+      endsSoon: "Ends soon"
     },
     appMode: {
       organize: "Organize",
@@ -341,7 +344,10 @@ export const TRANSLATIONS = {
       subtotal: "מוצרים",
       totalWithDelivery: "סה״כ כולל משלוח",
       minimumOrder: "הזמנה מינימלית",
-      belowMinimum: "מתחת להזמנה מינימלית"
+      belowMinimum: "מתחת להזמנה מינימלית",
+      endsToday: "מסתיים היום",
+      endsTomorrow: "מסתיים מחר",
+      endsSoon: "מסתיים בקרוב"
     },
     appMode: {
       organize: "ארגון",

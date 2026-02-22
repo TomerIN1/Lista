@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingDown, ChevronDown, ChevronUp, Award, AlertTriangle, XCircle, MapPin, Truck } from 'lucide-react';
+import { TrendingDown, ChevronDown, ChevronUp, Award, AlertTriangle, XCircle, MapPin, Truck, Tag } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListPriceComparison, StorePriceSummary, StoreBranch } from '../types';
 
@@ -207,22 +207,44 @@ const StoreRow: React.FC<StoreRowProps> = ({
           {displayItemPrices.length > 0 && (
             <div className="mt-2 space-y-1">
               {displayItemPrices.map((ip, i) => (
-                <div key={i} className="flex items-center justify-between text-xs gap-2">
-                  <span className="text-slate-600 truncate min-w-0 flex-1">
-                    {ip.itemName}
-                  </span>
-                  {ip.amount > 1 ? (
-                    <span className="text-slate-400 whitespace-nowrap flex-shrink-0">
-                      ₪{ip.price.toFixed(2)} × {ip.amount}
+                <div key={i}>
+                  <div className="flex items-center justify-between text-xs gap-2">
+                    <span className="text-slate-600 truncate min-w-0 flex-1">
+                      {ip.itemName}
                     </span>
-                  ) : (
-                    <span className="text-slate-400 whitespace-nowrap flex-shrink-0">
-                      ₪{ip.price.toFixed(2)}
+                    {ip.amount > 1 ? (
+                      <span className="text-slate-400 whitespace-nowrap flex-shrink-0">
+                        {ip.originalPrice != null && (
+                          <span className="line-through text-slate-300 me-1">₪{ip.originalPrice.toFixed(2)}</span>
+                        )}
+                        ₪{ip.price.toFixed(2)} × {ip.amount}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 whitespace-nowrap flex-shrink-0">
+                        {ip.originalPrice != null && (
+                          <span className="line-through text-slate-300 me-1">₪{ip.originalPrice.toFixed(2)}</span>
+                        )}
+                        ₪{ip.price.toFixed(2)}
+                      </span>
+                    )}
+                    <span className="text-slate-800 font-medium whitespace-nowrap flex-shrink-0">
+                      ₪{ip.total.toFixed(2)}
                     </span>
+                  </div>
+                  {ip.promotion && (
+                    <div className="flex items-center gap-1 mt-0.5 ms-0.5">
+                      <Tag className="w-3 h-3 text-rose-500 flex-shrink-0" />
+                      <span className="text-[10px] text-rose-600 font-medium">{ip.promotion.description}</span>
+                      {ip.promotion.endsAt && (() => {
+                        const daysLeft = Math.ceil((new Date(ip.promotion!.endsAt!).getTime() - Date.now()) / 86400000);
+                        return daysLeft <= 2 && daysLeft >= 0 ? (
+                          <span className="text-[10px] text-amber-600 font-medium">
+                            ({daysLeft === 0 ? t('priceComparison.endsToday') : daysLeft === 1 ? t('priceComparison.endsTomorrow') : t('priceComparison.endsSoon')})
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
                   )}
-                  <span className="text-slate-800 font-medium whitespace-nowrap flex-shrink-0">
-                    ₪{ip.total.toFixed(2)}
-                  </span>
                 </div>
               ))}
               {/* Delivery fee line for online stores */}

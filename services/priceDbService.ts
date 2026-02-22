@@ -4,12 +4,11 @@ import {
   DbPriceComparison,
   DbPromotion,
   DbSupermarket,
-  DbStorePrice,
   ListPriceComparison,
   StorePriceSummary,
   StoreBranch,
   ItemPriceDetail,
-  CategoryGroup,
+  ItemPromotion,
 } from '../types';
 
 // ============================================
@@ -212,263 +211,218 @@ export async function getCities(storeType?: string): Promise<string[]> {
 }
 
 // ============================================
-// Core: Compare Entire Shopping List
+// Core: Compare Entire Shopping List (single POST call)
 // ============================================
 
-interface ItemForComparison {
-  name: string;
-  amount: number;
-  barcode?: string;
+export interface ShoppingListCompareRequest {
+  items: { barcode: string; quantity: number }[];
+  city?: string;
+  city_code?: number;
+  store_type?: string;
 }
 
-// Concurrency limiter
-async function withConcurrencyLimit<T>(
-  tasks: (() => Promise<T>)[],
-  limit: number
-): Promise<PromiseSettledResult<T>[]> {
-  const results: PromiseSettledResult<T>[] = [];
-  const executing: Promise<void>[] = [];
+// API response types for POST /api/shopping-list/compare
+interface ApiStoreItemPromotion {
+  description: string;
+  type: string;
+  ends_at: string | null;
+}
 
-  for (const task of tasks) {
-    const p = task()
-      .then((value) => ({ status: 'fulfilled' as const, value }))
-      .catch((reason) => ({ status: 'rejected' as const, reason }))
-      .then((result) => {
-        results.push(result);
-      });
+interface ApiStoreItem {
+  barcode: string;
+  name: string | null;
+  quantity: number;
+  unit_price: number | null;
+  effective_unit_price: number | null;
+  total_price: number | null;
+  promotion: ApiStoreItemPromotion | null;
+  available: boolean;
+}
 
-    executing.push(p);
+interface ApiStore {
+  store_ref_id: number;
+  store_name: string;
+  store_chain_id: string;
+  city: string;
+  address: string | null;
+  is_online: boolean;
+  matched_items: number;
+  total_items: number;
+  subtotal: number;
+  delivery_fee: number | null;
+  minimum_order: number | null;
+  free_delivery_threshold: number | null;
+  below_minimum_order: boolean;
+  total: number;
+  items: ApiStoreItem[];
+  missing_items: string[];
+}
 
-    if (executing.length >= limit) {
-      await Promise.race(executing);
-      // Remove completed promises
-      executing.splice(
-        0,
-        executing.length,
-        ...executing.filter((e) => {
-          // Keep promises that haven't settled yet
-          let settled = false;
-          e.then(() => { settled = true; });
-          return !settled;
-        })
-      );
+interface ApiCompareResponse {
+  stores: ApiStore[];
+  cheapest_store: number | null;
+  cheapest_per_item: Record<string, { store_ref_id: number; store_name: string; effective_unit_price: number; promotion_description: string | null }>;
+  savings_vs_most_expensive: number | null;
+}
+
+// Map a barcode → name from the API response items (for unmatched items display)
+function buildBarcodeNameMap(stores: ApiStore[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const store of stores) {
+    for (const item of store.items) {
+      if (item.name && !map.has(item.barcode)) {
+        map.set(item.barcode, item.name);
+      }
     }
   }
-
-  await Promise.all(executing);
-  return results;
+  return map;
 }
 
 export async function compareListPrices(
-  groups: CategoryGroup[],
-  city?: string,
-  storeType?: string
+  request: ShoppingListCompareRequest
 ): Promise<ListPriceComparison> {
-  // Flatten all items from groups
-  const items: ItemForComparison[] = [];
-  for (const group of groups) {
-    for (const item of group.items) {
-      if (!item.checked) {
-        items.push({
-          name: item.name,
-          amount: item.amount,
-          barcode: item.barcode,
-        });
-      }
-    }
-  }
+  const cacheKey = `compare-list:${JSON.stringify(request.items.map(i => i.barcode).sort())}:${request.city || ''}:${request.store_type || ''}`;
+  const cached = cache.get<ListPriceComparison>(cacheKey);
+  if (cached) return cached;
 
-  // For each item, get price comparison data
-  const tasks = items.map((item) => async () => {
-    let barcode = item.barcode;
-
-    // If no barcode, search by name and pick best match
-    if (!barcode) {
-      const searchResult = await searchProducts(item.name, 1, 0, city, storeType);
-      if (searchResult.products && searchResult.products.length > 0) {
-        barcode = searchResult.products[0].barcode;
-      }
-    }
-
-    if (!barcode) {
-      return { item, priceData: null };
-    }
-
-    const priceData = await comparePrices(barcode, city, storeType);
-    return { item, priceData };
+  const url = `${API_BASE}/api/shopping-list/compare`;
+  const response = await fetch(url.startsWith('http') ? url : `${window.location.origin}${url}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
   });
 
-  const results = await withConcurrencyLimit(tasks, 5);
-
-  // Determine if we have branch-level data (physical mode)
-  const hasBranchData = results.some(
-    (r) =>
-      r.status === 'fulfilled' &&
-      r.value.priceData?.prices?.some((sp: DbStorePrice) => sp.store && !sp.store.is_online)
-  );
-
-  // Build per-store totals
-  const storeMap = new Map<string, StorePriceSummary>();
-  const unmatchedItems: string[] = [];
-
-  // For branch-aware mode: track per-branch item prices
-  // Key: "chainName::storeId", Value: { itemPrices, totalCost }
-  const branchMap = new Map<
-    string,
-    { chainName: string; storeId: string; address: string | null; totalCost: number; itemPrices: ItemPriceDetail[] }
-  >();
-
-  for (const result of results) {
-    if (result.status === 'rejected') continue;
-
-    const { item, priceData } = result.value;
-    if (!priceData || !priceData.prices || priceData.prices.length === 0) {
-      unmatchedItems.push(item.name);
-      continue;
-    }
-
-    if (hasBranchData) {
-      // Branch-aware grouping: group by chain+storeId
-      for (const sp of priceData.prices) {
-        const chainName = SUPERMARKET_NAME_MAP[sp.supermarket] || sp.supermarket;
-        const storeId = sp.store?.store_id || '_default';
-        const address = sp.store?.address || null;
-        const branchKey = `${chainName}::${storeId}`;
-
-        if (!branchMap.has(branchKey)) {
-          branchMap.set(branchKey, { chainName, storeId, address, totalCost: 0, itemPrices: [] });
-        }
-
-        const branch = branchMap.get(branchKey)!;
-        const itemTotal = sp.price * item.amount;
-        branch.totalCost += itemTotal;
-        branch.itemPrices.push({
-          itemName: item.name,
-          price: sp.price,
-          amount: item.amount,
-          total: itemTotal,
-        });
-      }
-    } else {
-      // Online / no-branch mode: original dedup (cheapest per chain)
-      const dedupedPrices = new Map<string, { supermarket: string; price: number; store?: typeof priceData.prices[0]['store'] }>();
-      for (const sp of priceData.prices) {
-        const name = SUPERMARKET_NAME_MAP[sp.supermarket] || sp.supermarket;
-        const existing = dedupedPrices.get(name);
-        if (!existing || sp.price < existing.price) {
-          dedupedPrices.set(name, { supermarket: name, price: sp.price, store: sp.store });
-        }
-      }
-
-      for (const [storeName, storePrice] of dedupedPrices) {
-        if (!storeMap.has(storeName)) {
-          storeMap.set(storeName, {
-            supermarketName: storeName,
-            totalCost: 0,
-            matchedItems: 0,
-            unmatchedItems: [],
-            itemPrices: [],
-            deliveryFee: storePrice.store?.delivery_fee,
-            minimumOrder: storePrice.store?.minimum_order,
-          });
-        }
-
-        const summary = storeMap.get(storeName)!;
-        const itemTotal = storePrice.price * item.amount;
-        summary.totalCost += itemTotal;
-        summary.matchedItems += 1;
-        summary.itemPrices.push({
-          itemName: item.name,
-          price: storePrice.price,
-          amount: item.amount,
-          total: itemTotal,
-        });
-      }
-    }
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
-  // If branch-aware mode, collapse branches into StorePriceSummary entries
-  if (hasBranchData) {
-    // Group branches by chain name
-    const chainBranches = new Map<string, typeof branchMap extends Map<string, infer V> ? V[] : never>();
-    for (const branch of branchMap.values()) {
-      const existing = chainBranches.get(branch.chainName) || [];
-      existing.push(branch);
-      chainBranches.set(branch.chainName, existing);
-    }
+  const data: ApiCompareResponse = await response.json();
+  const barcodeNames = buildBarcodeNameMap(data.stores);
 
-    for (const [chainName, branches] of chainBranches) {
-      // Sort branches: cheapest total first
-      branches.sort((a, b) => a.totalCost - b.totalCost);
-      const cheapest = branches[0];
-
-      const availableBranches: StoreBranch[] = branches.map((b) => ({
-        storeId: b.storeId,
-        address: b.address,
-        totalCost: b.totalCost,
-        itemPrices: b.itemPrices,
-      }));
-
-      storeMap.set(chainName, {
-        supermarketName: chainName,
-        totalCost: cheapest.totalCost,
-        matchedItems: cheapest.itemPrices.length,
-        unmatchedItems: [],
-        itemPrices: cheapest.itemPrices,
-        storeAddress: cheapest.address || undefined,
-        selectedStoreId: cheapest.storeId,
-        availableBranches,
-      });
-    }
+  // Group branches by chain name (same store_name may have multiple branches)
+  const chainMap = new Map<string, ApiStore[]>();
+  for (const store of data.stores) {
+    const displayName = SUPERMARKET_NAME_MAP[store.store_name] || store.store_name;
+    const existing = chainMap.get(displayName) || [];
+    existing.push(store);
+    chainMap.set(displayName, existing);
   }
 
-  // Build the full list of item names for per-store unavailable tracking
-  const allItemNames = items.map((item) => item.name);
-
-  // For each store, compute unavailable items and delivery-inclusive totals
-  const isOnlineMode = storeType === 'online';
-  for (const [, summary] of storeMap) {
-    const matchedSet = new Set(summary.itemPrices.map((ip) => ip.itemName));
-    summary.unmatchedItems = allItemNames.filter((name) => !matchedSet.has(name));
-
-    // Compute total with delivery for online stores
-    if (isOnlineMode && summary.deliveryFee != null) {
-      summary.totalWithDelivery = summary.totalCost + summary.deliveryFee;
+  // Map an API item to our ItemPriceDetail (with promotion data)
+  const mapItemPrice = (item: ApiStoreItem): ItemPriceDetail => {
+    const detail: ItemPriceDetail = {
+      itemName: item.name || item.barcode,
+      price: item.effective_unit_price!,
+      amount: item.quantity,
+      total: item.total_price!,
+    };
+    // Include original price if there's a discount
+    if (item.promotion && item.unit_price != null && item.unit_price !== item.effective_unit_price) {
+      detail.originalPrice = item.unit_price;
+      detail.promotion = {
+        description: item.promotion.description,
+        type: item.promotion.type,
+        endsAt: item.promotion.ends_at,
+      };
     }
+    return detail;
+  };
+
+  const isOnlineMode = request.store_type === 'online';
+  const stores: StorePriceSummary[] = [];
+
+  for (const [chainName, branches] of chainMap) {
+    // Sort branches: most matched first, then cheapest
+    branches.sort((a, b) => {
+      if (b.matched_items !== a.matched_items) return b.matched_items - a.matched_items;
+      return a.total - b.total;
+    });
+
+    const best = branches[0];
+
+    // Build item price details from best branch
+    const itemPrices: ItemPriceDetail[] = best.items
+      .filter((item) => item.available && item.effective_unit_price != null)
+      .map(mapItemPrice);
+
+    // Unmatched items: missing from this store
+    const unmatchedItems = best.missing_items.map(
+      (barcode) => barcodeNames.get(barcode) || barcode
+    );
+
+    // Build available branches list for branch selector
+    const availableBranches: StoreBranch[] = branches.map((b) => ({
+      storeId: String(b.store_ref_id),
+      address: b.address,
+      totalCost: b.total,
+      itemPrices: b.items
+        .filter((item) => item.available && item.effective_unit_price != null)
+        .map(mapItemPrice),
+    }));
+
+    const summary: StorePriceSummary = {
+      supermarketName: chainName,
+      totalCost: best.subtotal,
+      matchedItems: best.matched_items,
+      unmatchedItems,
+      itemPrices,
+      storeAddress: best.address || undefined,
+      selectedStoreId: String(best.store_ref_id),
+      availableBranches: branches.length > 1 ? availableBranches : undefined,
+      deliveryFee: best.delivery_fee ?? undefined,
+      minimumOrder: best.minimum_order,
+    };
+
+    if (isOnlineMode && best.delivery_fee != null) {
+      summary.totalWithDelivery = best.subtotal + best.delivery_fee;
+    }
+
+    stores.push(summary);
   }
 
   // Sort: most matched items first, then cheapest within same match count
-  // For online mode, use totalWithDelivery when available
-  const stores = Array.from(storeMap.values()).sort((a, b) => {
+  stores.sort((a, b) => {
     if (b.matchedItems !== a.matchedItems) return b.matchedItems - a.matchedItems;
     const aCost = a.totalWithDelivery ?? a.totalCost;
     const bCost = b.totalWithDelivery ?? b.totalCost;
     return aCost - bCost;
   });
 
-  // Savings: compare only within the top coverage tier (stores with the most items)
+  // Savings: compare only within the top coverage tier
   const topTierMatched = stores[0]?.matchedItems ?? 0;
   const topTierStores = stores.filter((s) => s.matchedItems === topTierMatched);
-
   const cheapestStore = topTierStores[0];
   const mostExpensiveStore = topTierStores[topTierStores.length - 1];
-
-  // Use delivery-inclusive totals for savings in online mode
   const cheapestTotal = cheapestStore?.totalWithDelivery ?? cheapestStore?.totalCost ?? 0;
   const mostExpensiveTotal = mostExpensiveStore?.totalWithDelivery ?? mostExpensiveStore?.totalCost ?? 0;
   const savingsAmount = mostExpensiveTotal - cheapestTotal;
   const savingsPercent = mostExpensiveTotal > 0 ? (savingsAmount / mostExpensiveTotal) * 100 : 0;
 
-  return {
+  // Global unmatched: items not carried by any store
+  const globalUnmatched: string[] = [];
+  const allBarcodes = new Set(request.items.map((i) => i.barcode));
+  for (const barcode of allBarcodes) {
+    const carriedAnywhere = data.stores.some((s) =>
+      s.items.some((item) => item.barcode === barcode && item.available)
+    );
+    if (!carriedAnywhere) {
+      globalUnmatched.push(barcodeNames.get(barcode) || barcode);
+    }
+  }
+
+  const result: ListPriceComparison = {
     stores,
     cheapestStoreId: cheapestStore?.supermarketName ?? '',
     cheapestTotal,
     mostExpensiveTotal,
     savingsAmount,
     savingsPercent,
-    unmatchedItems,
-    totalListItems: items.length,
+    unmatchedItems: globalUnmatched,
+    totalListItems: request.items.length,
   };
+
+  cache.set(cacheKey, result, PRICES_TTL);
+  return result;
 }
 
 export function clearCache(): void {
