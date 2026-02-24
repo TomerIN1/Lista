@@ -2487,6 +2487,214 @@ data.gov.il uses the spelling `קרית` (single yod) for cities like קרית �
 
 ---
 
-**Last Updated**: February 22, 2026
-**Version**: 3.9.0
+### PricePilot Agent Redesign: Single Cart-Building Browser Agent (February 2026)
+
+#### Overview
+
+Redesigned the PricePilot agent from a 5-agent orchestrator architecture to a **single `LlmAgent`** with 10 Playwright browser tools. The previous multi-agent system (orchestrator → list_interpreter → store_navigator → browser_agent → checkout_builder) re-did work that Lista already handles via its DB API, and blew up to 208K tokens per session from redundant agent hops and context accumulation.
+
+**New paradigm**: Lista does price comparison via DB API. The agent's ONLY job is:
+1. Receive the user's chosen store + item list (from Lista's comparison results)
+2. Browse that ONE store's website with Playwright
+3. Search each item, add to cart
+4. Handle user interaction mid-flow (product disambiguation, registration, OTP)
+5. Return the checkout URL
+
+Estimated ~36K tokens per 15-item session vs the old 208K.
+
+#### New Architecture
+
+```
+Lista App
+    │
+    ▼
+┌─────────────────────────────────────┐
+│  FastAPI Server  (api/server.py)    │
+│  POST /sessions (BuildCartRequest)  │
+│  POST /sessions/{id}/message        │
+│  GET  /sessions/{id}                │
+│  DELETE /sessions/{id}              │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  cart_builder  (agent.py)           │
+│  Single LlmAgent — Claude Sonnet   │
+│  10 Playwright browser tools        │
+│                                     │
+│  Phase 1: Navigate to store         │
+│  Phase 2: Search & add each item    │
+│  Phase 3: Go to cart → checkout     │
+└─────────────────────────────────────┘
+```
+
+#### Deleted Files (10 files)
+
+| File | Reason |
+|------|--------|
+| `pricepilot/agents/orchestrator.py` | No more multi-agent orchestration |
+| `pricepilot/agents/list_interpreter.py` | Lista provides parsed items with barcodes |
+| `pricepilot/agents/store_navigator.py` | Store selected in Lista before agent launches |
+| `pricepilot/agents/checkout_builder.py` | Savings done by DB API; checkout URL from browser |
+| `pricepilot/agents/__init__.py` | Entire `agents/` directory removed |
+| `pricepilot/tools/search_tools.py` | Store discovery not needed |
+| `pricepilot/tools/cart_tools.py` | Multi-store comparison not needed |
+| `pricepilot/tools/checkout_tools.py` | Checkout URL captured live from browser |
+| `tests/test_list_interpreter.py` | Tests deleted code |
+| `tests/test_checkout.py` | Tests deleted code |
+
+#### Rewritten Files
+
+##### `pricepilot/agent.py` — Single Root Agent
+
+Replaced the orchestrator import with a single `LlmAgent` named `cart_builder` that has all 10 browser tools. The agent instruction prompt covers:
+- Receives a JSON payload: `{store_name, store_url, city, items[]}`
+- Phase 1: Navigate to store, dismiss popups, handle delivery address
+- Phase 2: For each item — search, evaluate results, add to cart (or ask user if ambiguous)
+- Phase 3: Go to cart, proceed to checkout, return URL
+- Hebrew supermarket tips (button text, selectors)
+- Rules: strategic screenshot usage, skip items after 2 failed attempts, progress updates
+
+##### `pricepilot/config.py` — Store URL Mapping
+
+- Removed `SAVINGS_FEE_PERCENT` and `ISRAELI_SUPERMARKETS` list
+- Added `STORE_URLS: dict[str, str]` mapping Hebrew store names to online shopping URLs (7 stores + English aliases)
+- Increased `MAX_BROWSER_ACTIONS` from 50 to 100
+
+##### `pricepilot/types.py` — Simplified Models
+
+Removed all old models (ShoppingItem, Product, Store, PricingPlan, SavingsReport, etc.). New models:
+- `CartItem` — `{name, quantity, barcode?, manufacturer?}`
+- `BuildCartRequest` — `{user_id, store_name, store_url?, city?, items: CartItem[]}`
+- `MessageRequest` — `{user_id, text}`
+- `ChatMessageOut` — `{id, type, text, timestamp}`
+- `SessionCreatedResponse` — `{session_id, messages[]}`
+- `MessageResponse` — `{messages[], status?}` (status: in_progress/checkout_ready/error)
+- `SessionStatusResponse` — `{session_id, status, messages[], checkout_url?, items_added, items_failed[]}`
+
+##### `pricepilot/api/server.py` — New API Contract
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/sessions` | Start cart-building session (BuildCartRequest) — resolves store URL from `STORE_URLS`, returns 400 for unknown stores |
+| `POST` | `/sessions/{id}/message` | User reply (disambiguation, OTP) |
+| `GET` | `/sessions/{id}?user_id=` | Session status with progress |
+| `DELETE` | `/sessions/{id}?user_id=` | End session + close browser |
+| `GET` | `/health` | `{status: "ok", version: "0.2.0"}` |
+
+Key changes: store URL resolution with case-insensitive lookup, browser cleanup on delete and shutdown, proper error handling with try/catch around `runner.run_async()`.
+
+#### New Test Files
+
+- **`tests/test_agent.py`** — Verifies root_agent exists, has 10 tools, no sub-agents, instruction covers all 3 phases
+- **`tests/test_api.py`** — Health check, store URL resolution (Hebrew/English/override), unknown store returns 400
+
+#### Updated Files
+
+- **`test_agent.py`** (integration script) — Uses new `BuildCartRequest` format with `store_name` and `city` instead of `list_id` and `grocery_list`
+- **`.env.example`** — Removed `SAVINGS_FEE_PERCENT`, updated `MAX_BROWSER_ACTIONS=100`
+- **`PRICEPILOT.md`** — Complete rewrite for single-agent architecture
+
+#### Final File Tree
+
+```
+pricepilot-agent/
+├── pricepilot/
+│   ├── __init__.py
+│   ├── agent.py               ← Single LlmAgent root_agent
+│   ├── config.py              ← STORE_URLS mapping
+│   ├── types.py               ← BuildCartRequest + simplified models
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   └── browser_tools.py   ← UNCHANGED (10 Playwright tools)
+│   └── api/
+│       ├── __init__.py
+│       └── server.py          ← New endpoints
+├── tests/
+│   ├── __init__.py
+│   ├── test_browser_tools.py  ← UNCHANGED
+│   ├── test_agent.py          ← NEW
+│   └── test_api.py            ← NEW
+├── test_agent.py              ← UPDATED integration script
+├── .env.example               ← UPDATED
+└── PRICEPILOT.md              ← REWRITTEN
+```
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `pricepilot/agents/` (5 files) | **Deleted** | Entire agents directory removed |
+| `pricepilot/tools/search_tools.py` | **Deleted** | Store discovery tools removed |
+| `pricepilot/tools/cart_tools.py` | **Deleted** | Cart/savings tools removed |
+| `pricepilot/tools/checkout_tools.py` | **Deleted** | Checkout tools removed |
+| `tests/test_list_interpreter.py` | **Deleted** | Tests for deleted code |
+| `tests/test_checkout.py` | **Deleted** | Tests for deleted code |
+| `pricepilot/agent.py` | **Rewritten** | Single LlmAgent with 10 browser tools |
+| `pricepilot/config.py` | **Rewritten** | STORE_URLS mapping, MAX_BROWSER_ACTIONS=100 |
+| `pricepilot/types.py` | **Rewritten** | BuildCartRequest + simplified response models |
+| `pricepilot/api/server.py` | **Rewritten** | New endpoints, store URL resolution, browser cleanup |
+| `tests/test_agent.py` | **New** | Agent definition tests (10 tools, no sub-agents) |
+| `tests/test_api.py` | **New** | API routing tests (health, store resolution, 400) |
+| `test_agent.py` | **Updated** | Uses BuildCartRequest format |
+| `.env.example` | **Updated** | Removed SAVINGS_FEE_PERCENT |
+| `PRICEPILOT.md` | **Rewritten** | Single-agent architecture docs |
+
+---
+
+### Delivery Check: DB-Based Fix & נהרייה Normalization (February 2026)
+
+#### Backend Fix (DB API)
+
+`POST /api/delivery/check` was crashing with Vercel 500 because it made sequential real-time HTTP calls to 4 supermarket websites (5–20 seconds total), exceeding Vercel's 10-second serverless timeout.
+
+**Fix**: Endpoint now executes a single DB query against the `store_delivery_coverage` table (~50 ms). Coverage data populated by daily ETL:
+- Rami Levy: 102 cities
+- Shufersal: 122 cities (nationwide, ₪29.90 fee)
+- Victory: 117 delivery areas
+- Market Warehouses: 74 delivery areas
+
+Request/response schema unchanged — `eligible_store_ref_ids` and per-chain `delivery_fee` still returned. `error` field is now always `null` (no live calls).
+
+#### Frontend Fix (govDataService.ts)
+
+data.gov.il returns `נהריה` (single yod) for Nahariya, but the delivery coverage table stores `נהרייה` (double yod). Added this mapping to `CITY_NAME_NORMALIZATIONS`.
+
+**Affected city**: `נהריה` → `נהרייה`
+
+This was the only `יה/ייה` variant mismatch in the entire online cities list (confirmed by checking all cities with `ייה` in the coverage table).
+
+#### Service Worker Fix (service-worker.js → v5)
+
+The v4 service worker was intercepting all same-origin GET requests — including `/price-api/` and `/gov-data-api/` proxy paths — and attempting `cache.put()` on the proxied responses. This failed silently and caused the entire fetch to reject, breaking delivery check and product search calls.
+
+**Fixes in v5:**
+- Bumped `CACHE_NAME` to `lista-cache-v5` (forces old SW eviction)
+- Added explicit skip for proxy paths (`/price-api/`, `/gov-data-api/`)
+- Wrapped `cache.put()` in `.catch(() => {})` so cache failures never kill network responses
+
+#### End-to-End Flow (Confirmed Working)
+
+1. User selects city + online mode in setup step → delivery check fires in background
+2. govData returns `נהריה` → normalized to `נהרייה` → `checkDelivery("נהרייה")` returns `eligible:[26, 22]` (Rami Levy, Shufersal)
+3. On compare: `eligible_store_ref_ids` filters the compare to only those 2 eligible chains; `delivery_fees: {22: 29.9, 26: 29.9}` passed through
+4. SavingsReport shows only eligible stores with correct delivery fee breakdown
+
+#### Rami Levy Delivery Fee (Backend Data Fix)
+
+After the initial deployment, `/api/delivery/check` returned `delivery_fee: null` for Rami Levy (despite `delivers: true`) because the `store_delivery_coverage` table had no fee populated for Rami Levy rows. The frontend correctly excluded it from the `deliveryFees` map (filter: `c.delivers && c.delivery_fee != null`), so Rami Levy appeared cheaper than Shufersal by ₪29.90.
+
+**Fix**: DB API agent populated `delivery_fee = 29.90` for all Rami Levy rows in `store_delivery_coverage`. No frontend changes were needed.
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `services/govDataService.ts` | Modified | Added `נהריה → נהרייה` to `CITY_NAME_NORMALIZATIONS` |
+| `service-worker.js` | Modified | v5: skip proxy paths, safe `cache.put()`, force SW update |
+
+---
+
+**Last Updated**: February 24, 2026
+**Version**: 4.1.0
 **Status**: Production Ready

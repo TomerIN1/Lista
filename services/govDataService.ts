@@ -24,9 +24,10 @@ interface GovDataResponse {
   };
 }
 
-// data.gov.il uses "קרית" while the food prices DB uses "קריית" (double yod).
+// data.gov.il uses different spellings than the food prices DB delivery coverage table.
 // Normalize to match the DB convention.
 const CITY_NAME_NORMALIZATIONS: Record<string, string> = {
+  // קרית (single yod) → קריית (double yod)
   'קרית אונו': 'קריית אונו',
   'קרית גת': 'קריית גת',
   'קרית טבעון': 'קריית טבעון',
@@ -40,6 +41,8 @@ const CITY_NAME_NORMALIZATIONS: Record<string, string> = {
   'קרית מלאכי': 'קריית מלאכי',
   'קרית שמונה': 'קריית שמונה',
   'קרית עקרון': 'קריית עקרון',
+  // נהריה (single yod) → נהרייה (double yod)
+  'נהריה': 'נהרייה',
 };
 
 function normalizeCityName(city: string): string {

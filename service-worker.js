@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lista-cache-v4';
+const CACHE_NAME = 'lista-cache-v5';
 
 // Assets to cache immediately
 const PRECACHE_ASSETS = [
@@ -44,6 +44,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Skip API proxy paths — these have their own app-level cache and proxied
+  // responses cannot be reliably cloned/cached by the service worker.
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/price-api/') || url.pathname.startsWith('/gov-data-api/')) {
+    return;
+  }
+
   // HTML / Navigation requests: Network First
   if (event.request.mode === 'navigate') {
     event.respondWith(
@@ -60,7 +67,8 @@ self.addEventListener('fetch', (event) => {
     caches.open(CACHE_NAME).then((cache) => {
       return cache.match(event.request).then((cachedResponse) => {
         const fetchPromise = fetch(event.request).then((networkResponse) => {
-          cache.put(event.request, networkResponse.clone());
+          // Silently ignore cache errors — the network response is still returned.
+          cache.put(event.request, networkResponse.clone()).catch(() => {});
           return networkResponse;
         });
         return cachedResponse || fetchPromise;

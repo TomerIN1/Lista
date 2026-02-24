@@ -2,6 +2,9 @@
 
 Each public async function is registered as an ADK FunctionTool.
 The module maintains a per-session browser/page that is lazily initialized.
+
+All tools catch Playwright exceptions and return error strings so the agent
+can recover instead of crashing the session.
 """
 
 from __future__ import annotations
@@ -46,19 +49,33 @@ async def _ensure_browser() -> Page:
 
 async def navigate(url: str) -> str:
     """Navigate to a URL. Returns the page title and current URL."""
-    page = await _ensure_browser()
-    response = await page.goto(url, wait_until="domcontentloaded")
-    status = response.status if response else "unknown"
-    title = await page.title()
-    return json.dumps({"title": title, "url": page.url, "status": status})
+    try:
+        page = await _ensure_browser()
+        response = await page.goto(url, wait_until="domcontentloaded")
+        status = response.status if response else "unknown"
+        title = await page.title()
+        return json.dumps({"title": title, "url": page.url, "status": status})
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
 
 
-async def screenshot() -> dict:
-    """Take a screenshot of the current page. Returns base64-encoded PNG image."""
-    page = await _ensure_browser()
-    image_bytes = await page.screenshot(full_page=False)
-    b64 = base64.b64encode(image_bytes).decode("utf-8")
-    return {"mime_type": "image/png", "data": b64}
+async def screenshot() -> str:
+    """Take a screenshot of the current page. Returns base64-encoded JPEG image.
+
+    The image is compressed to keep token usage low (~10K tokens per screenshot).
+    """
+    try:
+        page = await _ensure_browser()
+        image_bytes = await page.screenshot(
+            full_page=False, type="jpeg", quality=40,
+        )
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        return json.dumps({
+            "screenshot": f"data:image/jpeg;base64,{b64}",
+            "size_bytes": len(image_bytes),
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
 
 
 async def click(selector: str) -> str:
@@ -67,11 +84,14 @@ async def click(selector: str) -> str:
     Args:
         selector: CSS selector or text selector (e.g. 'text=Add to cart').
     """
-    page = await _ensure_browser()
-    await page.click(selector, timeout=BROWSER_TIMEOUT)
-    await page.wait_for_load_state("domcontentloaded")
-    title = await page.title()
-    return json.dumps({"clicked": selector, "url": page.url, "title": title})
+    try:
+        page = await _ensure_browser()
+        await page.click(selector, timeout=BROWSER_TIMEOUT)
+        await page.wait_for_load_state("domcontentloaded")
+        title = await page.title()
+        return json.dumps({"clicked": selector, "url": page.url, "title": title})
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200], "selector": selector})
 
 
 async def type_text(selector: str, text: str) -> str:
@@ -81,9 +101,12 @@ async def type_text(selector: str, text: str) -> str:
         selector: CSS selector of the input element.
         text: The text to type.
     """
-    page = await _ensure_browser()
-    await page.fill(selector, text)
-    return json.dumps({"typed": text, "into": selector})
+    try:
+        page = await _ensure_browser()
+        await page.fill(selector, text)
+        return json.dumps({"typed": text, "into": selector})
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200], "selector": selector})
 
 
 async def press_key(key: str) -> str:
@@ -92,9 +115,12 @@ async def press_key(key: str) -> str:
     Args:
         key: The key to press.
     """
-    page = await _ensure_browser()
-    await page.keyboard.press(key)
-    return json.dumps({"pressed": key})
+    try:
+        page = await _ensure_browser()
+        await page.keyboard.press(key)
+        return json.dumps({"pressed": key})
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
 
 
 async def scroll(direction: str = "down", amount: int = 500) -> str:
@@ -104,39 +130,45 @@ async def scroll(direction: str = "down", amount: int = 500) -> str:
         direction: 'up' or 'down'.
         amount: Pixels to scroll.
     """
-    page = await _ensure_browser()
-    delta = amount if direction == "down" else -amount
-    await page.mouse.wheel(0, delta)
-    await page.wait_for_timeout(500)
-    return json.dumps({"scrolled": direction, "pixels": amount})
+    try:
+        page = await _ensure_browser()
+        delta = amount if direction == "down" else -amount
+        await page.mouse.wheel(0, delta)
+        await page.wait_for_timeout(500)
+        return json.dumps({"scrolled": direction, "pixels": amount})
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
 
 
 async def get_page_info() -> str:
     """Get current page information: URL, title, and a summary of visible elements."""
-    page = await _ensure_browser()
-    title = await page.title()
-    url = page.url
+    try:
+        page = await _ensure_browser()
+        title = await page.title()
+        url = page.url
 
-    # Extract a DOM summary: interactive elements
-    summary = await page.evaluate("""() => {
-        const elements = [];
-        const interactable = document.querySelectorAll(
-            'a, button, input, select, textarea, [role="button"], [onclick]'
-        );
-        for (const el of Array.from(interactable).slice(0, 50)) {
-            const tag = el.tagName.toLowerCase();
-            const text = (el.textContent || '').trim().slice(0, 80);
-            const type = el.getAttribute('type') || '';
-            const placeholder = el.getAttribute('placeholder') || '';
-            const href = el.getAttribute('href') || '';
-            const id = el.id || '';
-            const cls = el.className ? String(el.className).slice(0, 40) : '';
-            elements.push({tag, text, type, placeholder, href, id, cls});
-        }
-        return elements;
-    }""")
+        # Extract a DOM summary: interactive elements
+        summary = await page.evaluate("""() => {
+            const elements = [];
+            const interactable = document.querySelectorAll(
+                'a, button, input, select, textarea, [role="button"], [onclick]'
+            );
+            for (const el of Array.from(interactable).slice(0, 50)) {
+                const tag = el.tagName.toLowerCase();
+                const text = (el.textContent || '').trim().slice(0, 80);
+                const type = el.getAttribute('type') || '';
+                const placeholder = el.getAttribute('placeholder') || '';
+                const href = el.getAttribute('href') || '';
+                const id = el.id || '';
+                const cls = el.className ? String(el.className).slice(0, 40) : '';
+                elements.push({tag, text, type, placeholder, href, id, cls});
+            }
+            return elements;
+        }""")
 
-    return json.dumps({"title": title, "url": url, "elements": summary})
+        return json.dumps({"title": title, "url": url, "elements": summary})
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
 
 
 async def extract_products() -> str:
@@ -144,38 +176,41 @@ async def extract_products() -> str:
 
     Looks for common product card patterns and extracts name, price, and image.
     """
-    page = await _ensure_browser()
-    products = await page.evaluate("""() => {
-        const results = [];
-        // Try common product card selectors
-        const selectors = [
-            '[data-product]', '.product-card', '.product-item',
-            '[class*="product"]', '[class*="Product"]',
-            '.item-card', '.grocery-item'
-        ];
+    try:
+        page = await _ensure_browser()
+        products = await page.evaluate("""() => {
+            const results = [];
+            // Try common product card selectors
+            const selectors = [
+                '[data-product]', '.product-card', '.product-item',
+                '[class*="product"]', '[class*="Product"]',
+                '.item-card', '.grocery-item'
+            ];
 
-        for (const sel of selectors) {
-            const cards = document.querySelectorAll(sel);
-            for (const card of Array.from(cards).slice(0, 20)) {
-                const name = (
-                    card.querySelector('[class*="name"], [class*="title"], h2, h3, h4')
-                    ?.textContent || ''
-                ).trim();
-                const price = (
-                    card.querySelector('[class*="price"], [class*="Price"]')
-                    ?.textContent || ''
-                ).trim();
-                const img = card.querySelector('img')?.src || '';
-                if (name) {
-                    results.push({name, price, image_url: img});
+            for (const sel of selectors) {
+                const cards = document.querySelectorAll(sel);
+                for (const card of Array.from(cards).slice(0, 20)) {
+                    const name = (
+                        card.querySelector('[class*="name"], [class*="title"], h2, h3, h4')
+                        ?.textContent || ''
+                    ).trim();
+                    const price = (
+                        card.querySelector('[class*="price"], [class*="Price"]')
+                        ?.textContent || ''
+                    ).trim();
+                    const img = card.querySelector('img')?.src || '';
+                    if (name) {
+                        results.push({name, price, image_url: img});
+                    }
                 }
+                if (results.length > 0) break;
             }
-            if (results.length > 0) break;
-        }
-        return results;
-    }""")
+            return results;
+        }""")
 
-    return json.dumps({"products": products, "count": len(products)})
+        return json.dumps({"products": products, "count": len(products)})
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
 
 
 async def wait_for(milliseconds: int = 1000) -> str:
@@ -184,21 +219,30 @@ async def wait_for(milliseconds: int = 1000) -> str:
     Args:
         milliseconds: Time to wait in ms.
     """
-    page = await _ensure_browser()
-    await page.wait_for_timeout(milliseconds)
-    return json.dumps({"waited_ms": milliseconds})
+    try:
+        page = await _ensure_browser()
+        await page.wait_for_timeout(milliseconds)
+        return json.dumps({"waited_ms": milliseconds})
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
 
 
 async def close_browser() -> str:
     """Close the browser and clean up resources."""
     global _playwright, _browser, _page
-    if _page:
-        await _page.close()
+    try:
+        if _page:
+            await _page.close()
+            _page = None
+        if _browser:
+            await _browser.close()
+            _browser = None
+        if _playwright:
+            await _playwright.stop()
+            _playwright = None
+        return json.dumps({"status": "browser_closed"})
+    except Exception as e:
         _page = None
-    if _browser:
-        await _browser.close()
         _browser = None
-    if _playwright:
-        await _playwright.stop()
         _playwright = None
-    return json.dumps({"status": "browser_closed"})
+        return json.dumps({"status": "browser_closed", "warning": str(e)[:200]})

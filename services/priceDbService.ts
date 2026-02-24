@@ -9,6 +9,7 @@ import {
   StoreBranch,
   ItemPriceDetail,
   ItemPromotion,
+  DeliveryCheckResult,
 } from '../types';
 
 // ============================================
@@ -211,6 +212,34 @@ export async function getCities(storeType?: string): Promise<string[]> {
 }
 
 // ============================================
+// Delivery Check (POST /api/delivery/check)
+// ============================================
+
+export async function checkDelivery(city: string, street?: string): Promise<DeliveryCheckResult> {
+  const cacheKey = `delivery:${city}:${street || ''}`;
+  const cached = cache.get<DeliveryCheckResult>(cacheKey);
+  if (cached) return cached;
+
+  const url = `${API_BASE}/api/delivery/check`;
+  const body: Record<string, string> = { city };
+  if (street) body.street = street;
+
+  const response = await fetch(url.startsWith('http') ? url : `${window.location.origin}${url}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Delivery check failed: ${response.status} ${response.statusText}`);
+  }
+
+  const result: DeliveryCheckResult = await response.json();
+  cache.set(cacheKey, result, PRICES_TTL);
+  return result;
+}
+
+// ============================================
 // Core: Compare Entire Shopping List (single POST call)
 // ============================================
 
@@ -219,6 +248,8 @@ export interface ShoppingListCompareRequest {
   city?: string;
   city_code?: number;
   store_type?: string;
+  eligible_store_ref_ids?: number[];
+  delivery_fees?: Record<number, number>;
 }
 
 // API response types for POST /api/shopping-list/compare

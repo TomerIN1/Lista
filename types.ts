@@ -200,6 +200,26 @@ export interface UserLocation {
 }
 
 // ============================================
+// Delivery Check (POST /api/delivery/check)
+// ============================================
+
+export interface ChainDeliveryResult {
+  chain: string;
+  store_ref_id: number;
+  delivers: boolean;
+  click_and_collect: boolean;
+  delivery_fee: number | null;
+  error: string | null;
+}
+
+export interface DeliveryCheckResult {
+  city: string;
+  street: string | null;
+  chains: ChainDeliveryResult[];
+  eligible_store_ref_ids: number[];
+}
+
+// ============================================
 // Price Agent Types
 // ============================================
 

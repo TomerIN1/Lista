@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct, ShoppingProduct, AppMode, ShoppingFlowStep, ShoppingMode, ListPriceComparison, UserLocation } from './types';
+import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct, ShoppingProduct, AppMode, ShoppingFlowStep, ShoppingMode, ListPriceComparison, UserLocation, DeliveryCheckResult } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
 import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe, createShoppingList, updateShoppingListProducts } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
@@ -19,7 +19,7 @@ import ShoppingSetupStep from './components/ShoppingSetupStep';
 import { LEGAL_TEXT, LegalDocType } from './constants/legalText';
 import { useLanguage } from './contexts/LanguageContext';
 import { groupsToShoppingItems } from './types';
-import { compareListPrices, getCities } from './services/priceDbService';
+import { compareListPrices, getCities, checkDelivery } from './services/priceDbService';
 
 import { AlertCircle, Sparkles, Menu, ShieldAlert } from 'lucide-react';
 
@@ -66,6 +66,7 @@ const App: React.FC = () => {
   const [shoppingLocation, setShoppingLocation] = useState<UserLocation | null>(null);
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
+  const [deliveryCheck, setDeliveryCheck] = useState<DeliveryCheckResult | null>(null);
 
   // Ref to guard against circular auto-save from sync effect
   const shoppingProductsRef = useRef<ShoppingProduct[]>([]);
@@ -583,6 +584,7 @@ const App: React.FC = () => {
       setStoreRecommendation(null);
       setShoppingCity('');
       setShoppingLocation(null);
+      setDeliveryCheck(null);
     }
   };
 
@@ -665,7 +667,14 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleSetupProceed = () => {
+  const handleSetupProceed = async () => {
+    // For online mode, run the delivery check in the background while transitioning
+    if (selectedShoppingMode === 'online' && shoppingCity) {
+      // Fire-and-forget: don't block the transition, results will be ready by compare time
+      checkDelivery(shoppingCity, shoppingLocation?.streetName)
+        .then((result) => setDeliveryCheck(result))
+        .catch((err) => console.error('Delivery check failed:', err));
+    }
     setShoppingStep('build_list');
   };
 
@@ -681,6 +690,7 @@ const App: React.FC = () => {
     setStoreRecommendation(null);
     setShoppingCity('');
     setShoppingLocation(null);
+    setDeliveryCheck(null);
   };
 
   const handleShoppingCompare = async () => {
@@ -691,11 +701,34 @@ const App: React.FC = () => {
 
     try {
       const storeType = selectedShoppingMode === 'online' ? 'online' : selectedShoppingMode === 'physical' ? 'physical' : undefined;
+
+      // If online mode and delivery check hasn't completed yet, wait for it
+      let currentDeliveryCheck = deliveryCheck;
+      if (storeType === 'online' && !currentDeliveryCheck && shoppingCity) {
+        try {
+          currentDeliveryCheck = await checkDelivery(shoppingCity, shoppingLocation?.streetName);
+          setDeliveryCheck(currentDeliveryCheck);
+        } catch (err) {
+          console.error('Delivery check failed during compare:', err);
+        }
+      }
+
+      // Build delivery_fees map from delivery check results
+      const deliveryFees = currentDeliveryCheck
+        ? Object.fromEntries(
+            currentDeliveryCheck.chains
+              .filter((c) => c.delivers && c.delivery_fee != null)
+              .map((c) => [c.store_ref_id, c.delivery_fee!])
+          )
+        : undefined;
+
       const result = await compareListPrices({
         items: shoppingProducts.map((p) => ({ barcode: p.barcode, quantity: p.amount })),
         city: shoppingCity || undefined,
         city_code: shoppingLocation?.cityCode,
         store_type: storeType,
+        eligible_store_ref_ids: currentDeliveryCheck?.eligible_store_ref_ids,
+        delivery_fees: deliveryFees && Object.keys(deliveryFees).length > 0 ? deliveryFees : undefined,
       });
       setPriceComparison(result);
       setShoppingStep('results');
