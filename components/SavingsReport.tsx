@@ -88,7 +88,7 @@ const StoreRow: React.FC<StoreRowProps> = ({
   onToggle,
   totalItems,
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [selectedBranchIndex, setSelectedBranchIndex] = useState(0);
   const [showBranches, setShowBranches] = useState(false);
 
@@ -101,6 +101,15 @@ const StoreRow: React.FC<StoreRowProps> = ({
   const displayItemPrices = activeBranch?.itemPrices ?? store.itemPrices;
   const displayAddress = activeBranch?.address ?? store.storeAddress;
   const displayMatchedItems = activeBranch ? activeBranch.itemPrices.length : store.matchedItems;
+
+  // Promo savings: sum of (originalPrice - promoPrice) * amount for promoted items
+  const promoSavings = displayItemPrices.reduce((sum, ip) => {
+    if (ip.originalPrice != null && ip.originalPrice > ip.price) {
+      return sum + (ip.originalPrice - ip.price) * ip.amount;
+    }
+    return sum;
+  }, 0);
+  const hasPromos = promoSavings > 0;
 
   const hasDelivery = store.deliveryFee != null;
   const displayHeadlineTotal = store.totalWithDelivery ?? displayTotal;
@@ -153,6 +162,16 @@ const StoreRow: React.FC<StoreRowProps> = ({
             <span className={`text-xs ${hasAllItems ? 'text-emerald-600' : 'text-amber-600'}`}>
               {displayMatchedItems} {t('priceComparison.of')} {totalItems} {t('priceComparison.items')} {t('priceComparison.matched')}
             </span>
+            {hasPromos && (
+              <span className="flex items-center gap-0.5 mt-0.5">
+                <Tag className="w-3 h-3 text-rose-500" />
+                <span className="text-[10px] font-semibold text-rose-600">
+                  {language === 'he'
+                    ? `חיסכון ₪${promoSavings.toFixed(2)} במבצע`
+                    : `₪${promoSavings.toFixed(2)} promo savings`}
+                </span>
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -212,21 +231,14 @@ const StoreRow: React.FC<StoreRowProps> = ({
                     <span className="text-slate-600 truncate min-w-0 flex-1">
                       {ip.itemName}
                     </span>
-                    {ip.amount > 1 ? (
-                      <span className="text-slate-400 whitespace-nowrap flex-shrink-0">
-                        {ip.originalPrice != null && (
-                          <span className="line-through text-slate-300 me-1">₪{ip.originalPrice.toFixed(2)}</span>
-                        )}
-                        ₪{ip.price.toFixed(2)} × {ip.amount}
+                    <span className="whitespace-nowrap flex-shrink-0 flex items-center gap-1">
+                      {ip.originalPrice != null && (
+                        <span className="line-through text-slate-400">₪{ip.originalPrice.toFixed(2)}</span>
+                      )}
+                      <span className={ip.originalPrice != null ? 'text-rose-600 font-semibold' : 'text-slate-400'}>
+                        ₪{ip.price.toFixed(2)}{ip.amount > 1 ? ` × ${ip.amount}` : ''}
                       </span>
-                    ) : (
-                      <span className="text-slate-400 whitespace-nowrap flex-shrink-0">
-                        {ip.originalPrice != null && (
-                          <span className="line-through text-slate-300 me-1">₪{ip.originalPrice.toFixed(2)}</span>
-                        )}
-                        ₪{ip.price.toFixed(2)}
-                      </span>
-                    )}
+                    </span>
                     <span className="text-slate-800 font-medium whitespace-nowrap flex-shrink-0">
                       ₪{ip.total.toFixed(2)}
                     </span>

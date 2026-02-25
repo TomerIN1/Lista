@@ -2695,6 +2695,34 @@ After the initial deployment, `/api/delivery/check` returned `delivery_fee: null
 
 ---
 
-**Last Updated**: February 24, 2026
-**Version**: 4.1.0
+### Promotion Display in Price Comparison (February 2026)
+
+The `POST /api/shopping-list/compare` response already included per-item promotion data (`unit_price`, `effective_unit_price`, `promotion.description`, `promotion.ends_at`), and `priceDbService.ts` was already mapping it into `ItemPriceDetail.originalPrice` and `ItemPriceDetail.promotion`. However the UI was not surfacing it clearly.
+
+#### Changes in `SavingsReport.tsx`
+
+**Collapsed store row** — added a promo savings line below the matched-items count:
+- Computes `promoSavings = Σ (originalPrice − promoPrice) × amount` for items with promos
+- If `promoSavings > 0`, shows a `Tag` icon + `"חיסכון ₪X.XX במבצע"` (he) / `"₪X.XX promo savings"` (en)
+
+**Expanded item breakdown** — improved promo price visibility:
+- Original (full) price strikethrough: `text-slate-300` → `text-slate-400` (more visible)
+- Promo (effective) price: now `text-rose-600 font-semibold` (was `text-slate-400`) when a promo is active, making the discount unmistakable
+- Non-promo items remain `text-slate-400` (no visual change)
+
+#### Data Source
+
+Only Rami Levy has populated promo data in the current DB. Example product:
+- Barcode `5711953106583` — ארלה גבינת שמנת 200ג — regular ₪14.90 → promo ₪12.90 (fixed_amount, expires 2026-03-07)
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `components/SavingsReport.tsx` | Modified | Promo savings badge in collapsed row; visible strikethrough + rose promo price in expanded row |
+
+---
+
+**Last Updated**: February 25, 2026
+**Version**: 4.2.0
 **Status**: Production Ready
