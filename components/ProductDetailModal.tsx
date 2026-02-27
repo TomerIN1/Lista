@@ -267,7 +267,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                             {promoLabel && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <Tag className="w-3 h-3 text-rose-500 flex-shrink-0" />
-                                <p className="text-[11px] text-rose-600 font-medium">{promoLabel}</p>
+                                <p className="text-[11px] text-rose-600 font-medium">
+                                  {isRTL ? 'במבצע: ' : 'Sale: '}{promoLabel}
+                                </p>
                               </div>
                             )}
                           </div>
