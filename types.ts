@@ -83,8 +83,45 @@ export interface DbProduct {
   category: string;
   image_url: string | null;
   min_price: number;
-  max_price: number;
-  savings: number;
+  max_price?: number;   // absent from browse endpoint
+  savings?: number;     // absent from browse endpoint
+  // Optional enhanced fields (present when using browse/detail endpoints)
+  subcategory?: string | null;
+  sub_subcategory?: string | null;
+  allergens?: string | null;
+  is_vegan?: boolean | null;
+  labels?: string | null;
+}
+
+export interface DbProductEnhanced extends DbProduct {
+  subcategory: string | null;
+  sub_subcategory: string | null;
+  allergens: string | null;
+  is_vegan: boolean | null;
+  labels: string | null;
+}
+
+export interface SubSubCategoryNode { name: string; count: number; }
+export interface SubCategoryNode { name: string; count: number; sub_subcategories: SubSubCategoryNode[]; }
+export interface CategoryNode { name: string; count: number; subcategories: SubCategoryNode[]; }
+
+export interface ProductBrowseResult {
+  total: number;
+  page: number;
+  limit: number;
+  products: DbProductEnhanced[];
+}
+
+export interface ProductStorePrice {
+  supermarket: string;
+  price: number;
+  effective_price: number;
+  promotion: { description: string; type: string; ends_at: string | null } | null;
+  store: { store_id: string; store_name: string; city: string | null; address: string | null; is_online: boolean };
+}
+
+export interface DbProductDetail extends DbProductEnhanced {
+  prices: ProductStorePrice[];
 }
 
 export interface ShoppingProduct extends DbProduct {

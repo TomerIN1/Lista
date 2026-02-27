@@ -10,6 +10,10 @@ import {
   ItemPriceDetail,
   ItemPromotion,
   DeliveryCheckResult,
+  CategoryNode,
+  ProductBrowseResult,
+  DbProductDetail,
+  DbProductEnhanced,
 } from '../types';
 
 // ============================================
@@ -117,9 +121,11 @@ export async function searchProducts(
   limit: number = 20,
   offset: number = 0,
   city?: string,
-  storeType?: string
+  storeType?: string,
+  is_vegan?: boolean,
+  allergen_free?: string[]
 ): Promise<DbProductSearchResult> {
-  const cacheKey = `search:${query}:${limit}:${offset}:${city || ''}:${storeType || ''}`;
+  const cacheKey = `search:${query}:${limit}:${offset}:${city || ''}:${storeType || ''}:${is_vegan ?? ''}:${allergen_free?.join(',') || ''}`;
   const cached = cache.get<DbProductSearchResult>(cacheKey);
   if (cached) return cached;
 
@@ -128,11 +134,73 @@ export async function searchProducts(
   // does not support city filtering (returns 0 results). City filtering is handled
   // by the price comparison endpoints instead. storeType works and filters by store kind.
   if (storeType) params.store_type = storeType;
+  if (is_vegan) params.is_vegan = 'true';
+  if (allergen_free && allergen_free.length > 0) params.allergen_free = allergen_free.join(',');
 
   const result = await apiFetch<DbProductSearchResult>('/api/products/search', params);
 
   cache.set(cacheKey, result, SEARCH_TTL);
   return result;
+}
+
+// GET /api/products/categories (30min cache)
+// API returns { total: number, categories: CategoryNode[] }
+export async function getCategories(): Promise<CategoryNode[]> {
+  const cacheKey = 'categories';
+  const cached = cache.get<CategoryNode[]>(cacheKey);
+  if (cached) return cached;
+
+  const result = await apiFetch<{ total: number; categories: CategoryNode[] }>('/api/products/categories');
+  const categories = Array.isArray(result) ? result : (result as any).categories ?? [];
+  cache.set(cacheKey, categories, SUPERMARKETS_TTL);
+  return categories;
+}
+
+// GET /api/products/browse (5min cache, keyed by all params)
+export async function browseProducts(params: {
+  category?: string;
+  subcategory?: string;
+  sub_subcategory?: string;
+  is_vegan?: boolean;
+  allergen_free?: string[];
+  city?: string;
+  store_type?: string;
+  limit?: number;
+  page?: number;
+}): Promise<ProductBrowseResult> {
+  const cacheKey = `browse:${params.category || ''}:${params.subcategory || ''}:${params.sub_subcategory || ''}:${params.is_vegan ?? ''}:${params.allergen_free?.join(',') || ''}:${params.city || ''}:${params.store_type || ''}:${params.page ?? 1}`;
+  const cached = cache.get<ProductBrowseResult>(cacheKey);
+  if (cached) return cached;
+
+  const apiParams: Record<string, string | number> = {};
+  if (params.category) apiParams.category = params.category;
+  if (params.subcategory) apiParams.subcategory = params.subcategory;
+  if (params.sub_subcategory) apiParams.sub_subcategory = params.sub_subcategory;
+  if (params.is_vegan) apiParams.is_vegan = 'true';
+  if (params.allergen_free && params.allergen_free.length > 0) apiParams.allergen_free = params.allergen_free.join(',');
+  if (params.city) apiParams.city = params.city;
+  if (params.store_type) apiParams.store_type = params.store_type;
+  if (params.limit) apiParams.limit = params.limit;
+  if (params.page) apiParams.page = params.page;
+
+  const result = await apiFetch<ProductBrowseResult>('/api/products/browse', apiParams);
+  cache.set(cacheKey, result, SEARCH_TTL);
+  return result;
+}
+
+// GET /api/products/{barcode} — returns full detail with prices (10min cache)
+export async function getProductDetail(barcode: string): Promise<DbProductDetail | null> {
+  const cacheKey = `detail:${barcode}`;
+  const cached = cache.get<DbProductDetail | null>(cacheKey);
+  if (cached !== null) return cached;
+
+  try {
+    const result = await apiFetch<DbProductDetail>(`/api/products/${barcode}`);
+    cache.set(cacheKey, result, PRICES_TTL);
+    return result;
+  } catch {
+    return null;
+  }
 }
 
 export async function getProductByBarcode(barcode: string): Promise<DbProduct | null> {
