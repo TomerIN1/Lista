@@ -94,6 +94,23 @@ The application supports both authenticated users (via Google Sign-In) and guest
 - **Copy with Recipe Context**: Copied lists include original recipe breakdown
 - **Works Offline**: Recipe mode fully functional in guest mode
 
+### 🛒 Shopping Mode — Supermarket-Style Product Catalog
+- **3-Level Category Navigation**: Browse products by category › subcategory › sub_subcategory with horizontal chip navigation
+- **Product Grid**: 2-col (mobile) / 3-col (desktop) card grid with product image, name, manufacturer, price
+- **Promo Badges**: `-X%` rose pill on cards and in the detail modal when `min_price < max_price`; shows savings amount ("חיסכון ₪X")
+- **Filter Panel**: Vegan-only toggle + allergen-free multi-select (גלוטן, חלב, ביצים, etc.) with active chip summary row
+- **Search**: Debounced (300ms) full-text product search with result count; clears back to category view
+- **Product Detail Modal** (opens on card click):
+  - Fixed-height image with product name/manufacturer overlaid on gradient
+  - Labeled info table: Barcode, Manufacturer, Category, Subcategory, Sub-subcategory (merged from browse + detail API responses)
+  - Price hero: best price + "חסוך ₪X" savings badge vs most expensive store
+  - Store price table sorted cheapest-first; cheapest row highlighted green + "הכי זול" badge + `-X%` discount badge
+  - Per-store promo detection via `effective_price < price`; shows "במבצע: [description]" with Tag icon
+  - `+₪X.XX` price difference vs cheapest shown on every non-cheapest row
+  - Sticky "הוסף" / "נוסף" button pinned to modal bottom
+- **Collapsible Cart Footer**: Collapsed bar shows item count + Compare button; expanded shows full list with qty/unit controls, product metadata (barcode, manufacturer, category breadcrumb), and price
+- **Load More**: Paginated product loading (24 per page) with Load More button
+
 ### 🤝 Collaboration
 - **Shareable Links**: Copy and share lists with a single link that includes full list content + join URL
 - **Email Invitations**: Share lists with other users via email
@@ -180,18 +197,22 @@ Lista/
 ├── metadata.json                # App metadata
 │
 ├── components/                  # React components
-│   ├── AccessibilityMenu.tsx   # Accessibility controls
-│   ├── CategoryCard.tsx         # Category display
-│   ├── CategoryItem.tsx         # Individual item
-│   ├── Footer.tsx               # App footer
-│   ├── Header.tsx               # App header
-│   ├── InfoModal.tsx            # Modal dialog
-│   ├── InputArea.tsx            # List input
-│   ├── Logo.tsx                 # App logo
-│   ├── ResultCard.tsx           # Results display
-│   ├── ShareModal.tsx           # Share dialog
+│   ├── AccessibilityMenu.tsx        # Accessibility controls
+│   ├── CategoryCard.tsx             # Category display
+│   ├── CategoryItem.tsx             # Individual item
+│   ├── Footer.tsx                   # App footer
+│   ├── Header.tsx                   # App header
+│   ├── InfoModal.tsx                # Modal dialog
+│   ├── InputArea.tsx                # List input
+│   ├── Logo.tsx                     # App logo
+│   ├── ResultCard.tsx               # Results display
+│   ├── ShareModal.tsx               # Share dialog
 │   ├── OrganizeListBreakdownModal.tsx  # Modal for viewing organize list categories & items
-│   └── Sidebar.tsx              # Navigation sidebar
+│   ├── Sidebar.tsx                  # Navigation sidebar
+│   ├── ShoppingInputArea.tsx        # Shopping mode list builder with collapsible cart footer
+│   ├── ProductCatalogArea.tsx       # Supermarket-style browse/search with category nav & filters
+│   ├── ProductCard.tsx              # Product grid card with promo badge & savings display
+│   └── ProductDetailModal.tsx       # Rich product detail: info table, sorted price table, per-store promos
 │
 ├── constants/                   # Static data
 │   ├── legalText.ts            # Privacy & Terms
@@ -204,7 +225,8 @@ Lista/
 ├── services/                    # External services
 │   ├── firestoreService.ts     # Firestore operations
 │   ├── geminiService.ts        # OpenAI API integration
-│   └── govDataService.ts       # data.gov.il address autocomplete
+│   ├── govDataService.ts       # data.gov.il address autocomplete
+│   └── priceDbService.ts       # Israeli food prices API (browse, search, compare, delivery)
 │
 └── node_modules/                # Dependencies (not in git)
 ```
@@ -494,7 +516,146 @@ Small colored badge component showing recipe labels on items.
 
 ---
 
+### ProductCatalogArea.tsx
+**Location**: `components/ProductCatalogArea.tsx`
+
+The supermarket-style browse/search experience embedded inside `ShoppingInputArea`.
+
+**Views**:
+- `categories` — 3-column emoji grid of top-level categories (filters out numeric-only DB artefacts)
+- `browse` — product grid for a selected category/subcategory/sub_subcategory
+- `search` — product grid for a free-text query (debounced 300ms, min 2 chars)
+
+**Navigation**:
+- Category tile click → `browse` view; subcategory/sub_subcategory chips refine results
+- Breadcrumb buttons navigate back up the hierarchy
+- Clearing search returns to `categories` or `browse` depending on state
+
+**Filters** (via `FilterPanel` dropdown):
+- 🌿 Vegan-only toggle (`is_vegan=true`)
+- Allergen-free multi-select (8 allergens: גלוטן, חלב, ביצים, אגוזים, בוטנים, סויה, דגים, שומשום)
+- Active filters shown as dismissible chips with allergen disclaimer
+
+**Pagination**: 24 products/page; Load More appends next page.
+
+**Props**:
+```typescript
+{
+  selectedProducts: ShoppingProduct[];
+  onSelectProduct: (product: ShoppingProduct) => void;
+  onRemoveProduct: (barcode: string) => void;
+  onUpdateProduct?: (barcode: string, updates: { amount?: number; unit?: Unit }) => void;
+  disabled?: boolean;
+  city?: string;
+  storeType?: string;
+}
+```
+
+---
+
+### ProductCard.tsx
+**Location**: `components/ProductCard.tsx`
+
+Individual product card for the browse/search grid.
+
+**Features**:
+- Product image with `Package` fallback on 404
+- Name (2-line clamp), manufacturer
+- Promo badge: `-X%` rose pill (top-start) when `min_price < max_price`
+- Price section: sale price in rose + original struck through + "חיסכון ₪X / Save ₪X" line
+- Add / Added button (green CTA → disabled state once in cart)
+- Card body click opens `ProductDetailModal`
+
+---
+
+### ProductDetailModal.tsx
+**Location**: `components/ProductDetailModal.tsx`
+
+Full product details rendered as a portal modal.
+
+**Layout**:
+1. **Fixed-height image** (200-240px) with gradient + product name/manufacturer overlay
+2. **Scrollable body**:
+   - Labeled info table: Barcode · Manufacturer · Category · Subcategory · Sub-subcategory
+   - Price hero card: best price (₪X) + "חסוך ₪Y" badge vs most expensive store
+   - Vegan / labels badges + allergen chips (with AlertCircle icon)
+   - Store price table (sorted cheapest first):
+     - Cheapest row: green highlight + "הכי זול" badge + `-X%` badge (vs most expensive)
+     - Per-store promo detection via `effective_price < price` → shows `-X% מבצע` badge + "במבצע: [description]"
+     - Other rows: `+₪X.XX` diff vs cheapest in slate text
+3. **Sticky Add button** pinned to modal bottom
+
+**Data merging**: Detail API omits several fields; modal accepts `fallbackProduct: DbProductEnhanced` prop from the browse card to fill gaps.
+
+**Props**:
+```typescript
+{
+  barcode: string;
+  onClose: () => void;
+  onAdd: (product: DbProductEnhanced) => void;
+  isAdded: boolean;
+  fallbackImageUrl?: string | null;
+  fallbackProduct?: DbProductEnhanced | null;
+}
+```
+
+---
+
+### ShoppingInputArea.tsx
+**Location**: `components/ShoppingInputArea.tsx`
+
+Shopping mode list builder. Hosts `ProductCatalogArea` (browse/search) and a collapsible cart footer.
+
+**Cart footer**:
+- **Collapsed**: `🛒 N מוצרים` + Compare Prices button
+- **Expanded** (max-h-96, scrollable): per-product rows showing name, manufacturer, category breadcrumb (category › subcategory › sub_subcategory), barcode, price, qty/unit controls, remove button
+- Clear All button inside expanded panel
+- Toggle via ChevronUp/Down
+
+---
+
 ## Services
+
+### services/priceDbService.ts
+**Location**: `services/priceDbService.ts`
+
+Client-side service for the Israeli food prices API, proxied through `/price-api`.
+
+**LRU Cache**: In-memory, 200 entries max with per-function TTLs.
+
+#### Key Functions
+
+**`getCategories()`** — TTL 30min
+- `GET /api/products/categories`
+- Returns `CategoryNode[]` (3-level tree: category → subcategory → sub_subcategory)
+
+**`browseProducts(params)`** — TTL 5min
+- `GET /api/products/browse`
+- Params: `category`, `subcategory`, `sub_subcategory`, `is_vegan`, `allergen_free`, `city`, `store_type`, `limit`, `page`
+- Returns `ProductBrowseResult` (`{ total, page, limit, products: DbProductEnhanced[] }`)
+
+**`getProductDetail(barcode)`** — TTL 10min
+- `GET /api/products/{barcode}`
+- Returns `DbProductDetail` (product + `prices: ProductStorePrice[]`)
+- `ProductStorePrice` includes `supermarket`, `price`, `effective_price`, `promotion`, `store`
+
+**`searchProducts(query, limit, offset, city?, storeType?, is_vegan?, allergen_free?)`** — TTL 5min
+- `GET /api/products/search`
+- Returns `DbProductSearchResult`
+
+**`compareListPrices(request)`**
+- `POST /api/shopping-list/compare`
+- Bulk price comparison for a full shopping list
+- Groups branches by chain, picks best branch, computes savings
+
+**`checkDelivery(city, street?)`**
+- `POST /api/delivery/check`
+- Returns per-chain delivery availability + eligible store ref IDs
+
+#### Known Issues
+- Many `image_url` values point to `https://www.rami-levy.co.il/product/{barcode}/large.jpg` which returns 404 (stale CDN paths). The frontend falls back to a `Package` placeholder icon. **Backend fix needed**: re-crawl image URLs or set `image_url = NULL` for broken entries.
+
+---
 
 ### services/geminiService.ts
 **Location**: `services/geminiService.ts`
@@ -2723,6 +2884,155 @@ Only Rami Levy has populated promo data in the current DB. Example product:
 
 ---
 
+### Supermarket-Style Product Catalog (February 2026)
+
+#### Overview
+
+Replaced the simple text-search-to-dropdown product input in Shopping Mode with a full supermarket-style browsing experience. Users can now navigate a 3-level category tree, browse a product grid with images, filter by vegan/allergen preferences, and view full product details including per-store prices — all from within the list-building step.
+
+The selected products (cart) moved from an inline list inside the search component to a **collapsible footer bar** at the bottom of `ShoppingInputArea`.
+
+#### New API Endpoints Consumed
+
+| Endpoint | Purpose | Cache TTL |
+|----------|---------|-----------|
+| `GET /api/products/categories` | Returns `{total, categories[]}` with 3-level hierarchy | 30 min |
+| `GET /api/products/browse` | Paginated product grid with category/filter params | 5 min |
+| `GET /api/products/{barcode}` | Full product detail including per-store prices and promotions | 10 min |
+
+All products from the browse and detail endpoints include new fields: `subcategory`, `sub_subcategory`, `allergens`, `is_vegan`, `labels`.
+
+#### New Types (`types.ts`)
+
+| Type | Definition | Purpose |
+|------|-----------|---------|
+| `DbProductEnhanced` | Extends `DbProduct` with 5 new fields | Products from browse/detail endpoints |
+| `SubSubCategoryNode` | `{name, count}` | Leaf category level |
+| `SubCategoryNode` | `{name, count, sub_subcategories[]}` | Mid category level |
+| `CategoryNode` | `{name, count, subcategories[]}` | Top category level |
+| `ProductBrowseResult` | `{total, page, limit, products[]}` | Browse API response |
+| `ProductStorePrice` | `{supermarket, price, effective_price, promotion, store}` | Per-store price in detail |
+| `DbProductDetail` | Extends `DbProductEnhanced` with `prices[]` | Full product detail |
+
+Also made `max_price` and `savings` optional on `DbProduct` (browse endpoint omits them) and added 5 optional enhanced fields to `DbProduct` for backward compatibility.
+
+#### New Components
+
+##### `components/ProductCard.tsx`
+
+Individual product tile for the catalog grid.
+
+- **Layout**: Square image (with `Package` fallback), name (2-line clamp), manufacturer, `₪min_price`, promo `Tag` badge when `min_price < max_price`
+- **Add button**: `+ הוסף` → `✓ נוסף` (green, disabled) when already in cart
+- Clicking the card body (not button) opens `ProductDetailModal`
+
+##### `components/ProductDetailModal.tsx`
+
+Full-screen bottom-sheet modal (portalled via `createPortal`).
+
+- Fetches product detail via `getProductDetail(barcode)` on open
+- Shows: large image, category breadcrumb, name/manufacturer/barcode, vegan badge (only when `is_vegan === true`), labels, allergen chips, per-store prices table with promotion descriptions
+- Escape key and backdrop click close the modal
+- Add to List button mirrors the card's `+ הוסף / ✓ נוסף` state
+
+##### `components/ProductCatalogArea.tsx`
+
+The main new component — replaces `ProductSearchInput` inside `ShoppingInputArea`.
+
+**Internal state**: `view` (`categories` / `browse` / `search`), `searchQuery` (debounced 300 ms), `categories`, 3-level selection state, `products`, pagination state, loading states, `filterVegan`, `filterAllergenFree[]`, `detailBarcode`.
+
+**Layout (top → bottom)**:
+1. **Search bar** — always visible; `Loader2` spinner while searching; `X` clear button; **Filter dropdown button** (`SlidersHorizontal` icon) at the `end` of the bar
+2. **Active filter chips** — visible only when filters are on; each chip has an `×` to remove it; allergen disclaimer appears when allergen filters are active
+3. **Breadcrumb + subcategory chips** — visible when a category is selected; horizontal scroll chip rows for sub and sub-sub levels
+4. **Main content**: category emoji grid (`view=categories`) or 2/3-col product grid (`view=browse/search`) with Load More button
+
+**Filter dropdown** (`FilterPanel` sub-component):
+- Opens as a `w-64` panel anchored `end-0` (RTL-safe — grows rightward in Hebrew, leftward in English)
+- Mobile backdrop closes it on outside tap
+- Vegan toggle and 8 allergen checkboxes with `rounded-md` check marks
+- `max-h-[70vh] overflow-y-auto` prevents viewport overflow on small screens
+
+**Category icon/colour map**: 15 entries with emoji + Tailwind bg colour per category; spaces normalised before lookup so "בשר  ודגים" (double-space from API) matches correctly.
+
+**Filter semantics**:
+- **Vegan**: only `is_vegan === true` products shown; `null` items hidden
+- **Allergen-free**: products with matching allergens hidden; `allergens = null` products kept (unknown ≠ contains); disclaimer shown
+
+#### Modified Components
+
+##### `components/ShoppingInputArea.tsx`
+
+- Replaced `<ProductSearchInput>` with `<ProductCatalogArea>` (same prop surface)
+- Replaced the bottom actions row with a **collapsible cart bar**:
+  - **Collapsed** (default): `🛒 N מוצרים` toggle + `השווה מחירים →` button
+  - **Expanded**: scrollable product list (max-h-64) with qty/unit controls and remove buttons per row, plus "Clear all" at the bottom
+  - Chevron direction flips on expand/collapse
+- Mobile-responsive padding: `px-3 sm:px-4`, compare button `px-4 sm:px-6`
+- `formatPrice()` updated to accept optional `max_price`
+
+#### Modified Services
+
+##### `services/priceDbService.ts`
+
+Three new functions:
+
+| Function | Notes |
+|----------|-------|
+| `getCategories()` | Unwraps `{total, categories}` API response (was incorrectly treated as bare array, causing blank category grid) |
+| `browseProducts(params)` | Full param set: category, subcategory, sub_subcategory, is_vegan, allergen_free, city, store_type, limit, page. Cache key includes all params. |
+| `getProductDetail(barcode)` | Returns `DbProductDetail` with `prices[]`; `null` on error |
+
+`searchProducts()` updated to accept `is_vegan?: boolean` and `allergen_free?: string[]` and forward them as query params.
+
+#### Modified Translations (`constants/translations.ts`)
+
+Added `productBrowse` namespace with 20 keys in both `en` and `he`:
+
+| Key | English | Hebrew |
+|-----|---------|--------|
+| `categories` | Categories | קטגוריות |
+| `allCategories` | All Categories | כל הקטגוריות |
+| `searchPlaceholder` | Search products by name... | חפש מוצרים לפי שם... |
+| `filters` | Filters | סינון |
+| `veganOnly` | Vegan Only | טבעוני בלבד |
+| `allergenFree` | Allergen-Free | ללא אלרגנים |
+| `addToList` | + Add | + הוסף |
+| `added` | ✓ Added | ✓ נוסף |
+| `backToCategories` | Categories | קטגוריות |
+| `noProducts` | No products found | לא נמצאו מוצרים |
+| `loadMore` | Load More | טען עוד |
+| `results` | results | תוצאות |
+| `allergens` | Allergens | אלרגנים |
+| `vegan` | Vegan | טבעוני |
+| `detailTitle` | Product Details | פרטי מוצר |
+| `pricesAt` | Prices at stores | מחירים בחנויות |
+| `allergenDisclaimer` | Products with no allergen info are included | מוצרים ללא מידע על אלרגנים כלולים |
+| `cartItems` | items | מוצרים |
+| `cartEmpty` | Add products to start | הוסף מוצרים להתחיל |
+| `clearAll` | Clear all | נקה הכל |
+
+#### Notable Bug Fixes Included
+
+1. **Categories blank screen** — `getCategories()` was treating the API's `{total, categories[]}` wrapper as a bare array, so `cats.filter(...)` ran on a plain object and discarded everything. Fixed by extracting `result.categories`.
+2. **Filter dropdown off-screen (RTL)** — `start-0` in RTL = `right: 0`, causing the panel to grow leftward off-screen. Changed to `end-0` (`left: 0` in RTL) so the panel grows rightward into visible space.
+3. **Missing `max_price` from browse endpoint** — browse API only returns `min_price`. Made `max_price` and `savings` optional in `DbProduct`; added null guards in `ProductCard` and `ShoppingInputArea`.
+4. **Double-space in "בשר  ודגים"** — API category name has two spaces; icon map had one. Added `replace(/\s+/g, ' ')` normalisation before lookup.
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `types.ts` | Modified | `DbProductEnhanced`, category hierarchy types, `ProductBrowseResult`, `ProductStorePrice`, `DbProductDetail`; optional `max_price`/`savings` on `DbProduct` |
+| `services/priceDbService.ts` | Modified | `getCategories()` (response unwrap), `browseProducts()`, `getProductDetail()`; `searchProducts()` filter params |
+| `constants/translations.ts` | Modified | Added `productBrowse` namespace — 20 keys EN + HE |
+| `components/ProductCard.tsx` | **New** | Product grid tile with image, price, promo badge, add button |
+| `components/ProductDetailModal.tsx` | **New** | Portalled bottom-sheet detail view with per-store prices |
+| `components/ProductCatalogArea.tsx` | **New** | Full catalog: category grid, browse/search, filter dropdown, detail modal |
+| `components/ShoppingInputArea.tsx` | Modified | Replaced `ProductSearchInput` with `ProductCatalogArea`; collapsible cart footer bar |
+
+---
+
 **Last Updated**: February 25, 2026
-**Version**: 4.2.0
+**Version**: 4.3.0
 **Status**: Production Ready
