@@ -120,14 +120,25 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
           ) : (
             <div className="p-4 space-y-4">
 
-              {/* ── Breadcrumb + barcode ────────────────────── */}
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-1 text-[11px] text-slate-400 flex-wrap min-w-0">
-                  <span className="truncate">{product.category}</span>
-                  {product.subcategory && <><span>›</span><span className="truncate">{product.subcategory}</span></>}
-                  {product.sub_subcategory && <><span>›</span><span className="truncate">{product.sub_subcategory}</span></>}
-                </div>
-                <span className="text-[11px] text-slate-300 font-mono flex-shrink-0">{product.barcode}</span>
+              {/* ── Product info table ───────────────────────── */}
+              <div className="rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
+                {[
+                  { label: isRTL ? 'ברקוד' : 'Barcode', value: product.barcode, mono: true },
+                  { label: isRTL ? 'יצרן' : 'Manufacturer', value: product.manufacturer },
+                  { label: isRTL ? 'קטגוריה' : 'Category', value: product.category },
+                  { label: isRTL ? 'תת-קטגוריה' : 'Subcategory', value: product.subcategory },
+                  { label: isRTL ? 'תת-תת-קטגוריה' : 'Sub-subcategory', value: product.sub_subcategory },
+                ]
+                  .filter(row => row.value)
+                  .map(row => (
+                    <div key={row.label} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <span className="text-xs text-slate-400 flex-shrink-0">{row.label}</span>
+                      <span className={`text-xs font-medium text-slate-700 text-end ${row.mono ? 'font-mono' : ''}`}>
+                        {row.value}
+                      </span>
+                    </div>
+                  ))
+                }
               </div>
 
               {/* ── Price hero ──────────────────────────────── */}
@@ -204,43 +215,55 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                     {sortedPrices.map((p, i) => {
                       const isCheapest = i === 0;
                       const diff = cheapestPrice != null ? p.effective_price - cheapestPrice : 0;
+                      const hasDiscount = p.effective_price < p.price - 0.01;
+                      const discountPct = hasDiscount
+                        ? Math.round((1 - p.effective_price / p.price) * 100)
+                        : 0;
+                      const promoLabel = p.promotion?.description
+                        || (hasDiscount ? (isRTL ? 'מחיר מבצע' : 'Sale price') : null);
+
                       return (
                         <div
                           key={i}
-                          className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${
+                          className={`flex items-start gap-3 px-3 py-2.5 transition-colors ${
                             isCheapest ? 'bg-emerald-50/80' : 'hover:bg-slate-50/60'
                           }`}
                         >
-                          {/* Store name + promo */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className={`text-sm font-semibold truncate ${isCheapest ? 'text-emerald-800' : 'text-slate-700'}`}>
+                          {/* Store name + promo label */}
+                          <div className="flex-1 min-w-0 pt-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className={`text-sm font-semibold ${isCheapest ? 'text-emerald-800' : 'text-slate-700'}`}>
                                 {p.supermarket}
                               </p>
                               {isCheapest && (
-                                <span className="flex-shrink-0 text-[10px] font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded-full">
+                                <span className="text-[10px] font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
                                   {isRTL ? 'הכי זול' : 'Best'}
                                 </span>
                               )}
+                              {hasDiscount && (
+                                <span className="text-[10px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                  -{discountPct}%
+                                </span>
+                              )}
                             </div>
-                            {p.promotion && (
+                            {promoLabel && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <Tag className="w-3 h-3 text-rose-500 flex-shrink-0" />
-                                <p className="text-[11px] text-rose-600 font-medium truncate">{p.promotion.description}</p>
+                                <p className="text-[11px] text-rose-600 font-medium">{promoLabel}</p>
                               </div>
                             )}
                           </div>
 
-                          {/* Price */}
+                          {/* Price column */}
                           <div className="text-end flex-shrink-0">
-                            <p className={`text-sm font-black ${isCheapest ? 'text-emerald-700' : 'text-slate-700'}`}>
+                            <p className={`text-sm font-black ${isCheapest ? 'text-emerald-700' : hasDiscount ? 'text-rose-600' : 'text-slate-700'}`}>
                               ₪{p.effective_price.toFixed(2)}
                             </p>
-                            {p.effective_price !== p.price && (
+                            {hasDiscount && (
                               <p className="text-[11px] text-slate-400 line-through">₪{p.price.toFixed(2)}</p>
                             )}
                             {!isCheapest && diff > 0.01 && (
-                              <p className="text-[11px] text-rose-400 font-medium">+₪{diff.toFixed(2)}</p>
+                              <p className="text-[11px] text-slate-400 font-medium">+₪{diff.toFixed(2)}</p>
                             )}
                           </div>
                         </div>
