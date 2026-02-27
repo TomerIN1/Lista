@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Package, Tag, Check } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -11,9 +11,12 @@ interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, onClick }) => {
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const [imgFailed, setImgFailed] = useState(false);
   const hasPromo = product.max_price != null && product.min_price < product.max_price;
+  const discountPct = hasPromo && product.max_price
+    ? Math.round((1 - product.min_price / product.max_price) * 100)
+    : 0;
 
   return (
     <div
@@ -33,8 +36,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
           <Package className="w-12 h-12 text-slate-200" />
         )}
         {hasPromo && (
-          <span className="absolute top-1.5 end-1.5 bg-rose-500 text-white rounded-full p-1">
-            <Tag className="w-3 h-3" />
+          <span className="absolute top-1.5 start-1.5 bg-rose-500 text-white text-[11px] font-black px-2 py-0.5 rounded-full leading-tight shadow-sm">
+            -{discountPct}%
           </span>
         )}
       </div>
@@ -47,14 +50,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
         {product.manufacturer && (
           <p className="text-[11px] text-slate-400 truncate">{product.manufacturer}</p>
         )}
-        <p className="text-sm font-bold text-emerald-600 mt-auto pt-1">
-          ₪{product.min_price.toFixed(2)}
-          {hasPromo && product.max_price != null && (
-            <span className="text-[11px] font-normal text-slate-400 line-through ms-1.5">
-              ₪{product.max_price.toFixed(2)}
-            </span>
+        <div className="mt-auto pt-1">
+          {hasPromo && product.max_price != null ? (
+            <>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-sm font-black text-rose-600">₪{product.min_price.toFixed(2)}</span>
+                <span className="text-xs font-normal text-slate-400 line-through">₪{product.max_price.toFixed(2)}</span>
+              </div>
+              <p className="text-[11px] text-rose-500 font-semibold">
+                {isRTL ? `חיסכון ₪${(product.max_price - product.min_price).toFixed(2)}` : `Save ₪${(product.max_price - product.min_price).toFixed(2)}`}
+              </p>
+            </>
+          ) : (
+            <span className="text-sm font-bold text-emerald-600">₪{product.min_price.toFixed(2)}</span>
           )}
-        </p>
+        </div>
       </div>
 
       {/* Add button */}

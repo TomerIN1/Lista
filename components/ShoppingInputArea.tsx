@@ -150,33 +150,29 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
       <div className="border-t border-slate-100 rounded-b-3xl overflow-hidden">
         {/* Expanded cart list */}
         {isCartExpanded && hasContent && (
-          <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
+          <div className="divide-y divide-slate-50 max-h-96 overflow-y-auto">
             {products.map((product) => (
               <div
                 key={product.barcode}
-                className="flex items-center gap-3 px-4 py-2.5 bg-white hover:bg-slate-50/50 transition-colors"
+                className="flex items-start gap-3 px-4 py-3 bg-white hover:bg-slate-50/50 transition-colors"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-slate-800 truncate">{product.name}</div>
-                  {/* Manufacturer + category breadcrumb */}
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0 mt-0.5">
-                    {product.manufacturer && (
-                      <span className="text-[11px] text-slate-400 truncate">{product.manufacturer}</span>
-                    )}
-                    {product.manufacturer && product.category && (
-                      <span className="text-[11px] text-slate-300">·</span>
-                    )}
-                    {product.category && (
-                      <span className="text-[11px] text-slate-400 truncate">
-                        {[product.category, product.subcategory, product.sub_subcategory]
-                          .filter(Boolean).join(' › ')}
-                      </span>
-                    )}
-                  </div>
+                <div className="flex-1 min-w-0 pt-0.5">
+                  <div className="text-sm font-semibold text-slate-800 leading-snug">{product.name}</div>
+                  {/* Manufacturer */}
+                  {product.manufacturer && (
+                    <div className="text-xs text-slate-500 mt-0.5">{product.manufacturer}</div>
+                  )}
+                  {/* Category breadcrumb */}
+                  {product.category && (
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      {[product.category, product.subcategory, product.sub_subcategory]
+                        .filter(Boolean).join(' › ')}
+                    </div>
+                  )}
                   {/* Barcode */}
-                  <div className="text-[10px] text-slate-300 font-mono mt-0.5">{product.barcode}</div>
+                  <div className="text-[11px] text-slate-400 font-mono mt-0.5">{product.barcode}</div>
                   {product.min_price > 0 && (
-                    <div className="text-xs font-bold text-emerald-600 mt-0.5">
+                    <div className="text-xs font-bold text-emerald-600 mt-1">
                       {formatPrice(product.min_price, product.max_price)}
                     </div>
                   )}
