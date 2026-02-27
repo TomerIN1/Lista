@@ -65,6 +65,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
   const maxSavings = cheapestPrice != null && mostExpensivePrice != null
     ? mostExpensivePrice - cheapestPrice
     : 0;
+  const overallDiscountPct = cheapestPrice != null && mostExpensivePrice != null && mostExpensivePrice > cheapestPrice
+    ? Math.round((1 - cheapestPrice / mostExpensivePrice) * 100)
+    : 0;
 
   const modal = (
     <div
@@ -250,9 +253,14 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                                   {isRTL ? 'הכי זול' : 'Best'}
                                 </span>
                               )}
-                              {hasDiscount && (
+                              {isCheapest && overallDiscountPct > 0 && (
                                 <span className="text-[10px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
-                                  -{discountPct}%
+                                  -{overallDiscountPct}%
+                                </span>
+                              )}
+                              {!isCheapest && hasDiscount && (
+                                <span className="text-[10px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                  -{discountPct}% {isRTL ? 'מבצע' : 'sale'}
                                 </span>
                               )}
                             </div>
