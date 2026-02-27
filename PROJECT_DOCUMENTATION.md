@@ -655,6 +655,9 @@ Client-side service for the Israeli food prices API, proxied through `/price-api
 #### Known Issues
 - Many `image_url` values point to `https://www.rami-levy.co.il/product/{barcode}/large.jpg` which returns 404 (stale CDN paths). The frontend falls back to a `Package` placeholder icon. **Backend fix needed**: re-crawl image URLs or set `image_url = NULL` for broken entries.
 
+#### Resolved Issues
+- **`min_price` reflected only regular prices** — The browse/search endpoints computed `min_price` as `MIN(price)`, ignoring active promotions. This caused a visible inconsistency: a product card showed ₪14.90 as the best price while the detail modal showed ₪12.90 (Rami Levy promo). **Fixed in backend**: browse and search queries now compute `min_price` as `MIN(effective_price)` so the cheapest promotion price is always reflected in card display. `max_price` remains `MAX(price)` (the most expensive regular price, used as the "before discount" anchor).
+
 ---
 
 ### services/geminiService.ts
@@ -3018,6 +3021,7 @@ Added `productBrowse` namespace with 20 keys in both `en` and `he`:
 2. **Filter dropdown off-screen (RTL)** — `start-0` in RTL = `right: 0`, causing the panel to grow leftward off-screen. Changed to `end-0` (`left: 0` in RTL) so the panel grows rightward into visible space.
 3. **Missing `max_price` from browse endpoint** — browse API only returns `min_price`. Made `max_price` and `savings` optional in `DbProduct`; added null guards in `ProductCard` and `ShoppingInputArea`.
 4. **Double-space in "בשר  ודגים"** — API category name has two spaces; icon map had one. Added `replace(/\s+/g, ' ')` normalisation before lookup.
+5. **`min_price` / modal price inconsistency** — Card showed ₪14.90 (cheapest regular price) while the detail modal showed ₪12.90 (Rami Levy effective promo price). Root cause: browse API computed `min_price` from `price` column, not `effective_price`. Fixed in backend — `min_price` is now `MIN(effective_price)`. No frontend changes required; the in-memory cache (5 min TTL) flushes naturally.
 
 #### File Change Summary
 
@@ -3033,6 +3037,6 @@ Added `productBrowse` namespace with 20 keys in both `en` and `he`:
 
 ---
 
-**Last Updated**: February 25, 2026
-**Version**: 4.3.0
+**Last Updated**: February 27, 2026
+**Version**: 4.3.1
 **Status**: Production Ready
