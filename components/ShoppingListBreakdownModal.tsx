@@ -41,8 +41,8 @@ const ShoppingListBreakdownModal: React.FC<ShoppingListBreakdownModalProps> = ({
 
   if (!isOpen) return null;
 
-  const formatPrice = (min: number, max: number) => {
-    if (min === max) return `₪${min.toFixed(2)}`;
+  const formatPrice = (min: number, max?: number) => {
+    if (!max || min === max) return `₪${min.toFixed(2)}`;
     return `₪${min.toFixed(2)} - ₪${max.toFixed(2)}`;
   };
 
