@@ -201,6 +201,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
 
   // Detail modal
   const [detailBarcode, setDetailBarcode] = useState<string | null>(null);
+  const [detailImageUrl, setDetailImageUrl] = useState<string | null>(null);
 
   const fetchId = useRef(0);
 
@@ -543,7 +544,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                     product={product}
                     isSelected={selectedProducts.some((p) => p.barcode === product.barcode)}
                     onAdd={() => handleAddProduct(product)}
-                    onClick={() => setDetailBarcode(product.barcode)}
+                    onClick={() => { setDetailBarcode(product.barcode); setDetailImageUrl(product.image_url ?? null); }}
                   />
                 ))}
               </div>
@@ -570,6 +571,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
       {detailBarcode && (
         <ProductDetailModal
           barcode={detailBarcode}
+          fallbackImageUrl={detailImageUrl}
           onClose={() => setDetailBarcode(null)}
           onAdd={(product) => {
             handleAddProduct(product);

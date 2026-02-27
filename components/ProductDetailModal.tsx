@@ -10,9 +10,10 @@ interface ProductDetailModalProps {
   onClose: () => void;
   onAdd: (product: DbProductEnhanced) => void;
   isAdded: boolean;
+  fallbackImageUrl?: string | null;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClose, onAdd, isAdded }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClose, onAdd, isAdded, fallbackImageUrl }) => {
   const { t } = useLanguage();
   const [product, setProduct] = useState<DbProductDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,6 +35,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  const imageUrl = product?.image_url || fallbackImageUrl || null;
 
   const allergenList = product?.allergens
     ? product.allergens.split(',').map((a) => a.trim()).filter(Boolean)
@@ -70,9 +73,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
           <>
             {/* Image */}
             <div className="w-full aspect-video bg-slate-50 flex items-center justify-center rounded-t-3xl sm:rounded-t-2xl overflow-hidden">
-              {product.image_url && !imgFailed ? (
+              {imageUrl && !imgFailed ? (
                 <img
-                  src={product.image_url}
+                  src={imageUrl}
                   alt={product.name}
                   className="w-full h-full object-contain p-6"
                   onError={() => setImgFailed(true)}
