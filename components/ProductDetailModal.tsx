@@ -11,9 +11,10 @@ interface ProductDetailModalProps {
   onAdd: (product: DbProductEnhanced) => void;
   isAdded: boolean;
   fallbackImageUrl?: string | null;
+  fallbackProduct?: DbProductEnhanced | null;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClose, onAdd, isAdded, fallbackImageUrl }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClose, onAdd, isAdded, fallbackImageUrl, fallbackProduct }) => {
   const { t, isRTL } = useLanguage();
   const [product, setProduct] = useState<DbProductDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,6 +37,15 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
   }, [onClose]);
 
   const imageUrl = product?.image_url || fallbackImageUrl || null;
+  // Merge detail response with browse data — detail API omits several fields
+  const info = {
+    barcode:         product?.barcode         || fallbackProduct?.barcode         || barcode,
+    manufacturer:    product?.manufacturer    || fallbackProduct?.manufacturer    || null,
+    category:        product?.category        || fallbackProduct?.category        || null,
+    subcategory:     product?.subcategory     || fallbackProduct?.subcategory     || null,
+    sub_subcategory: product?.sub_subcategory || fallbackProduct?.sub_subcategory || null,
+    name:            product?.name            || fallbackProduct?.name            || '',
+  };
 
   const allergenList = product?.allergens
     ? product.allergens.split(',').map((a) => a.trim()).filter(Boolean)
@@ -86,13 +96,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent" />
 
           {/* Product name on the image */}
-          {product && (
+          {(product || fallbackProduct) && (
             <div className="absolute inset-x-0 bottom-0 px-4 pb-3">
               <p className="text-white font-bold text-base leading-snug line-clamp-2 drop-shadow">
-                {product.name}
+                {info.name}
               </p>
-              {product.manufacturer && (
-                <p className="text-white/80 text-xs mt-0.5 drop-shadow">{product.manufacturer}</p>
+              {info.manufacturer && (
+                <p className="text-white/80 text-xs mt-0.5 drop-shadow">{info.manufacturer}</p>
               )}
             </div>
           )}
@@ -123,11 +133,11 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
               {/* ── Product info table ───────────────────────── */}
               <div className="rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
                 {[
-                  { label: isRTL ? 'ברקוד' : 'Barcode', value: product.barcode, mono: true },
-                  { label: isRTL ? 'יצרן' : 'Manufacturer', value: product.manufacturer },
-                  { label: isRTL ? 'קטגוריה' : 'Category', value: product.category },
-                  { label: isRTL ? 'תת-קטגוריה' : 'Subcategory', value: product.subcategory },
-                  { label: isRTL ? 'תת-תת-קטגוריה' : 'Sub-subcategory', value: product.sub_subcategory },
+                  { label: isRTL ? 'ברקוד' : 'Barcode', value: info.barcode, mono: true },
+                  { label: isRTL ? 'יצרן' : 'Manufacturer', value: info.manufacturer },
+                  { label: isRTL ? 'קטגוריה' : 'Category', value: info.category },
+                  { label: isRTL ? 'תת-קטגוריה' : 'Subcategory', value: info.subcategory },
+                  { label: isRTL ? 'תת-תת-קטגוריה' : 'Sub-subcategory', value: info.sub_subcategory },
                 ]
                   .filter(row => row.value)
                   .map(row => (
