@@ -158,6 +158,23 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-slate-800 truncate">{product.name}</div>
+                  {/* Manufacturer + category breadcrumb */}
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0 mt-0.5">
+                    {product.manufacturer && (
+                      <span className="text-[11px] text-slate-400 truncate">{product.manufacturer}</span>
+                    )}
+                    {product.manufacturer && product.category && (
+                      <span className="text-[11px] text-slate-300">·</span>
+                    )}
+                    {product.category && (
+                      <span className="text-[11px] text-slate-400 truncate">
+                        {[product.category, product.subcategory, product.sub_subcategory]
+                          .filter(Boolean).join(' › ')}
+                      </span>
+                    )}
+                  </div>
+                  {/* Barcode */}
+                  <div className="text-[10px] text-slate-300 font-mono mt-0.5">{product.barcode}</div>
                   {product.min_price > 0 && (
                     <div className="text-xs font-bold text-emerald-600 mt-0.5">
                       {formatPrice(product.min_price, product.max_price)}
