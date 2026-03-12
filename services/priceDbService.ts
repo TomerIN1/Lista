@@ -178,7 +178,7 @@ export async function browseProducts(params: {
   if (params.sub_subcategory) apiParams.sub_subcategory = params.sub_subcategory;
   if (params.is_vegan) apiParams.is_vegan = 'true';
   if (params.allergen_free && params.allergen_free.length > 0) apiParams.allergen_free = params.allergen_free.join(',');
-  if (params.city) apiParams.city = params.city;
+  if (params.city) apiParams.delivery_city_name = params.city;
   if (params.store_type) apiParams.store_type = params.store_type;
   if (params.limit) apiParams.limit = params.limit;
   if (params.page) apiParams.page = params.page;

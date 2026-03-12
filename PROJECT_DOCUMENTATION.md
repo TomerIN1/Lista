@@ -631,7 +631,7 @@ Client-side service for the Israeli food prices API, proxied through `/price-api
 
 **`browseProducts(params)`** — TTL 5min
 - `GET /api/products/browse`
-- Params: `category`, `subcategory`, `sub_subcategory`, `is_vegan`, `allergen_free`, `city`, `store_type`, `limit`, `page`
+- Params: `category`, `subcategory`, `sub_subcategory`, `is_vegan`, `allergen_free`, `delivery_city_name`, `store_type`, `limit`, `page`
 - Returns `ProductBrowseResult` (`{ total, page, limit, products: DbProductEnhanced[] }`)
 
 **`getProductDetail(barcode)`** — TTL 10min
@@ -656,6 +656,7 @@ Client-side service for the Israeli food prices API, proxied through `/price-api
 - Many `image_url` values point to `https://www.rami-levy.co.il/product/{barcode}/large.jpg` which returns 404 (stale CDN paths). The frontend falls back to a `Package` placeholder icon. **Backend fix needed**: re-crawl image URLs or set `image_url = NULL` for broken entries.
 
 #### Resolved Issues
+- **Browse by category returned no products when city selected** — The `browseProducts()` call passed the city as `city` query param, but the API expects `delivery_city_name`. This caused the browse endpoint to return 0–1 results when a city was selected (same class of bug as the search/city fix in `cd5a124`). **Fixed in frontend**: `priceDbService.ts` now maps `city` → `delivery_city_name` for the browse endpoint.
 - **`min_price` reflected only regular prices** — The browse/search endpoints computed `min_price` as `MIN(price)`, ignoring active promotions. This caused a visible inconsistency: a product card showed ₪14.90 as the best price while the detail modal showed ₪12.90 (Rami Levy promo). **Fixed in backend**: browse and search queries now compute `min_price` as `MIN(effective_price)` so the cheapest promotion price is always reflected in card display. `max_price` remains `MAX(price)` (the most expensive regular price, used as the "before discount" anchor).
 
 ---
@@ -2983,7 +2984,7 @@ Three new functions:
 | Function | Notes |
 |----------|-------|
 | `getCategories()` | Unwraps `{total, categories}` API response (was incorrectly treated as bare array, causing blank category grid) |
-| `browseProducts(params)` | Full param set: category, subcategory, sub_subcategory, is_vegan, allergen_free, city, store_type, limit, page. Cache key includes all params. |
+| `browseProducts(params)` | Full param set: category, subcategory, sub_subcategory, is_vegan, allergen_free, delivery_city_name (mapped from `city` param), store_type, limit, page. Cache key includes all params. |
 | `getProductDetail(barcode)` | Returns `DbProductDetail` with `prices[]`; `null` on error |
 
 `searchProducts()` updated to accept `is_vegan?: boolean` and `allergen_free?: string[]` and forward them as query params.
