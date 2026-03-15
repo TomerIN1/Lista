@@ -210,7 +210,10 @@ export const TRANSLATIONS = {
       cartEmpty: "Add products to start",
       expandCart: "Show list",
       collapseCart: "Hide list",
-      clearAll: "Clear all"
+      clearAll: "Clear all",
+      availableStores: "Available stores",
+      collectAvailable: "Collect",
+      noStoresAvailable: "No stores found in your area"
     },
     errors: {
       organizeFailed: "Failed to organize list.",
@@ -427,7 +430,10 @@ export const TRANSLATIONS = {
       cartEmpty: "הוסף מוצרים להתחיל",
       expandCart: "הצג רשימה",
       collapseCart: "הסתר רשימה",
-      clearAll: "נקה הכל"
+      clearAll: "נקה הכל",
+      availableStores: "חנויות זמינות",
+      collectAvailable: "איסוף",
+      noStoresAvailable: "לא נמצאו חנויות באזור שלך"
     },
     errors: {
       organizeFailed: "נכשל בסידור הרשימה.",

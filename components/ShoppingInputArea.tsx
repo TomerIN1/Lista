@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   ArrowRight, ArrowLeft, ShoppingCart, Trash2, Pencil, Check,
-  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, X,
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, X, Store,
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { DbProduct, ShoppingProduct, Unit } from '../types';
+import { DbProduct, ShoppingProduct, Unit, DeliveryCheckResult } from '../types';
+import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
 import ProductCatalogArea from './ProductCatalogArea';
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
@@ -18,6 +19,8 @@ interface ShoppingInputAreaProps {
   onTitleChange?: (title: string) => void;
   city?: string;
   storeType?: string;
+  deliveryCheck?: DeliveryCheckResult | null;
+  shoppingMode?: string | null;
   onBack?: () => void;
 }
 
@@ -30,6 +33,8 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   onTitleChange,
   city,
   storeType,
+  deliveryCheck,
+  shoppingMode,
   onBack,
 }) => {
   const { t, isRTL, tUnit } = useLanguage();
@@ -134,6 +139,43 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         </div>
         {onBack ? <div className="w-[68px] sm:w-[120px] flex-shrink-0" /> : <div className="w-0" />}
       </div>
+
+      {/* ── Available stores banner ─────────────────────── */}
+      {deliveryCheck && (() => {
+        const isOnline = shoppingMode === 'online';
+        const availableChains = deliveryCheck.chains.filter(c =>
+          isOnline ? (c.delivers || c.click_and_collect) : true
+        );
+        if (availableChains.length === 0) return (
+          <div className="px-4 py-2 text-xs text-slate-400 text-center">
+            {t('productBrowse.noStoresAvailable')}
+          </div>
+        );
+        return (
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-100 overflow-x-auto scrollbar-none">
+            <div className="flex items-center gap-1 text-xs text-slate-500 flex-shrink-0">
+              <Store className="w-3.5 h-3.5" />
+              <span>{t('productBrowse.availableStores')}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {availableChains.map(c => (
+                <span
+                  key={c.chain}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-medium whitespace-nowrap"
+                >
+                  {SUPERMARKET_NAME_MAP[c.chain] || c.chain}
+                  {isOnline && c.delivers && c.delivery_fee != null && (
+                    <span className="text-emerald-500">₪{c.delivery_fee}</span>
+                  )}
+                  {isOnline && !c.delivers && c.click_and_collect && (
+                    <span className="text-amber-600">{t('productBrowse.collectAvailable')}</span>
+                  )}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Catalog (browse + search) ───────────────────── */}
       <ProductCatalogArea

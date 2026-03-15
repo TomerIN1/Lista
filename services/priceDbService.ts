@@ -24,7 +24,7 @@ import {
 const API_BASE = '/price-api';
 
 // Map English API names → Hebrew display names
-const SUPERMARKET_NAME_MAP: Record<string, string> = {
+export const SUPERMARKET_NAME_MAP: Record<string, string> = {
   'Shufersal': 'שופרסל',
   'Victory': 'ויקטורי',
   'Market Warehouses': 'מחסני השוק',

@@ -109,6 +109,7 @@ The application supports both authenticated users (via Google Sign-In) and guest
   - `+₪X.XX` price difference vs cheapest shown on every non-cheapest row
   - Sticky "הוסף" / "נוסף" button pinned to modal bottom
 - **Collapsible Cart Footer**: Collapsed bar shows item count + Compare button; expanded shows full list with qty/unit controls, product metadata (barcode, manufacturer, category breadcrumb), and price
+- **Available Stores Banner**: Compact chip row between header and catalog showing which supermarket chains serve the user's selected city. Online mode shows delivery fee (₪XX) or "איסוף" (collect) badge per chain; physical mode shows all chain names. Uses `checkDelivery()` API data.
 - **Load More**: Paginated product loading (24 per page) with Load More button
 
 ### 🤝 Collaboration
@@ -605,6 +606,13 @@ Full product details rendered as a portal modal.
 **Location**: `components/ShoppingInputArea.tsx`
 
 Shopping mode list builder. Hosts `ProductCatalogArea` (browse/search) and a collapsible cart footer.
+
+**Available Stores Banner** (between header and catalog):
+- Renders when `deliveryCheck` prop is non-null (i.e., delivery API has responded)
+- Online mode: shows chains where `delivers || click_and_collect`; chips include delivery fee or "איסוף" badge
+- Physical mode: shows all chains (all represent stores in the city area)
+- Empty state: "לא נמצאו חנויות באזור שלך" message
+- Uses `SUPERMARKET_NAME_MAP` from `priceDbService` for Hebrew chain names
 
 **Cart footer**:
 - **Collapsed**: `🛒 N מוצרים` + Compare Prices button
@@ -3036,8 +3044,27 @@ Added `productBrowse` namespace with 20 keys in both `en` and `he`:
 | `components/ProductCatalogArea.tsx` | **New** | Full catalog: category grid, browse/search, filter dropdown, detail modal |
 | `components/ShoppingInputArea.tsx` | Modified | Replaced `ProductSearchInput` with `ProductCatalogArea`; collapsible cart footer bar |
 
+### Supermarket Availability Banner in Shopping Mode (March 2026)
+
+Added a compact banner inside `ShoppingInputArea` that shows which supermarket chains are available in the user's selected city, giving immediate visibility before browsing products.
+
+**Changes**:
+- **`services/priceDbService.ts`**: Exported `SUPERMARKET_NAME_MAP` so other components can map English chain names → Hebrew display names.
+- **`App.tsx`**: Removed the `selectedShoppingMode === 'online'` guard on `checkDelivery()` so it fires for both physical and online modes. Passed `deliveryCheck` and `shoppingMode` props to `<ShoppingInputArea>`.
+- **`components/ShoppingInputArea.tsx`**: Added a horizontally-scrollable chip banner between the header and `ProductCatalogArea`. Online mode chips show delivery fee (₪XX) or "איסוף" badge for click-and-collect-only chains. Physical mode shows all chain names. Banner doesn't render until delivery check completes (no flash).
+- **`constants/translations.ts`**: Added `productBrowse.availableStores`, `productBrowse.collectAvailable`, `productBrowse.noStoresAvailable` in EN + HE.
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `services/priceDbService.ts` | Modified | Exported `SUPERMARKET_NAME_MAP` |
+| `App.tsx` | Modified | `checkDelivery()` fires for both modes; passed `deliveryCheck`/`shoppingMode` props |
+| `components/ShoppingInputArea.tsx` | Modified | Added available-stores chip banner with delivery fee / collect badges |
+| `constants/translations.ts` | Modified | Added 3 translation keys (EN + HE) |
+
 ---
 
-**Last Updated**: February 27, 2026
-**Version**: 4.3.1
+**Last Updated**: March 15, 2026
+**Version**: 4.4.0
 **Status**: Production Ready

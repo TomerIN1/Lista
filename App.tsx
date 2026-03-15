@@ -668,8 +668,8 @@ const App: React.FC = () => {
   }, []);
 
   const handleSetupProceed = async () => {
-    // For online mode, run the delivery check in the background while transitioning
-    if (selectedShoppingMode === 'online' && shoppingCity) {
+    // Run the delivery check in the background while transitioning (both modes)
+    if (shoppingCity) {
       // Fire-and-forget: don't block the transition, results will be ready by compare time
       checkDelivery(shoppingCity, shoppingLocation?.streetName)
         .then((result) => setDeliveryCheck(result))
@@ -963,6 +963,8 @@ const App: React.FC = () => {
                         onTitleChange={user && activeListId ? handleTitleUpdate : undefined}
                         city={shoppingCity || undefined}
                         storeType={selectedShoppingMode || undefined}
+                        deliveryCheck={deliveryCheck}
+                        shoppingMode={selectedShoppingMode}
                         onBack={() => {
                           setShoppingStep('setup');
                         }}
