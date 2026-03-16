@@ -29,7 +29,7 @@ const CATEGORY_ORDER: string[] = [
   'חטיפים מתוקים ופיצוחים',
   'בריאות טבע וללא גלוטן',
   'יין בירה ואלכוהול',
-  'נקיון כביסה וחד פעמי',
+  'ניקיון כביסה וחד פעמי',
   'בית מטבח ואירוח',
   'פארם טיפוח אישי ובריאות',
   'תינוקות',
@@ -531,7 +531,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                   <img
                     src={getCategoryIconSrc(cat.name)}
                     alt=""
-                    className="w-10 h-10 object-contain"
+                    className="w-full h-24 object-contain"
                     loading="lazy"
                   />
                   <span className="text-[11px] font-semibold text-slate-700 leading-tight line-clamp-2">{cat.name}</span>
