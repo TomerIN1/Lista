@@ -7,34 +7,51 @@ import { useDebounce } from '../hooks/useDebounce';
 import ProductCard from './ProductCard';
 import ProductDetailModal from './ProductDetailModal';
 
-// ─── Category icon / colour map ─────────────────────────────────────────────
-// normalise spaces so "בשר  ודגים" (double-space) still matches
-const CATEGORY_ICONS_RAW: Record<string, { emoji: string; bg: string }> = {
-  'שימורים בישול ואפיה':              { emoji: '🥫', bg: 'bg-orange-50' },
-  'חלב ביצים וסלטים':                 { emoji: '🥛', bg: 'bg-blue-50' },
-  'בשר ודגים':                         { emoji: '🥩', bg: 'bg-red-50' },
-  'לחם ומאפים טריים':                  { emoji: '🍞', bg: 'bg-amber-50' },
-  'חטיפים ומתוקים':                   { emoji: '🍫', bg: 'bg-pink-50' },
-  'משקאות':                            { emoji: '🥤', bg: 'bg-cyan-50' },
-  'קפואים':                            { emoji: '❄️', bg: 'bg-indigo-50' },
-  'אחזקת הבית ובע"ח':                  { emoji: '🏠', bg: 'bg-slate-50' },
-  'מוצרי ניקיון':                      { emoji: '🧹', bg: 'bg-teal-50' },
-  'פארם ותינוקות':                     { emoji: '💊', bg: 'bg-emerald-50' },
-  'חד-פעמי ומתכלה':                   { emoji: '🍽️', bg: 'bg-yellow-50' },
-  'אורגני ובריאות':                    { emoji: '🌿', bg: 'bg-green-50' },
-  'קטניות ודגנים':                    { emoji: '🌾', bg: 'bg-amber-50' },
-  'פירות וירקות':                     { emoji: '🍎', bg: 'bg-rose-50' },
-  'מבצעים וקופוני פירות וירקות':       { emoji: '🎁', bg: 'bg-rose-50' },
-};
+// ─── Category icon helpers ──────────────────────────────────────────────────
 
-// Build a normalised lookup (collapse multiple spaces → single space)
-const CATEGORY_ICONS: Record<string, { emoji: string; bg: string }> = {};
-for (const [k, v] of Object.entries(CATEGORY_ICONS_RAW)) {
-  CATEGORY_ICONS[k.replace(/\s+/g, ' ')] = v;
+/** Resolve SVG icon path for a category (file names match Hebrew category names) */
+function getCategoryIconSrc(name: string): string {
+  const normalised = name.replace(/\s+/g, ' ');
+  return `/category-icons/${encodeURIComponent(normalised)}.svg`;
 }
 
-function getCategoryIcon(name: string) {
-  return CATEGORY_ICONS[name.replace(/\s+/g, ' ')] ?? { emoji: '🛒', bg: 'bg-slate-50' };
+// Preferred display order: classic grocery first, lifestyle/other last.
+// Categories not in this list appear after the listed ones, sorted alphabetically.
+const CATEGORY_ORDER: string[] = [
+  'פירות וירקות',
+  'מוצרי חלב וביצים',
+  'בשר עוף דגים ומעדניה',
+  'לחם מאפים ודגני בוקר',
+  'מזווה בישול ואפייה',
+  'שימורים רטבים וממרחים',
+  'קפואים',
+  'משקאות',
+  'חטיפים מתוקים ופיצוחים',
+  'בריאות טבע וללא גלוטן',
+  'יין בירה ואלכוהול',
+  'נקיון כביסה וחד פעמי',
+  'בית מטבח ואירוח',
+  'פארם טיפוח אישי ובריאות',
+  'תינוקות',
+  'חיות מחמד',
+  'פנאי נסיעות ועונתי',
+  'פרחים גינה וחוץ',
+  'חשמל אלקטרוניקה וסוללות',
+  'טבק ועישון',
+  'טקסטיל והלבשה בסיסית',
+  'אחר ולא מסווג',
+];
+
+function sortCategories(cats: CategoryNode[]): CategoryNode[] {
+  const orderMap = new Map(CATEGORY_ORDER.map((name, i) => [name.replace(/\s+/g, ' '), i]));
+  return [...cats].sort((a, b) => {
+    const aN = a.name.replace(/\s+/g, ' ');
+    const bN = b.name.replace(/\s+/g, ' ');
+    const aIdx = orderMap.get(aN) ?? 999;
+    const bIdx = orderMap.get(bN) ?? 999;
+    if (aIdx !== bIdx) return aIdx - bIdx;
+    return aN.localeCompare(bN, 'he');
+  });
 }
 
 const ALLERGEN_LIST = ['גלוטן', 'חלב', 'ביצים', 'אגוזים', 'בוטנים', 'סויה', 'דגים', 'שומשום'];
@@ -213,7 +230,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
     setIsLoadingCategories(true);
     getCategories()
       .then((cats) => {
-        setCategories(cats.filter((c) => !/^\d+$/.test(c.name)));
+        setCategories(sortCategories(cats.filter((c) => !/^\d+$/.test(c.name))));
       })
       .catch(() => setCategories([]))
       .finally(() => setIsLoadingCategories(false));
@@ -504,21 +521,22 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2.5">
-              {categories.map((cat) => {
-                const icon = getCategoryIcon(cat.name);
-                return (
-                  <button
-                    key={cat.name}
-                    type="button"
-                    onClick={() => handleCategoryClick(cat.name)}
-                    className={`${icon.bg} rounded-xl p-3 flex flex-col items-center gap-1.5 border border-white hover:shadow-md hover:-translate-y-0.5 transition-all text-center`}
-                  >
-                    <span className="text-2xl leading-none">{icon.emoji}</span>
-                    <span className="text-[11px] font-semibold text-slate-700 leading-tight line-clamp-2">{cat.name}</span>
-                    <span className="text-[10px] text-slate-400">{cat.count}</span>
-                  </button>
-                );
-              })}
+              {categories.map((cat) => (
+                <button
+                  key={cat.name}
+                  type="button"
+                  onClick={() => handleCategoryClick(cat.name)}
+                  className="bg-slate-50 rounded-xl p-3 flex flex-col items-center gap-1.5 border border-white hover:shadow-md hover:-translate-y-0.5 transition-all text-center"
+                >
+                  <img
+                    src={getCategoryIconSrc(cat.name)}
+                    alt=""
+                    className="w-10 h-10 object-contain"
+                    loading="lazy"
+                  />
+                  <span className="text-[11px] font-semibold text-slate-700 leading-tight line-clamp-2">{cat.name}</span>
+                </button>
+              ))}
             </div>
           )
         )}
