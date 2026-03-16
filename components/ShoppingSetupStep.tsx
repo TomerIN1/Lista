@@ -67,12 +67,12 @@ const ShoppingSetupStep: React.FC<ShoppingSetupStepProps> = ({
     }
   }, [selectedAddress]);
 
-  // Open dropdown when suggestions arrive
+  // Open dropdown when suggestions arrive (but not if an address is already selected)
   useEffect(() => {
-    if (suggestions.length > 0) {
+    if (suggestions.length > 0 && !selectedAddress) {
       setIsDropdownOpen(true);
     }
-  }, [suggestions]);
+  }, [suggestions, selectedAddress]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -223,7 +223,7 @@ const ShoppingSetupStep: React.FC<ShoppingSetupStepProps> = ({
                         )}
                       </button>
                     ))
-                  ) : query.trim().length >= 2 ? (
+                  ) : query.trim().length >= 2 && !selectedAddress ? (
                     <div className="px-4 py-3 text-center">
                       <p className="text-sm text-slate-500">{t('appMode.noAddressResults')}</p>
                       <button
