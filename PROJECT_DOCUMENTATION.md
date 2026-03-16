@@ -95,7 +95,7 @@ The application supports both authenticated users (via Google Sign-In) and guest
 - **Works Offline**: Recipe mode fully functional in guest mode
 
 ### 🛒 Shopping Mode — Supermarket-Style Product Catalog
-- **3-Level Category Navigation**: Browse products by category › subcategory › sub_subcategory with horizontal chip navigation
+- **3-Level Category Navigation**: Browse products by category › subcategory › sub_subcategory with horizontal chip navigation. Categories display custom SVG illustration icons (served from `/public/category-icons/`) and are sorted in grocery-first order (produce, dairy, meat → lifestyle, pets, garden → other)
 - **Product Grid**: 2-col (mobile) / 3-col (desktop) card grid with product image, name, manufacturer, price
 - **Promo Badges**: `-X%` rose pill on cards and in the detail modal when `min_price < max_price`; shows savings amount ("חיסכון ₪X")
 - **Filter Panel**: Vegan-only toggle + allergen-free multi-select (גלוטן, חלב, ביצים, etc.) with active chip summary row
@@ -3063,8 +3063,23 @@ Added a compact banner inside `ShoppingInputArea` that shows which supermarket c
 | `components/ShoppingInputArea.tsx` | Modified | Added available-stores chip banner with delivery fee / collect badges |
 | `constants/translations.ts` | Modified | Added 3 translation keys (EN + HE) |
 
+### Category SVG Icons & Sort Order (March 2026)
+
+Replaced emoji-based category icons with high-quality SVG illustrations and added a fixed display order for categories.
+
+**Changes**:
+- **`public/category-icons/`**: Added 23 SVG illustration files (one per category, Hebrew filenames matching API names). Renamed `נקיון` → `ניקיון` to match API spelling.
+- **`components/ProductCatalogArea.tsx`**: Replaced `CATEGORY_ICONS_RAW` emoji map with `getCategoryIconSrc()` that resolves SVG paths by category name. Added `CATEGORY_ORDER` array and `sortCategories()` to display grocery-first order. Removed product count from category tiles. Icons render at full tile width (`w-full h-24`).
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `public/category-icons/*.svg` | **New** | 23 category illustration SVGs |
+| `components/ProductCatalogArea.tsx` | Modified | SVG icons, category sort order, removed product count |
+
 ---
 
-**Last Updated**: March 15, 2026
-**Version**: 4.4.0
+**Last Updated**: March 16, 2026
+**Version**: 4.5.0
 **Status**: Production Ready
