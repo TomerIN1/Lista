@@ -661,7 +661,7 @@ Client-side service for the Israeli food prices API, proxied through `/price-api
 - Returns per-chain delivery availability + eligible store ref IDs
 
 #### Known Issues
-- Many `image_url` values point to `https://www.rami-levy.co.il/product/{barcode}/large.jpg` which returns 404 (stale CDN paths). The frontend falls back to a `Package` placeholder icon. **Backend fix needed**: re-crawl image URLs or set `image_url = NULL` for broken entries.
+- ~39.5% of products (~15,800 / 40,147) have images stored in S3 on Railway. Products without images show a `Package` placeholder icon.
 
 #### Resolved Issues
 - **Browse by category returned no products when city selected** — The `browseProducts()` call passed the city as `city` query param, but the API expects `delivery_city_name`. This caused the browse endpoint to return 0–1 results when a city was selected (same class of bug as the search/city fix in `cd5a124`). **Fixed in frontend**: `priceDbService.ts` now maps `city` → `delivery_city_name` for the browse endpoint.
@@ -1944,7 +1944,7 @@ Fixed the SavingsReport to show accurate item counts relative to the full shoppi
 
 ### Product Images in Shopping Mode (February 2026)
 
-Added product image support to the shopping mode search and selection flow. The API now returns an `image_url` field (Cloudinary URLs) for products that have images scraped.
+Added product image support to the shopping mode search and selection flow. The API returns an `image_url` field for products that have images stored in S3 (Railway).
 
 **Changes**:
 - **`types.ts`**: Added `image_url: string | null` to `DbProduct` interface
@@ -3078,8 +3078,25 @@ Replaced emoji-based category icons with high-quality SVG illustrations and adde
 | `public/category-icons/*.svg` | **New** | 23 category illustration SVGs |
 | `components/ProductCatalogArea.tsx` | Modified | SVG icons, category sort order, removed product count |
 
+### Product Image Proxy Fix & UX Updates (March 2026)
+
+Fixed product images not displaying. The API returns `image_url` as a relative path (e.g. `/api/images/7290113704794.jpg`) but the frontend wasn't routing it through the `/price-api` proxy.
+
+**Changes**:
+- **`services/priceDbService.ts`**: Added `proxyImageUrl()` helper that prefixes relative `image_url` paths with `/price-api`. Applied in `searchProducts()`, `browseProducts()`, and `getProductDetail()` so all consumers receive correctly-proxied URLs.
+- **`App.tsx`**: Default `appMode` changed from `'organize'` to `'shopping'`.
+- **`constants/translations.ts`**: Updated app subtitle/slogan to reflect shopping focus.
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `services/priceDbService.ts` | Modified | Added `proxyImageUrl()`, applied to search/browse/detail responses |
+| `App.tsx` | Modified | Default mode → shopping |
+| `constants/translations.ts` | Modified | Updated subtitle EN + HE |
+
 ---
 
-**Last Updated**: March 16, 2026
-**Version**: 4.5.0
+**Last Updated**: March 17, 2026
+**Version**: 4.6.0
 **Status**: Production Ready

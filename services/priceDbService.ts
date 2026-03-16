@@ -32,6 +32,14 @@ export const SUPERMARKET_NAME_MAP: Record<string, string> = {
   'Rami Levy': 'רמי לוי',
 };
 
+/** Prefix relative image_url paths with the API proxy base so <img> tags resolve correctly. */
+function proxyImageUrl(url: string | null): string | null {
+  if (!url) return null;
+  // Already absolute or already proxied
+  if (url.startsWith('http') || url.startsWith(API_BASE)) return url;
+  return `${API_BASE}${url}`;
+}
+
 // ============================================
 // LRU Cache
 // ============================================
@@ -138,6 +146,7 @@ export async function searchProducts(
   if (allergen_free && allergen_free.length > 0) params.allergen_free = allergen_free.join(',');
 
   const result = await apiFetch<DbProductSearchResult>('/api/products/search', params);
+  result.products.forEach(p => { p.image_url = proxyImageUrl(p.image_url); });
 
   cache.set(cacheKey, result, SEARCH_TTL);
   return result;
@@ -184,6 +193,7 @@ export async function browseProducts(params: {
   if (params.page) apiParams.page = params.page;
 
   const result = await apiFetch<ProductBrowseResult>('/api/products/browse', apiParams);
+  result.products.forEach(p => { p.image_url = proxyImageUrl(p.image_url); });
   cache.set(cacheKey, result, SEARCH_TTL);
   return result;
 }
@@ -196,6 +206,7 @@ export async function getProductDetail(barcode: string): Promise<DbProductDetail
 
   try {
     const result = await apiFetch<DbProductDetail>(`/api/products/${barcode}`);
+    result.image_url = proxyImageUrl(result.image_url);
     cache.set(cacheKey, result, PRICES_TTL);
     return result;
   } catch {
