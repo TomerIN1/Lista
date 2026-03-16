@@ -213,7 +213,19 @@ export const TRANSLATIONS = {
       clearAll: "Clear all",
       availableStores: "Available stores",
       collectAvailable: "Collect",
-      noStoresAvailable: "No stores found in your area"
+      noStoresAvailable: "No stores found in your area",
+      sortBy: "Sort",
+      sortDefault: "Default",
+      sortPriceAsc: "Price: Low → High",
+      sortPriceDesc: "Price: High → Low",
+      sortNameAsc: "Name: A → Z",
+      sortNameDesc: "Name: Z → A",
+      onSale: "On Sale",
+      priceRange: "Price Range",
+      minPrice: "Min",
+      maxPrice: "Max",
+      sortingLoaded: "Sorting loaded products",
+      allStores: "All Stores"
     },
     errors: {
       organizeFailed: "Failed to organize list.",
@@ -433,7 +445,19 @@ export const TRANSLATIONS = {
       clearAll: "נקה הכל",
       availableStores: "חנויות זמינות",
       collectAvailable: "איסוף",
-      noStoresAvailable: "לא נמצאו חנויות באזור שלך"
+      noStoresAvailable: "לא נמצאו חנויות באזור שלך",
+      sortBy: "מיון",
+      sortDefault: "ברירת מחדל",
+      sortPriceAsc: "מחיר: נמוך ← גבוה",
+      sortPriceDesc: "מחיר: גבוה ← נמוך",
+      sortNameAsc: "שם: א ← ת",
+      sortNameDesc: "שם: ת ← א",
+      onSale: "במבצע",
+      priceRange: "טווח מחירים",
+      minPrice: "מינימום",
+      maxPrice: "מקסימום",
+      sortingLoaded: "ממיין מוצרים שנטענו",
+      allStores: "כל החנויות"
     },
     errors: {
       organizeFailed: "נכשל בסידור הרשימה.",

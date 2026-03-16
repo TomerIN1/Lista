@@ -3,6 +3,7 @@ export type Language = 'en' | 'he';
 export type InputMode = 'items' | 'recipe';
 export type AppMode = 'organize' | 'shopping';
 export type ShoppingFlowStep = 'setup' | 'build_list' | 'comparing' | 'results' | 'ready';
+export type ProductSortOption = 'default' | 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc';
 
 export interface Recipe {
   id: string;

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, X, Loader2, Leaf, ChevronRight, SlidersHorizontal, Check } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Search, X, Loader2, Leaf, ChevronRight, SlidersHorizontal, Check, ArrowUpDown, Tag, DollarSign } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { DbProductEnhanced, ShoppingProduct, Unit, CategoryNode } from '../types';
+import { DbProductEnhanced, ShoppingProduct, Unit, CategoryNode, ProductSortOption } from '../types';
 import { getCategories, browseProducts, searchProducts } from '../services/priceDbService';
 import { useDebounce } from '../hooks/useDebounce';
 import ProductCard from './ProductCard';
@@ -66,6 +66,7 @@ interface ProductCatalogAreaProps {
   disabled?: boolean;
   city?: string;
   storeType?: string;
+  selectedChains?: string[];
 }
 
 type View = 'categories' | 'browse' | 'search';
@@ -78,12 +79,20 @@ interface FilterPanelProps {
   onToggleVegan: () => void;
   filterAllergenFree: string[];
   onToggleAllergen: (a: string) => void;
+  filterOnSale: boolean;
+  onToggleOnSale: () => void;
+  priceMin: string;
+  priceMax: string;
+  onPriceMinChange: (v: string) => void;
+  onPriceMaxChange: (v: string) => void;
   onClearFilters: () => void;
   activeCount: number;
 }
 
 const FilterPanel: React.FC<FilterPanelProps> = ({
-  filterVegan, onToggleVegan, filterAllergenFree, onToggleAllergen, onClearFilters, activeCount
+  filterVegan, onToggleVegan, filterAllergenFree, onToggleAllergen,
+  filterOnSale, onToggleOnSale, priceMin, priceMax, onPriceMinChange, onPriceMaxChange,
+  onClearFilters, activeCount
 }) => {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -142,6 +151,50 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 </span>
               </button>
 
+              {/* On Sale toggle */}
+              <button
+                type="button"
+                onClick={onToggleOnSale}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                <span className="flex items-center gap-2 text-sm text-slate-700 font-medium">
+                  <Tag className="w-4 h-4 text-red-500" />
+                  {t('productBrowse.onSale')}
+                </span>
+                <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+                  filterOnSale ? 'bg-red-500 border-red-500' : 'border-slate-300'
+                }`}>
+                  {filterOnSale && <Check className="w-3 h-3 text-white" />}
+                </span>
+              </button>
+
+              {/* Price range */}
+              <div className="h-px bg-slate-100 my-2" />
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">
+                {t('productBrowse.priceRange')}
+              </p>
+              <div className="flex items-center gap-2 px-3 pb-1">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder={t('productBrowse.minPrice')}
+                  value={priceMin}
+                  onChange={(e) => onPriceMinChange(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-400 text-center"
+                />
+                <span className="text-slate-400 text-xs">–</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder={t('productBrowse.maxPrice')}
+                  value={priceMax}
+                  onChange={(e) => onPriceMaxChange(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-400 text-center"
+                />
+              </div>
+
               {/* Allergen list */}
               <div className="h-px bg-slate-100 my-2" />
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">
@@ -186,6 +239,78 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   );
 };
 
+// ─── Sort dropdown ──────────────────────────────────────────────────────────
+interface SortDropdownProps {
+  sortBy: ProductSortOption;
+  onSortChange: (sort: ProductSortOption) => void;
+}
+
+const SORT_OPTIONS: ProductSortOption[] = ['default', 'price_asc', 'price_desc', 'name_asc', 'name_desc'];
+
+const SORT_LABEL_KEYS: Record<ProductSortOption, string> = {
+  default: 'productBrowse.sortDefault',
+  price_asc: 'productBrowse.sortPriceAsc',
+  price_desc: 'productBrowse.sortPriceDesc',
+  name_asc: 'productBrowse.sortNameAsc',
+  name_desc: 'productBrowse.sortNameDesc',
+};
+
+const SortDropdown: React.FC<SortDropdownProps> = ({ sortBy, onSortChange }) => {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+          sortBy !== 'default'
+            ? 'bg-blue-100 text-blue-700 border-blue-300'
+            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+        }`}
+      >
+        <ArrowUpDown className="w-3.5 h-3.5" />
+        {t('productBrowse.sortBy')}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)} />
+          <div className="absolute top-full end-0 mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-2xl w-56 overflow-hidden">
+            <div className="p-2">
+              {SORT_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => { onSortChange(option); setOpen(false); }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-colors ${
+                    sortBy === option
+                      ? 'bg-blue-50 text-blue-700 font-semibold'
+                      : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {t(SORT_LABEL_KEYS[option])}
+                  {sortBy === option && <Check className="w-4 h-4" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 // ─── Main component ───────────────────────────────────────────────────────────
 const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   selectedProducts,
@@ -194,6 +319,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   disabled = false,
   city,
   storeType,
+  selectedChains,
 }) => {
   const { t } = useLanguage();
 
@@ -216,6 +342,10 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   // Filters
   const [filterVegan, setFilterVegan] = useState(false);
   const [filterAllergenFree, setFilterAllergenFree] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<ProductSortOption>('default');
+  const [filterOnSale, setFilterOnSale] = useState(false);
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
 
   // Detail modal
   const [detailBarcode, setDetailBarcode] = useState<string | null>(null);
@@ -224,7 +354,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
 
   const fetchId = useRef(0);
 
-  const activeFilterCount = (filterVegan ? 1 : 0) + filterAllergenFree.length;
+  const activeFilterCount = (filterVegan ? 1 : 0) + filterAllergenFree.length + (filterOnSale ? 1 : 0) + (priceMin ? 1 : 0) + (priceMax ? 1 : 0);
 
   // ── Load categories on mount ─────────────────────────────────────────────
   useEffect(() => {
@@ -247,6 +377,12 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
         let result: { products: DbProductEnhanced[]; total: number };
 
         if (debouncedQuery.trim().length >= 2) {
+          // Map sort option to API params (search API supports sort_by=min_price)
+          let apiSortBy: string | undefined;
+          let apiSortOrder: string | undefined;
+          if (sortBy === 'price_asc') { apiSortBy = 'min_price'; apiSortOrder = 'asc'; }
+          else if (sortBy === 'price_desc') { apiSortBy = 'min_price'; apiSortOrder = 'desc'; }
+
           const sr = await searchProducts(
             debouncedQuery.trim(),
             PAGE_SIZE,
@@ -254,7 +390,10 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
             city,
             storeType,
             filterVegan || undefined,
-            filterAllergenFree.length > 0 ? filterAllergenFree : undefined
+            filterAllergenFree.length > 0 ? filterAllergenFree : undefined,
+            apiSortBy,
+            apiSortOrder,
+            selectedChains && selectedChains.length > 0 ? selectedChains : undefined
           );
           result = { products: sr.products as DbProductEnhanced[], total: sr.total };
         } else {
@@ -266,6 +405,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
             allergen_free: filterAllergenFree.length > 0 ? filterAllergenFree : undefined,
             city,
             store_type: storeType,
+            chains: selectedChains && selectedChains.length > 0 ? selectedChains : undefined,
             limit: PAGE_SIZE,
             page,
           });
@@ -286,7 +426,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
         if (id === fetchId.current) setIsLoadingProducts(false);
       }
     },
-    [debouncedQuery, selectedCategory, selectedSubcategory, selectedSubSubcategory, filterVegan, filterAllergenFree, city, storeType]
+    [debouncedQuery, selectedCategory, selectedSubcategory, selectedSubSubcategory, filterVegan, filterAllergenFree, city, storeType, sortBy, selectedChains]
   );
 
   // Re-fetch when browse params change
@@ -295,7 +435,15 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
       fetchProducts(1, true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selectedCategory, selectedSubcategory, selectedSubSubcategory, filterVegan, filterAllergenFree]);
+  }, [view, selectedCategory, selectedSubcategory, selectedSubSubcategory, filterVegan, filterAllergenFree, selectedChains]);
+
+  // Re-fetch search results when sort or chain filter changes
+  useEffect(() => {
+    if (view === 'search' && debouncedQuery.trim().length >= 2) {
+      fetchProducts(1, true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortBy, selectedChains]);
 
   // React to debounced search query
   useEffect(() => {
@@ -339,6 +487,10 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
     setView('categories');
     setProducts([]);
     setTotalProducts(0);
+    setSortBy('default');
+    setFilterOnSale(false);
+    setPriceMin('');
+    setPriceMax('');
   };
 
   const handleAddProduct = (product: DbProductEnhanced) => {
@@ -349,6 +501,39 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   const handleLoadMore = () => {
     fetchProducts(currentPage + 1, false);
   };
+
+  // ── displayProducts: client-side filter + sort ─────────────────────────────
+  const displayProducts = useMemo(() => {
+    let list = [...products];
+
+    // On-sale filter: keep products whose labels contain promo-related text
+    if (filterOnSale) {
+      list = list.filter((p) => p.labels && p.labels.length > 0);
+    }
+
+    // Price range filter
+    const minP = priceMin ? parseFloat(priceMin) : null;
+    const maxP = priceMax ? parseFloat(priceMax) : null;
+    if (minP !== null) list = list.filter((p) => p.min_price >= minP);
+    if (maxP !== null) list = list.filter((p) => p.min_price <= maxP);
+
+    // Client-side sort (always applied — serves as primary sort for browse and fallback for search)
+    if (sortBy !== 'default') {
+      list.sort((a, b) => {
+        switch (sortBy) {
+          case 'price_asc': return a.min_price - b.min_price;
+          case 'price_desc': return b.min_price - a.min_price;
+          case 'name_asc': return a.name.localeCompare(b.name, 'he');
+          case 'name_desc': return b.name.localeCompare(a.name, 'he');
+          default: return 0;
+        }
+      });
+    }
+
+    return list;
+  }, [products, filterOnSale, priceMin, priceMax, sortBy, view]);
+
+  const hasClientSideFilters = filterOnSale || priceMin !== '' || priceMax !== '';
 
   // Derived
   const activeCategoryNode = selectedCategory
@@ -386,6 +571,9 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           </button>
         )}
 
+        {/* Sort dropdown */}
+        <SortDropdown sortBy={sortBy} onSortChange={setSortBy} />
+
         {/* Filter dropdown — lives at the end of the search bar */}
         <FilterPanel
           filterVegan={filterVegan}
@@ -396,7 +584,13 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
               prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]
             )
           }
-          onClearFilters={() => { setFilterVegan(false); setFilterAllergenFree([]); }}
+          filterOnSale={filterOnSale}
+          onToggleOnSale={() => setFilterOnSale((v) => !v)}
+          priceMin={priceMin}
+          priceMax={priceMax}
+          onPriceMinChange={setPriceMin}
+          onPriceMaxChange={setPriceMax}
+          onClearFilters={() => { setFilterVegan(false); setFilterAllergenFree([]); setFilterOnSale(false); setPriceMin(''); setPriceMax(''); }}
           activeCount={activeFilterCount}
         />
       </div>
@@ -409,6 +603,24 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
               <Leaf className="w-3 h-3" />
               {t('productBrowse.veganOnly')}
               <button onClick={() => setFilterVegan(false)} className="ms-0.5 hover:opacity-70">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filterOnSale && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold border border-red-200">
+              <Tag className="w-3 h-3" />
+              {t('productBrowse.onSale')}
+              <button onClick={() => setFilterOnSale(false)} className="ms-0.5 hover:opacity-70">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {(priceMin || priceMax) && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-200 whitespace-nowrap flex-shrink-0">
+              <DollarSign className="w-3 h-3" />
+              {priceMin && `₪${priceMin}`}{priceMin && priceMax && '–'}{priceMax && `₪${priceMax}`}
+              <button onClick={() => { setPriceMin(''); setPriceMax(''); }} className="ms-0.5 hover:opacity-70">
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -548,17 +760,28 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
             <div className="flex items-center justify-center h-48">
               <div className="w-7 h-7 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin" />
             </div>
-          ) : products.length === 0 ? (
+          ) : displayProducts.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
               {t('productBrowse.noProducts')}
             </div>
           ) : (
             <>
-              {view === 'search' && totalProducts > 0 && (
-                <p className="text-xs text-slate-400 mb-2">{totalProducts} {t('productBrowse.results')}</p>
+              {totalProducts > 0 && (
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs text-slate-400">
+                    {hasClientSideFilters
+                      ? `${displayProducts.length} / ${totalProducts} ${t('productBrowse.results')}`
+                      : `${totalProducts} ${t('productBrowse.results')}`}
+                  </p>
+                  {sortBy !== 'default' && view === 'browse' && products.length < totalProducts && (
+                    <p className="text-[10px] text-blue-500 font-medium">
+                      ({t('productBrowse.sortingLoaded')})
+                    </p>
+                  )}
+                </div>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                {products.map((product) => (
+                {displayProducts.map((product) => (
                   <ProductCard
                     key={product.barcode}
                     product={product}

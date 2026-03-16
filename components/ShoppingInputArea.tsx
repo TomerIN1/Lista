@@ -41,6 +41,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(title || '');
   const [isCartExpanded, setIsCartExpanded] = useState(false);
+  const [selectedChains, setSelectedChains] = useState<string[]>([]);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -151,6 +152,12 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
             {t('productBrowse.noStoresAvailable')}
           </div>
         );
+        const toggleChain = (chain: string) => {
+          setSelectedChains(prev =>
+            prev.includes(chain) ? prev.filter(c => c !== chain) : [...prev, chain]
+          );
+        };
+        const hasFilter = selectedChains.length > 0;
         return (
           <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-100 overflow-x-auto scrollbar-none">
             <div className="flex items-center gap-1 text-xs text-slate-500 flex-shrink-0">
@@ -158,20 +165,41 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
               <span>{t('productBrowse.availableStores')}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              {availableChains.map(c => (
-                <span
-                  key={c.chain}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-medium whitespace-nowrap"
+              {/* "All" pill — shown when a filter is active so user can clear */}
+              {hasFilter && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedChains([])}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[11px] font-medium whitespace-nowrap hover:bg-slate-200 transition-colors"
                 >
-                  {SUPERMARKET_NAME_MAP[c.chain] || c.chain}
-                  {isOnline && c.delivers && c.delivery_fee != null && (
-                    <span className="text-emerald-500">₪{c.delivery_fee}</span>
-                  )}
-                  {isOnline && !c.delivers && c.click_and_collect && (
-                    <span className="text-amber-600">{t('productBrowse.collectAvailable')}</span>
-                  )}
-                </span>
-              ))}
+                  {t('productBrowse.allStores')}
+                </button>
+              )}
+              {availableChains.map(c => {
+                const isSelected = selectedChains.includes(c.chain);
+                return (
+                  <button
+                    type="button"
+                    key={c.chain}
+                    onClick={() => toggleChain(c.chain)}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${
+                      hasFilter && !isSelected
+                        ? 'bg-slate-50 text-slate-400 border border-slate-200'
+                        : isSelected
+                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300'
+                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {SUPERMARKET_NAME_MAP[c.chain] || c.chain}
+                    {isOnline && c.delivers && c.delivery_fee != null && (
+                      <span className={isSelected ? 'text-emerald-200' : 'text-emerald-500'}>₪{c.delivery_fee}</span>
+                    )}
+                    {isOnline && !c.delivers && c.click_and_collect && (
+                      <span className={isSelected ? 'text-amber-200' : 'text-amber-600'}>{t('productBrowse.collectAvailable')}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         );
@@ -186,6 +214,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         disabled={isLoading}
         city={city}
         storeType={storeType}
+        selectedChains={selectedChains}
       />
 
       {/* ── Collapsible cart bar ────────────────────────── */}

@@ -131,9 +131,12 @@ export async function searchProducts(
   city?: string,
   storeType?: string,
   is_vegan?: boolean,
-  allergen_free?: string[]
+  allergen_free?: string[],
+  sort_by?: string,
+  sort_order?: string,
+  chains?: string[]
 ): Promise<DbProductSearchResult> {
-  const cacheKey = `search:${query}:${limit}:${offset}:${city || ''}:${storeType || ''}:${is_vegan ?? ''}:${allergen_free?.join(',') || ''}`;
+  const cacheKey = `search:${query}:${limit}:${offset}:${city || ''}:${storeType || ''}:${is_vegan ?? ''}:${allergen_free?.join(',') || ''}:${sort_by || ''}:${sort_order || ''}:${chains?.join(',') || ''}`;
   const cached = cache.get<DbProductSearchResult>(cacheKey);
   if (cached) return cached;
 
@@ -144,6 +147,9 @@ export async function searchProducts(
   if (storeType) params.store_type = storeType;
   if (is_vegan) params.is_vegan = 'true';
   if (allergen_free && allergen_free.length > 0) params.allergen_free = allergen_free.join(',');
+  if (sort_by) params.sort_by = sort_by;
+  if (sort_order) params.sort_order = sort_order;
+  if (chains && chains.length > 0) params.chain = chains.join(',');
 
   const result = await apiFetch<DbProductSearchResult>('/api/products/search', params);
   result.products.forEach(p => { p.image_url = proxyImageUrl(p.image_url); });
@@ -174,10 +180,11 @@ export async function browseProducts(params: {
   allergen_free?: string[];
   city?: string;
   store_type?: string;
+  chains?: string[];
   limit?: number;
   page?: number;
 }): Promise<ProductBrowseResult> {
-  const cacheKey = `browse:${params.category || ''}:${params.subcategory || ''}:${params.sub_subcategory || ''}:${params.is_vegan ?? ''}:${params.allergen_free?.join(',') || ''}:${params.city || ''}:${params.store_type || ''}:${params.page ?? 1}`;
+  const cacheKey = `browse:${params.category || ''}:${params.subcategory || ''}:${params.sub_subcategory || ''}:${params.is_vegan ?? ''}:${params.allergen_free?.join(',') || ''}:${params.city || ''}:${params.store_type || ''}:${params.chains?.join(',') || ''}:${params.page ?? 1}`;
   const cached = cache.get<ProductBrowseResult>(cacheKey);
   if (cached) return cached;
 
@@ -189,6 +196,7 @@ export async function browseProducts(params: {
   if (params.allergen_free && params.allergen_free.length > 0) apiParams.allergen_free = params.allergen_free.join(',');
   if (params.city) apiParams.delivery_city_name = params.city;
   if (params.store_type) apiParams.store_type = params.store_type;
+  if (params.chains && params.chains.length > 0) apiParams.chain = params.chains.join(',');
   if (params.limit) apiParams.limit = params.limit;
   if (params.page) apiParams.page = params.page;
 

@@ -98,7 +98,9 @@ The application supports both authenticated users (via Google Sign-In) and guest
 - **3-Level Category Navigation**: Browse products by category › subcategory › sub_subcategory with horizontal chip navigation. Categories display custom SVG illustration icons (served from `/public/category-icons/`) and are sorted in grocery-first order (produce, dairy, meat → lifestyle, pets, garden → other)
 - **Product Grid**: 2-col (mobile) / 3-col (desktop) card grid with product image, name, manufacturer, price
 - **Promo Badges**: `-X%` rose pill on cards and in the detail modal when `min_price < max_price`; shows savings amount ("חיסכון ₪X")
-- **Filter Panel**: Vegan-only toggle + allergen-free multi-select (גלוטן, חלב, ביצים, etc.) with active chip summary row
+- **Filter Panel**: Vegan-only toggle + allergen-free multi-select (גלוטן, חלב, ביצים, etc.) + on-sale toggle + price range (min/max ₪) inputs, with active chip summary row
+- **Sort Dropdown**: 5 sort options (default, price low→high, price high→low, name א→ת, name ת→א). Browse view sorts client-side on loaded products; search view passes `sort_by=min_price` to the API for price sorts, name sorts are client-side.
+- **Chain Filter**: Toggleable supermarket pills in the Available Stores banner. Selecting one or more chains passes `chain=` to the browse/search API, filtering to products with prices at those chains with recalculated min/max prices. "All Stores" reset pill clears the filter.
 - **Search**: Debounced (300ms) full-text product search with result count; clears back to category view
 - **Product Detail Modal** (opens on card click):
   - Fixed-height image with product name/manufacturer overlaid on gradient
@@ -109,7 +111,7 @@ The application supports both authenticated users (via Google Sign-In) and guest
   - `+₪X.XX` price difference vs cheapest shown on every non-cheapest row
   - Sticky "הוסף" / "נוסף" button pinned to modal bottom
 - **Collapsible Cart Footer**: Collapsed bar shows item count + Compare button; expanded shows full list with qty/unit controls, product metadata (barcode, manufacturer, category breadcrumb), and price
-- **Available Stores Banner**: Compact chip row between header and catalog showing which supermarket chains serve the user's selected city. Online mode shows delivery fee (₪XX) or "איסוף" (collect) badge per chain; physical mode shows all chain names. Uses `checkDelivery()` API data.
+- **Available Stores Banner**: Interactive chip row between header and catalog showing which supermarket chains serve the user's selected city. Chips are toggleable — click to filter products to selected chains (API-side via `chain=` param). Online mode shows delivery fee (₪XX) or "איסוף" (collect) badge per chain; physical mode shows all chain names. Uses `checkDelivery()` API data.
 - **Load More**: Paginated product loading (24 per page) with Load More button
 
 ### 🤝 Collaboration
@@ -3095,8 +3097,40 @@ Fixed product images not displaying. The API returns `image_url` as a relative p
 | `App.tsx` | Modified | Default mode → shopping |
 | `constants/translations.ts` | Modified | Updated subtitle EN + HE |
 
+### Product Discovery: Sort, Filter & Chain Filter Enhancements (March 2026)
+
+Added sorting, additional filters (on-sale, price range), and supermarket chain filtering to the product catalog. Users can now sort by price or name, filter to on-sale products or a price range, and toggle specific supermarket chains to see only products available at those stores.
+
+**Changes**:
+- **`types.ts`**: Added `ProductSortOption` type (`'default' | 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc'`).
+- **`constants/translations.ts`**: Added 13 keys in EN + HE under `productBrowse`: `sortBy`, `sortDefault`, `sortPriceAsc`, `sortPriceDesc`, `sortNameAsc`, `sortNameDesc`, `onSale`, `priceRange`, `minPrice`, `maxPrice`, `sortingLoaded`, `allStores`.
+- **`services/priceDbService.ts`**: Added `sort_by`, `sort_order`, and `chains` params to `searchProducts()`. Added `chains` param to `browseProducts()`. Both pass `chain=` to the API for server-side chain filtering. Cache keys updated to include all new params.
+- **`components/ProductCatalogArea.tsx`**:
+  - New `SortDropdown` sub-component: 5 radio-style options with `ArrowUpDown` icon, outside-click-to-close, blue active indicator.
+  - Extended `FilterPanel`: added on-sale toggle (Tag icon, red theme), price range inputs (min/max ₪ number fields).
+  - New state: `sortBy`, `filterOnSale`, `priceMin`, `priceMax`.
+  - `displayProducts` useMemo: applies client-side on-sale filter, price range filter, and sort. Browse view always sorts client-side; search view uses API-side sort for price, client-side for name.
+  - Filter chips for on-sale and price range in the active filters row.
+  - Results count shows `displayProducts.length / totalProducts` when client-side filters reduce results.
+  - "Sorting loaded products" note when sorting browse view with more data on server.
+  - Accepts `selectedChains` prop and passes to browse/search API calls.
+  - All state resets when navigating back to categories.
+- **`components/ShoppingInputArea.tsx`**: Made available stores banner interactive — chain pills are toggleable with `selectedChains` state. Selected chains highlighted green (`bg-emerald-600 text-white`), unselected dimmed. "All Stores" reset pill appears when any chain is selected. Passes `selectedChains` to `ProductCatalogArea`.
+
+**API dependency**: Requires `chain` query parameter support on `GET /api/products/browse` and `GET /api/products/search` (added to backend separately). When `chain` is provided, the API returns only products with current prices at the specified chains, with `min_price`/`max_price`/`savings` recalculated from only those chains.
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `types.ts` | Modified | Added `ProductSortOption` type |
+| `constants/translations.ts` | Modified | Added 13 keys EN + HE (sort, on-sale, price range, allStores) |
+| `services/priceDbService.ts` | Modified | `searchProducts()`: added `sort_by`, `sort_order`, `chains` params; `browseProducts()`: added `chains` param |
+| `components/ProductCatalogArea.tsx` | Modified | `SortDropdown`, extended `FilterPanel`, `displayProducts` memo, `selectedChains` prop |
+| `components/ShoppingInputArea.tsx` | Modified | Toggleable chain pills, `selectedChains` state, passed to `ProductCatalogArea` |
+
 ---
 
 **Last Updated**: March 17, 2026
-**Version**: 4.6.0
+**Version**: 4.7.0
 **Status**: Production Ready
