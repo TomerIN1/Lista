@@ -3,8 +3,8 @@ import { Language } from '../types';
 export const TRANSLATIONS = {
   en: {
     header: {
-      subtitle: "Transform your chaotic thoughts into beautifully organized lists instantly using AI.",
-      highlight: "beautifully organized lists",
+      subtitle: "Compare prices, save money, and buy the cheapest shopping list — all in one place.",
+      highlight: "cheapest shopping list",
       login: "Sign in with Google",
       logout: "Sign Out"
     },
@@ -223,8 +223,8 @@ export const TRANSLATIONS = {
   },
   he: {
     header: {
-      subtitle: "הפוך את המחשבות המפוזרות שלך לרשימות מסודרות באמצעות AI.",
-      highlight: "רשימות מסודרות",
+      subtitle: "השוו מחירים, חסכו כסף וקנו את סל הקניות הזול ביותר — הכל במקום אחד.",
+      highlight: "סל הקניות הזול ביותר",
       login: "התחבר עם Google",
       logout: "התנתק"
     },

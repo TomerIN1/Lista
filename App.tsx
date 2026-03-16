@@ -55,7 +55,7 @@ const App: React.FC = () => {
   const [isPriceAgentOpen, setIsPriceAgentOpen] = useState(false);
 
   // App Mode State (Organize vs Shopping)
-  const [appMode, setAppMode] = useState<AppMode>('organize');
+  const [appMode, setAppMode] = useState<AppMode>('shopping');
   const [shoppingStep, setShoppingStep] = useState<ShoppingFlowStep>('setup');
   const [shoppingProducts, setShoppingProducts] = useState<ShoppingProduct[]>([]);
   const [priceComparison, setPriceComparison] = useState<ListPriceComparison | null>(null);
