@@ -174,6 +174,43 @@ export interface DbSupermarket {
 }
 
 // ============================================
+// Smart List Builder Types
+// ============================================
+
+export interface ParsedShoppingItem {
+  id: string;
+  originalText: string;    // raw segment from user input
+  name: string;            // normalized product name
+  searchQuery: string;     // optimized for searchProducts() API
+  quantity: number;        // extracted amount (default 1)
+  unit: Unit;              // extracted unit (default 'pcs')
+}
+
+export interface SmartListMatch {
+  parsedItem: ParsedShoppingItem;
+  matches: DbProduct[];      // top 3 search results
+  selectedIndex: number;      // which match is selected (0 = best)
+  status: 'matched' | 'no_match' | 'skipped';
+}
+
+export interface SearchIntent {
+  query: string;
+  limit?: number;
+  sort_by?: string;
+  sort_order?: string;
+  is_vegan?: boolean;
+}
+
+export interface SmartChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  text: string;
+  products?: DbProduct[];         // search results attached to AI messages
+  addedBarcodes?: Set<string>;    // which products were added from this message
+  isLoading?: boolean;
+}
+
+// ============================================
 // Price Comparison Results
 // ============================================
 

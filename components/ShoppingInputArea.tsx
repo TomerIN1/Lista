@@ -1,12 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   ArrowRight, ArrowLeft, ShoppingCart, Trash2, Pencil, Check,
-  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, X, Store,
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, X, Store, Sparkles,
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DbProduct, ShoppingProduct, Unit, DeliveryCheckResult } from '../types';
 import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
 import ProductCatalogArea from './ProductCatalogArea';
+import SmartListPanel from '../agents_and_ai/product-discovery-assistant/SmartListPanel';
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
@@ -42,7 +43,13 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   const [editTitle, setEditTitle] = useState(title || '');
   const [isCartExpanded, setIsCartExpanded] = useState(false);
   const [selectedChains, setSelectedChains] = useState<string[]>([]);
+  const [showSmartList, setShowSmartList] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+
+  const existingBarcodes = useMemo(
+    () => new Set(products.map((p) => p.barcode)),
+    [products]
+  );
 
   useEffect(() => {
     setEditTitle(title || '');
@@ -80,6 +87,11 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   const handleClear = () => {
     onProductsChange([]);
     setIsCartExpanded(false);
+  };
+
+  const handleSmartListConfirm = (newProducts: ShoppingProduct[]) => {
+    onProductsChange([...products, ...newProducts]);
+    setShowSmartList(false);
   };
 
   const formatPrice = (min: number, max?: number) => {
@@ -205,17 +217,44 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         );
       })()}
 
-      {/* ── Catalog (browse + search) ───────────────────── */}
-      <ProductCatalogArea
-        selectedProducts={products}
-        onSelectProduct={handleSelectProduct}
-        onRemoveProduct={handleRemoveProduct}
-        onUpdateProduct={handleUpdateProduct}
-        disabled={isLoading}
-        city={city}
-        storeType={storeType}
-        selectedChains={selectedChains}
-      />
+      {/* ── Smart List / Catalog toggle ─────────────────── */}
+      {showSmartList ? (
+        <SmartListPanel
+          onClose={() => setShowSmartList(false)}
+          onConfirm={handleSmartListConfirm}
+          existingBarcodes={existingBarcodes}
+          city={city}
+          storeType={storeType}
+          selectedChains={selectedChains}
+        />
+      ) : (
+        <>
+          {/* AI Assistant button */}
+          <div className="px-4 pt-2 pb-1">
+            <button
+              type="button"
+              onClick={() => setShowSmartList(true)}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors border border-indigo-100"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {t('smartList.pasteList')}
+            </button>
+          </div>
+
+          {/* Catalog (browse + search) */}
+          <ProductCatalogArea
+            selectedProducts={products}
+            onSelectProduct={handleSelectProduct}
+            onRemoveProduct={handleRemoveProduct}
+            onUpdateProduct={handleUpdateProduct}
+            disabled={isLoading}
+            city={city}
+            storeType={storeType}
+            selectedChains={selectedChains}
+          />
+        </>
+      )}
 
       {/* ── Collapsible cart bar ────────────────────────── */}
       <div className="border-t border-slate-100 rounded-b-3xl overflow-hidden">

@@ -114,6 +114,19 @@ The application supports both authenticated users (via Google Sign-In) and guest
 - **Available Stores Banner**: Interactive chip row between header and catalog showing which supermarket chains serve the user's selected city. Chips are toggleable — click to filter products to selected chains (API-side via `chain=` param). Online mode shows delivery fee (₪XX) or "איסוף" (collect) badge per chain; physical mode shows all chain names. Uses `checkDelivery()` API data.
 - **Load More**: Paginated product loading (24 per page) with Load More button
 
+### 🤖 Product Discovery Assistant (AI Chat)
+- **Conversational Product Search**: Chat-based AI assistant inside Shopping Mode that helps users find products via natural language — paste a list, ask questions, or search by criteria
+- **Smart Intent Detection**: AI interprets user input as shopping list, product search, price query, or general question
+- **Two-Pass AI Architecture**: First AI call generates search queries → products searched → second AI call sees actual product names/prices → generates honest, context-aware response
+- **Multi-Query Search**: For tricky queries (e.g., "milk in a bag"), AI generates multiple search variations to maximize match chances
+- **Price & Filter Support**: "cheapest milk" → sorts by price; "vegan snacks" → applies vegan filter
+- **Inline Product Cards**: Results shown as cards in the chat feed with product image, name, manufacturer, price
+- **Click for Detail**: Tap a product card to open the full `ProductDetailModal` with store-by-store price comparison
+- **Add to Cart**: Individual "Add" buttons per product + bulk "Add All" for multi-result responses
+- **Conversation Memory**: Follow-up questions work — AI maintains context within the session
+- **Bilingual**: Full Hebrew + English support with proper RTL layout
+- **Location**: `agents_and_ai/product-discovery-assistant/` — self-contained module with own README
+
 ### 🤝 Collaboration
 - **Shareable Links**: Copy and share lists with a single link that includes full list content + join URL
 - **Email Invitations**: Share lists with other users via email
@@ -227,9 +240,16 @@ Lista/
 │
 ├── services/                    # External services
 │   ├── firestoreService.ts     # Firestore operations
-│   ├── geminiService.ts        # OpenAI API integration
+│   ├── geminiService.ts        # OpenAI API (organize, recipes — shared AI functions)
 │   ├── govDataService.ts       # data.gov.il address autocomplete
 │   └── priceDbService.ts       # Israeli food prices API (browse, search, compare, delivery)
+│
+├── agents_and_ai/               # AI-powered features (self-contained modules)
+│   └── product-discovery-assistant/
+│       ├── README.md            # Full feature documentation
+│       ├── SmartListPanel.tsx   # Chat UI component (messages feed, product cards, input)
+│       ├── aiService.ts         # AI functions (parseShoppingList, smartAssistant, summarizeResults)
+│       └── smartListService.ts  # Orchestration (buildSmartList, processSmartChat)
 │
 └── node_modules/                # Dependencies (not in git)
 ```
@@ -607,7 +627,7 @@ Full product details rendered as a portal modal.
 ### ShoppingInputArea.tsx
 **Location**: `components/ShoppingInputArea.tsx`
 
-Shopping mode list builder. Hosts `ProductCatalogArea` (browse/search) and a collapsible cart footer.
+Shopping mode list builder. Hosts `ProductCatalogArea` (browse/search), an **AI Assistant** toggle (Product Discovery Assistant from `agents_and_ai/product-discovery-assistant/`), and a collapsible cart footer. The "AI Assistant" pill button above the catalog swaps `ProductCatalogArea` for `SmartListPanel` — a conversational chat that helps users find products via natural language.
 
 **Available Stores Banner** (between header and catalog):
 - Renders when `deliveryCheck` prop is non-null (i.e., delivery API has responded)
@@ -674,7 +694,7 @@ Client-side service for the Israeli food prices API, proxied through `/price-api
 ### services/geminiService.ts
 **Location**: `services/geminiService.ts`
 
-Handles all AI interactions with OpenAI.
+Handles shared AI interactions with OpenAI (list organization, recipes, ingredient suggestions). Product discovery AI functions (`parseShoppingList`, `smartAssistant`, `summarizeResults`) have been extracted to `agents_and_ai/product-discovery-assistant/aiService.ts`.
 
 #### Functions
 
@@ -3131,7 +3151,45 @@ Added sorting, additional filters (on-sale, price range), and supermarket chain 
 
 ---
 
-**Last Updated**: March 17, 2026
-**Version**: 4.7.0
+### Product Discovery Assistant: AI Chat for Finding Products (March 2026)
+
+Added a conversational AI assistant inside Shopping Mode that helps users find products faster via natural language. Users can paste a shopping list, ask for the cheapest product, filter by criteria (vegan, brand), and add results to cart — all through a chat interface.
+
+**Architecture — Two-Pass AI**:
+1. **Intent pass** (`smartAssistant`): AI interprets user message → generates optimized search queries (with sort/filter params, multiple query variations)
+2. **Product search**: Parallel `searchProducts()` calls (max 5 concurrent) against the price DB API
+3. **Summary pass** (`summarizeResults`): AI sees actual product names/prices → generates honest, context-aware response (never says "here it is" with no results)
+
+**New directory**: `agents_and_ai/product-discovery-assistant/` — self-contained module with own README.
+
+**Changes**:
+- **`agents_and_ai/product-discovery-assistant/SmartListPanel.tsx`** (new): Chat UI — messages feed (user bubbles + AI responses with inline product cards), text input with Enter-to-send, conversation state, product detail modal integration. RTL-aware with `dir` attribute.
+- **`agents_and_ai/product-discovery-assistant/aiService.ts`** (new): Three AI functions extracted from `geminiService.ts`:
+  - `parseShoppingList()`: Extracts structured items from raw list text (batch mode)
+  - `smartAssistant()`: Interprets user intent, generates search queries with sort/filter/vegan params, multiple query variations for tricky searches
+  - `summarizeResults()`: Post-search contextual response — references actual product names/prices, honest "not found" when empty
+- **`agents_and_ai/product-discovery-assistant/smartListService.ts`** (new): Orchestration — `buildSmartList()` for batch mode, `processSmartChat()` for conversational mode. Both use concurrency-limited parallel search.
+- **`types.ts`**: Added `ParsedShoppingItem`, `SmartListMatch`, `SearchIntent`, `SmartChatMessage` interfaces.
+- **`constants/translations.ts`**: Added `smartList` namespace (19 keys EN + HE): `pasteList`, `title`, `textPlaceholder`, `findProducts`, `processing`, `matchedOf`, `noMatch`, `skip`, `addAll`, `addSelected`, `addToCart`, `added`, `backToCatalog`, `alternatives`, `alreadyInCart`, `noItems`, `send`, `welcome`, `addAllResults`.
+- **`components/ShoppingInputArea.tsx`**: Added "AI Assistant" pill button (Sparkles icon, indigo theme) above catalog. Toggles `showSmartList` state — when active, renders `SmartListPanel` instead of `ProductCatalogArea`. Added `existingBarcodes` memo and `handleSmartListConfirm` handler.
+- **`services/geminiService.ts`**: Removed `parseShoppingList`, `smartAssistant`, `summarizeResults` (extracted to `aiService.ts`). Cleaned up unused `ParsedShoppingItem`/`SearchIntent` imports.
+
+#### File Change Summary
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `agents_and_ai/product-discovery-assistant/SmartListPanel.tsx` | **New** | Chat UI with product cards, detail modal, Add to Cart |
+| `agents_and_ai/product-discovery-assistant/aiService.ts` | **New** | 3 AI functions: intent, parsing, result summarization |
+| `agents_and_ai/product-discovery-assistant/smartListService.ts` | **New** | Orchestration: AI → parallel search → contextual response |
+| `agents_and_ai/product-discovery-assistant/README.md` | **New** | Full feature documentation |
+| `types.ts` | Modified | Added 4 interfaces for smart list & chat |
+| `constants/translations.ts` | Modified | Added `smartList` namespace (19 keys × 2 languages) |
+| `components/ShoppingInputArea.tsx` | Modified | AI Assistant toggle button, SmartListPanel mount |
+| `services/geminiService.ts` | Modified | Extracted 3 functions to aiService.ts |
+
+---
+
+**Last Updated**: March 18, 2026
+**Version**: 4.8.0
 **Status**: Production Ready
 
