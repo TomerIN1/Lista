@@ -46,6 +46,16 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   const [showSmartList, setShowSmartList] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
+  // Effective chains: if user hasn't explicitly filtered, use all available chains from their area
+  const effectiveChains = useMemo(() => {
+    if (selectedChains.length > 0) return selectedChains;
+    if (!deliveryCheck?.chains) return [];
+    const isOnline = shoppingMode === 'online';
+    return deliveryCheck.chains
+      .filter(c => isOnline ? (c.delivers || c.click_and_collect) : true)
+      .map(c => c.chain);
+  }, [selectedChains, deliveryCheck, shoppingMode]);
+
   const existingBarcodes = useMemo(
     () => new Set(products.map((p) => p.barcode)),
     [products]
@@ -225,7 +235,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
           existingBarcodes={existingBarcodes}
           city={city}
           storeType={storeType}
-          selectedChains={selectedChains}
+          selectedChains={effectiveChains}
         />
       ) : (
         <>
@@ -251,7 +261,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
             disabled={isLoading}
             city={city}
             storeType={storeType}
-            selectedChains={selectedChains}
+            selectedChains={effectiveChains}
           />
         </>
       )}

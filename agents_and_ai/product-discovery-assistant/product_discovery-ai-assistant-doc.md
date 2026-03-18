@@ -116,6 +116,15 @@ import SmartListPanel from '../agents_and_ai/product-discovery-assistant/SmartLi
 // Cart bar remains visible at bottom
 ```
 
+### Store/Chain Filtering
+
+`ShoppingInputArea` computes `effectiveChains` — the chain filter actually sent to the search API:
+
+- **User explicitly selected chains** → those specific chains are used
+- **No explicit selection** → ALL available chains from the user's area (from `deliveryCheck`) are used as the filter
+
+This ensures both the AI assistant and the catalog only return products available at stores in the user's city/area, preventing irrelevant results from chains not present there (e.g., no h-cohen products when searching in Jerusalem where only רמי לוי, שופרסל, ויקטורי are available).
+
 ## Translation Keys
 
 All UI strings are in `constants/translations.ts` under the `smartList` namespace:
@@ -155,3 +164,11 @@ Five fixes implemented based on user simulation testing:
 3. **Broad "cheapest X" search**: AI searches broadly for product category without carrying specific variants from history, uses higher limits (8-10)
 4. **Brand post-filtering**: `smartListService.ts` extracts brand from user message and filters results by manufacturer after search (common Israeli brands: תנובה, שטראוס, טרה, אסם, etc.)
 5. **Informative large-list summaries**: `summarizeResults` highlights mismatches, missing items, and fresh produce notes for large result sets (max tokens increased to 250)
+
+## Area-Aware Store Filtering (v4.8.2)
+
+**Problem**: AI assistant returned products from stores not available in the user's area (e.g., h-cohen products when searching in Jerusalem where only רמי לוי, שופרסל, ויקטורי are available).
+
+**Root cause**: `selectedChains` defaulted to `[]` (empty), which meant no chain filter was sent to the search API — so all chains were included.
+
+**Fix**: `ShoppingInputArea` now computes `effectiveChains` — when no chains are explicitly selected, it uses all available chains from `deliveryCheck` (the user's area). This applies to both the AI assistant and the regular product catalog.
