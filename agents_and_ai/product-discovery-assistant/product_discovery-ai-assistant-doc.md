@@ -76,7 +76,7 @@ This prevents the trust-damaging pattern of "Here's what I found!" followed by e
 | Paste shopping list | "חלב, ביצים, גבינה צהובה" | AI extracts items → parallel search → results with "Add All" |
 | Find cheapest product | "החלב הכי זול" | `sort_by: min_price, sort_order: asc` |
 | Specific product type | "חלב בשקית" | Multiple query variations: "חלב שקית", "חלב בשקית" |
-| Brand-specific search | "חלב של תנובה" | "חלב תנובה" query |
+| Brand-specific search | "יוגורט של שטראוס" | Brand in query + post-filter by manufacturer |
 | Vegan filter | "חטיפים טבעוניים" | `is_vegan: true` filter |
 | Follow-up questions | "יש יותר זול?" | Conversation history maintained in session |
 | Click product for detail | Tap product name/image | Opens `ProductDetailModal` with store prices |
@@ -90,7 +90,7 @@ This prevents the trust-damaging pattern of "Here's what I found!" followed by e
 | Temperature (intent) | 0.3 | Low for consistent query generation |
 | Temperature (summary) | 0.3 | Low for factual, reliable responses |
 | Response format | `json_object` | Structured output for reliable parsing |
-| Max tokens (summary) | 150 | Keeps responses concise (1-2 sentences) |
+| Max tokens (summary) | 250 | Keeps responses concise (2-3 sentences for large results, 1-2 for small) |
 | Search concurrency | 5 | Balances speed vs API load |
 
 ## Performance
@@ -134,10 +134,24 @@ smartList.backToCatalog     → back button label
 
 ## Edge Cases Handled
 
-- **Empty/nonsense input**: AI returns empty searches → "No items detected" message
+- **Nonsense/gibberish input**: AI detects gibberish, returns no searches, responds with "I don't understand" — does NOT re-search items from conversation history
 - **No search results**: `summarizeResults` honestly reports failure, suggests alternatives
 - **Duplicate barcodes**: Products already in cart show "In cart" badge, excluded from "Add All"
 - **Large lists (50+ items)**: Concurrency limit (5) prevents API overload
 - **API errors**: Individual search failures silently skipped, others still shown
 - **RTL layout**: Panel uses `dir={isRTL ? 'rtl' : 'ltr'}`, send button flipped
-- **Conversation context**: Previous messages passed to AI for follow-up queries
+- **Conversation context**: Last 6 messages passed to AI (prevents context pollution from long sessions)
+- **"Cheapest X" queries**: AI searches broadly for the product category, not biased by specific variants from history
+- **Brand-specific queries**: Post-filtering by manufacturer name ensures only matching brand products are returned
+- **Fresh produce**: AI notes when results may be processed versions (pickled, frozen) due to DB limitations
+- **Large result summaries**: AI highlights mismatches and items that may not match what user asked for
+
+## Robustness Improvements (v4.8.1)
+
+Five fixes implemented based on user simulation testing:
+
+1. **Nonsense input handling**: AI prompt explicitly instructs to return empty searches for gibberish — prevents re-searching from conversation history
+2. **Fresh produce awareness**: AI prompt notes DB limitation with fresh items, `summarizeResults` can mention when results are processed versions
+3. **Broad "cheapest X" search**: AI searches broadly for product category without carrying specific variants from history, uses higher limits (8-10)
+4. **Brand post-filtering**: `smartListService.ts` extracts brand from user message and filters results by manufacturer after search (common Israeli brands: תנובה, שטראוס, טרה, אסם, etc.)
+5. **Informative large-list summaries**: `summarizeResults` highlights mismatches, missing items, and fresh produce notes for large result sets (max tokens increased to 250)

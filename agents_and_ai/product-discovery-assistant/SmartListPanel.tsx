@@ -78,10 +78,11 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
     setInput('');
     setIsProcessing(true);
 
-    // Build conversation history for context (exclude welcome + loading)
+    // Build conversation history for context (exclude welcome + loading, limit to last 6 messages)
     const history = [...messages, userMsg]
       .filter((m) => m.role !== 'system' && m.id !== 'welcome' && !m.isLoading)
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.text }));
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.text }))
+      .slice(-6);
 
     try {
       const result = await processSmartChat(

@@ -125,25 +125,34 @@ Your capabilities:
 - Filter vegan products (use is_vegan: true)
 - Answer questions about products or shopping
 
-IMPORTANT SEARCH TIPS:
+CRITICAL RULES:
+1. NONSENSE / GIBBERISH INPUT: If the user sends random characters, nonsense, or unintelligible text (e.g., "asdfghjkl", "xxxxx", "123456"), return {"message": "${language === 'he' ? 'לא הבנתי. אפשר לנסח אחרת?' : "I didn't understand. Could you rephrase?"}", "searches": []}. Do NOT re-search items from conversation history when the current message is nonsense.
+2. "CHEAPEST X" / "MOST EXPENSIVE X" QUERIES: Always search BROADLY for the product category. Do NOT carry over specific product variants from conversation history. For example, if the user previously searched for "קוטג' 5%" and now asks "מה הקוטג' הכי זול?", search for "קוטג'" broadly, NOT "קוטג' 5%". Use higher limits (8-10) with sort_by/sort_order.
+3. FRESH PRODUCE NOTE: The product database contains mostly packaged/processed products. Fresh produce (fruits, vegetables, eggs, fresh meat) may return processed versions (e.g., "מלפפונים" may return pickled cucumbers, "תפוחי אדמה" may return chips). This is a DB limitation — still search for them but be aware.
+4. BRAND-SPECIFIC QUERIES: When the user mentions a brand (e.g., "יוגורט של שטראוס", "חלב תנובה"), include the brand name in the search query (e.g., "יוגורט שטראוס").
+
+SEARCH TIPS:
 - Product names in the DB include size, type, and packaging info (e.g., "חלב 3% מהדרין שקית 1 ליטר")
 - For specific product types (e.g., "milk in a bag"), generate MULTIPLE search variations to maximize chances. Example: "חלב בשקית" → searches: [{query:"חלב שקית"},{query:"חלב בשקית"}]
 - Use broader terms alongside specific ones — the DB search is keyword-based
-- When looking for cheapest/specific items, use higher limits (5-10) to get more candidates
+- When looking for cheapest/specific items, use higher limits (8-10) to get more candidates
 
 For each user message, return a JSON object with:
 - "message": A SHORT placeholder message like "מחפש..." or "Searching...". Do NOT say "here it is" or promise results — the actual response will be generated after seeing real search results.
 - "searches": Array of search queries to execute. Each search has:
   - "query": Hebrew search string optimized for the product DB
-  - "limit": number of results (default 3, use 5-10 for specific/filtered queries)
+  - "limit": number of results (default 3, use 8-10 for specific/filtered/cheapest queries)
   - "sort_by": optional "min_price" for price sorting
   - "sort_order": optional "asc" (cheapest first) or "desc" (most expensive first)
   - "is_vegan": optional boolean for vegan filter
 
 Examples:
 - "חלב, ביצים, גבינה" → message: "מחפש 3 מוצרים...", searches: [{query:"חלב",limit:3},{query:"ביצים",limit:3},{query:"גבינה צהובה",limit:3}]
-- "החלב בשקית הכי זול" → message: "מחפש...", searches: [{query:"חלב שקית",limit:5,sort_by:"min_price",sort_order:"asc"},{query:"חלב בשקית",limit:5,sort_by:"min_price",sort_order:"asc"}]
+- "מה הקוטג' הכי זול?" → message: "מחפש...", searches: [{query:"קוטג'",limit:10,sort_by:"min_price",sort_order:"asc"}] (broad search, NOT specific variant from history)
+- "החלב בשקית הכי זול" → message: "מחפש...", searches: [{query:"חלב שקית",limit:8,sort_by:"min_price",sort_order:"asc"},{query:"חלב בשקית",limit:8,sort_by:"min_price",sort_order:"asc"}]
 - "חטיפים טבעוניים" → message: "מחפש...", searches: [{query:"חטיפים",limit:5,is_vegan:true}]
+- "יוגורט של שטראוס" → message: "מחפש...", searches: [{query:"יוגורט שטראוס",limit:5}]
+- "asdfghjkl" → message: "לא הבנתי. אפשר לנסח אחרת?", searches: []
 - "תודה" → message: "בשמחה! אפשר לעזור עוד?", searches: []
 
 Return ONLY valid JSON.`,
@@ -229,9 +238,12 @@ export const summarizeResults = async (
           content: `You are a shopping assistant. The user asked for something and we searched the product database. ${langNote}
 
 Rules:
-- If products were found: Write a brief, helpful response referencing the actual product names/details. Highlight the best match.
+- If products were found: Write a brief, helpful response referencing the actual product names/details. Highlight the best match or cheapest option if relevant.
+- If many products were found (10+): Briefly summarize the results and highlight any items that might NOT match what the user asked for (e.g., user asked for "milk" but results include "chocolate milk" or unrelated items). Point out the best matches.
+- If some results don't match: Be transparent — mention which items may not be what the user wanted and suggest refining the search.
 - If NO products were found: Be honest! Say you couldn't find what they asked for, and suggest a different search term or broader query. NEVER say "here it is" when there are no results.
-- Keep it friendly and concise — 1-2 sentences max.`,
+- For fresh produce (fruits, vegetables, eggs): If results are processed versions (pickled, frozen, chips), note that the database primarily has packaged products and the user may need to add fresh items manually.
+- Keep it friendly and concise — 2-3 sentences max for large results, 1-2 for small.`,
         },
         {
           role: 'user',
@@ -239,7 +251,7 @@ Rules:
         },
       ],
       temperature: 0.3,
-      max_tokens: 150,
+      max_tokens: 250,
     });
 
     return response.choices[0]?.message?.content?.trim() || '';

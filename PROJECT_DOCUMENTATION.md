@@ -3189,7 +3189,26 @@ Added a conversational AI assistant inside Shopping Mode that helps users find p
 
 ---
 
+### Product Discovery Assistant: Robustness Fixes (v4.8.1, March 2026)
+
+Five improvements based on automated user simulation testing:
+
+1. **Nonsense input handling**: AI prompt explicitly returns empty searches for gibberish/random text — prevents re-searching items from conversation history when current message is unintelligible
+2. **Fresh produce awareness**: AI prompt notes DB limitation with fresh produce (may return processed versions like pickled cucumbers); `summarizeResults` can mention this to users
+3. **Broad "cheapest X" search**: AI now searches broadly for product category when user asks "cheapest X" — does NOT carry over specific variants from conversation history (e.g., "cheapest cottage" searches "קוטג'" broadly, not "קוטג' 5%"). Uses higher limits (8-10)
+4. **Brand post-filtering**: `smartListService.ts` extracts brand names from user messages (common Israeli brands: תנובה, שטראוס, טרה, אסם, עלית, יטבתה, מהדרין) and filters search results by manufacturer after API response
+5. **Informative large-list summaries**: `summarizeResults` now highlights mismatches, missing items, and fresh produce notes for large result sets. Max tokens increased to 250
+6. **Conversation history limit**: Chat history passed to AI is limited to last 6 messages to prevent context pollution from long sessions
+
+**Changes**:
+- **`aiService.ts`**: Enhanced `smartAssistant` system prompt with 4 critical rules (nonsense, broad cheapest, fresh produce, brand queries). Enhanced `summarizeResults` prompt for mismatch detection and fresh produce notes.
+- **`smartListService.ts`**: Added `extractBrandFromMessage()` helper with known Israeli brand list. Post-filters search results by manufacturer when brand detected.
+- **`SmartListPanel.tsx`**: Limited conversation history to last 6 messages via `.slice(-6)`.
+- **`product_discovery-ai-assistant-doc.md`**: Added robustness improvements section.
+
+---
+
 **Last Updated**: March 18, 2026
-**Version**: 4.8.0
+**Version**: 4.8.1
 **Status**: Production Ready
 

@@ -14,6 +14,36 @@ import { searchProducts } from '../../services/priceDbService';
 
 const MAX_CONCURRENT = 5;
 
+// Common Israeli brand names for post-filtering
+const KNOWN_BRANDS = [
+  'תנובה', 'שטראוס', 'טרה', 'אסם', 'עלית', 'אוסם',
+  'יטבתה', 'מהדרין', 'פרי גת', 'תלמה', 'בייגל',
+  'tnuva', 'strauss', 'tara', 'osem', 'elite', 'yotvata',
+];
+
+/**
+ * Extracts a brand name from the user message if one is mentioned.
+ * Handles Hebrew patterns like "של שטראוס" or "תנובה".
+ */
+function extractBrandFromMessage(message: string): string | null {
+  const lower = message.toLowerCase();
+  // Check "של <brand>" pattern (Hebrew "of <brand>")
+  const shelMatch = message.match(/של\s+(\S+)/);
+  if (shelMatch) {
+    const candidate = shelMatch[1];
+    if (KNOWN_BRANDS.some((b) => candidate.includes(b))) {
+      return candidate;
+    }
+  }
+  // Direct brand mention
+  for (const brand of KNOWN_BRANDS) {
+    if (lower.includes(brand.toLowerCase())) {
+      return brand;
+    }
+  }
+  return null;
+}
+
 // ─── Batch Mode (Shopping List) ──────────────────────────────────────────────
 
 /**
@@ -175,11 +205,24 @@ export async function processSmartChat(
 
   // Deduplicate by barcode
   const seen = new Set<string>();
-  const uniqueProducts = allProducts.filter((p) => {
+  let uniqueProducts = allProducts.filter((p) => {
     if (seen.has(p.barcode)) return false;
     seen.add(p.barcode);
     return true;
   });
+
+  // Brand post-filtering: if user mentions a known brand, prefer products from that manufacturer
+  const brandKeywords = extractBrandFromMessage(userMessage);
+  if (brandKeywords) {
+    const brandFiltered = uniqueProducts.filter((p) =>
+      p.manufacturer?.toLowerCase().includes(brandKeywords.toLowerCase()) ||
+      p.name?.toLowerCase().includes(brandKeywords.toLowerCase())
+    );
+    // Only apply filter if it leaves some results
+    if (brandFiltered.length > 0) {
+      uniqueProducts = brandFiltered;
+    }
+  }
 
   // Step 3: Generate context-aware response based on actual results
   const productSummaries = uniqueProducts.map((p) => ({
