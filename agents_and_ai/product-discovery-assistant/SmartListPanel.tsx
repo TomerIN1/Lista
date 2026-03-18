@@ -7,7 +7,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { SmartChatMessage, ShoppingProduct, DbProduct, DbProductEnhanced } from '../../types';
 import { processSmartChat } from './smartListService';
 import ProductDetailModal from '../../components/ProductDetailModal';
-import { formatPriceLabel, isWeightedProduct } from '../../utils/priceFormat';
+import { formatPriceLabel, defaultCartUnit } from '../../utils/priceFormat';
 
 const IMAGE_FALLBACK = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f1f5f9" width="40" height="40" rx="8"/><text x="20" y="24" text-anchor="middle" font-size="16">📦</text></svg>';
 
@@ -119,11 +119,10 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
 
   const handleAddProduct = (product: DbProduct) => {
     if (isInCart(product.barcode)) return;
-    const weighted = isWeightedProduct(product.unit_of_measure);
     const shoppingProduct: ShoppingProduct = {
       ...product,
-      amount: weighted ? 1 : 1,
-      unit: weighted ? 'kg' : 'pcs',
+      amount: 1,
+      unit: defaultCartUnit(product.unit_of_measure),
     };
     onConfirm([shoppingProduct]);
     setAddedInSession((prev) => new Set(prev).add(product.barcode));
@@ -134,8 +133,8 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
     if (toAdd.length === 0) return;
     const shoppingProducts: ShoppingProduct[] = toAdd.map((p) => ({
       ...p,
-      amount: isWeightedProduct(p.unit_of_measure) ? 1 : 1,
-      unit: isWeightedProduct(p.unit_of_measure) ? 'kg' as const : 'pcs' as const,
+      amount: 1,
+      unit: defaultCartUnit(p.unit_of_measure),
     }));
     onConfirm(shoppingProducts);
     setAddedInSession((prev) => {

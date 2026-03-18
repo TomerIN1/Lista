@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Package, Weight } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
-import { formatPriceLabel, isWeightedProduct } from '../utils/priceFormat';
+import { formatPriceLabel, unitBadgeLabel } from '../utils/priceFormat';
 
 interface ProductCardProps {
   product: DbProductEnhanced;
@@ -14,7 +14,7 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, onClick }) => {
   const { t, isRTL } = useLanguage();
   const [imgFailed, setImgFailed] = useState(false);
-  const weighted = isWeightedProduct(product.unit_of_measure);
+  const badge = unitBadgeLabel(product.unit_of_measure);
   const hasPromo = product.max_price != null && product.min_price < product.max_price;
   const discountPct = hasPromo && product.max_price
     ? Math.round((1 - product.min_price / product.max_price) * 100)
@@ -42,9 +42,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
             -{discountPct}%
           </span>
         )}
-        {weighted && (
+        {badge && (
           <span className="absolute top-1.5 end-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-tight shadow-sm flex items-center gap-0.5">
-            <Weight className="w-2.5 h-2.5" />ק״ג
+            <Weight className="w-2.5 h-2.5" />{badge}
           </span>
         )}
       </div>

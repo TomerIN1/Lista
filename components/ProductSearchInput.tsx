@@ -3,7 +3,7 @@ import { Search, Loader2, X, Package } from 'lucide-react';
 import { useProductSearch } from '../hooks/useProductSearch';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DbProduct, ShoppingProduct, Unit } from '../types';
-import { formatPriceRange, isWeightedProduct } from '../utils/priceFormat';
+import { formatPriceRange, defaultCartUnit } from '../utils/priceFormat';
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
@@ -85,8 +85,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   const handleSelect = (product: DbProduct) => {
     // Don't add duplicates
     if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
-    const weighted = isWeightedProduct(product.unit_of_measure);
-    onSelectProduct({ ...product, amount: 1, unit: weighted ? 'kg' : 'pcs' });
+    onSelectProduct({ ...product, amount: 1, unit: defaultCartUnit(product.unit_of_measure) });
     clearResults();
     setIsDropdownOpen(false);
   };

@@ -4,7 +4,7 @@ import { X, Package, Leaf, Tag, TrendingDown, AlertCircle, Weight } from 'lucide
 import { DbProductDetail, DbProductEnhanced, ProductStorePrice } from '../types';
 import { getProductDetail } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
-import { isWeightedProduct } from '../utils/priceFormat';
+import { unitBadgeLabel } from '../utils/priceFormat';
 
 interface ProductDetailModalProps {
   barcode: string;
@@ -69,8 +69,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
   const overallDiscountPct = cheapestPrice != null && mostExpensivePrice != null && mostExpensivePrice > cheapestPrice
     ? Math.round((1 - cheapestPrice / mostExpensivePrice) * 100)
     : 0;
-  const weighted = isWeightedProduct(product?.unit_of_measure || fallbackProduct?.unit_of_measure);
-  const priceSuffix = weighted ? ' / ק״ג' : '';
+  const uom = product?.unit_of_measure || fallbackProduct?.unit_of_measure;
+  const badge = unitBadgeLabel(uom);
+  const priceSuffix = badge ? ` / ${badge}` : '';
 
   const modal = (
     <div
@@ -167,11 +168,11 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                     <p className="text-3xl font-black text-emerald-700 leading-none">
                       ₪{cheapestPrice.toFixed(2)}{priceSuffix}
                     </p>
-                    {weighted && (
+                    {badge && (
                       <div className="flex items-center gap-1 mt-1">
                         <Weight className="w-3 h-3 text-amber-500" />
                         <span className="text-[11px] text-amber-600 font-medium">
-                          {isRTL ? 'מוצר נמכר לפי משקל' : 'Sold by weight'}
+                          {isRTL ? `מחיר ל-${badge}` : `Price per ${badge}`}
                         </span>
                       </div>
                     )}
