@@ -56,7 +56,7 @@ This prevents the trust-damaging pattern of "Here's what I found!" followed by e
 | `SmartListPanel.tsx` | Chat UI component — messages feed, product cards, input area |
 | `smartListService.ts` | Orchestration — coordinates AI + search API, concurrency control |
 | `aiService.ts` | All AI/LLM functions — parsing, intent detection, result summarization |
-| `README.md` | This documentation |
+| `product_discovery-ai-assistant-doc.md` | This documentation |
 
 ### External Dependencies
 
@@ -164,6 +164,18 @@ Five fixes implemented based on user simulation testing:
 3. **Broad "cheapest X" search**: AI searches broadly for product category without carrying specific variants from history, uses higher limits (8-10)
 4. **Brand post-filtering**: `smartListService.ts` extracts brand from user message and filters results by manufacturer after search (common Israeli brands: תנובה, שטראוס, טרה, אסם, etc.)
 5. **Informative large-list summaries**: `summarizeResults` highlights mismatches, missing items, and fresh produce notes for large result sets (max tokens increased to 250)
+
+## Weighted Products Support (v4.9.0)
+
+**Problem**: Products sold by weight (per-kg) like fresh produce showed prices without indicating it's per-kg, and were added to cart with 'pcs' unit instead of 'kg'.
+
+**Changes**:
+- Price display now shows `₪X.XX / ק״ג` for weighted products across all views (product cards, detail modal, search results, cart, AI assistant)
+- Weighted products auto-default to `kg` unit when added to cart (instead of `pcs`)
+- Product cards show a small ק״ג badge for weighted products
+- ProductDetailModal shows "Sold by weight" indicator
+- Shared utility `utils/priceFormat.ts` provides `formatPriceLabel()`, `formatPriceRange()`, `isWeightedProduct()`
+- `DbProduct.unit_of_measure` field added to types (value: `"kg"` for weighted, `null` for regular)
 
 ## Area-Aware Store Filtering (v4.8.2)
 

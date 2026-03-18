@@ -3,6 +3,7 @@ import { Search, Loader2, X, Package } from 'lucide-react';
 import { useProductSearch } from '../hooks/useProductSearch';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DbProduct, ShoppingProduct, Unit } from '../types';
+import { formatPriceRange, isWeightedProduct } from '../utils/priceFormat';
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
@@ -84,7 +85,8 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   const handleSelect = (product: DbProduct) => {
     // Don't add duplicates
     if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
-    onSelectProduct({ ...product, amount: 1, unit: 'pcs' });
+    const weighted = isWeightedProduct(product.unit_of_measure);
+    onSelectProduct({ ...product, amount: 1, unit: weighted ? 'kg' : 'pcs' });
     clearResults();
     setIsDropdownOpen(false);
   };
@@ -113,9 +115,8 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     }
   };
 
-  const formatPrice = (min: number, max: number) => {
-    if (min === max) return `₪${min.toFixed(2)}`;
-    return `₪${min.toFixed(2)} - ₪${max.toFixed(2)}`;
+  const formatPrice = (min: number, max: number, unitOfMeasure?: string | null) => {
+    return formatPriceRange(min, max, unitOfMeasure);
   };
 
   return (
@@ -194,7 +195,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
                 </div>
               </div>
               <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
-                {formatPrice(product.min_price, product.max_price)}
+                {formatPrice(product.min_price, product.max_price, product.unit_of_measure)}
               </span>
             </button>
           ))}
@@ -231,7 +232,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
                 </div>
                 {product.min_price > 0 && (
                   <div className="text-sm font-bold text-emerald-600 mt-0.5">
-                    {formatPrice(product.min_price, product.max_price)}
+                    {formatPrice(product.min_price, product.max_price, product.unit_of_measure)}
                   </div>
                 )}
               </div>

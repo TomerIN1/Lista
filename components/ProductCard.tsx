@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Package } from 'lucide-react';
+import { Package, Weight } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
+import { formatPriceLabel, isWeightedProduct } from '../utils/priceFormat';
 
 interface ProductCardProps {
   product: DbProductEnhanced;
@@ -13,6 +14,7 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, onClick }) => {
   const { t, isRTL } = useLanguage();
   const [imgFailed, setImgFailed] = useState(false);
+  const weighted = isWeightedProduct(product.unit_of_measure);
   const hasPromo = product.max_price != null && product.min_price < product.max_price;
   const discountPct = hasPromo && product.max_price
     ? Math.round((1 - product.min_price / product.max_price) * 100)
@@ -40,6 +42,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
             -{discountPct}%
           </span>
         )}
+        {weighted && (
+          <span className="absolute top-1.5 end-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-tight shadow-sm flex items-center gap-0.5">
+            <Weight className="w-2.5 h-2.5" />ק״ג
+          </span>
+        )}
       </div>
 
       {/* Info */}
@@ -54,7 +61,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
           {hasPromo && product.max_price != null ? (
             <>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-sm font-black text-rose-600">₪{product.min_price.toFixed(2)}</span>
+                <span className="text-sm font-black text-rose-600">{formatPriceLabel(product.min_price, product.unit_of_measure)}</span>
                 <span className="text-xs font-normal text-slate-400 line-through">₪{product.max_price.toFixed(2)}</span>
               </div>
               <p className="text-[11px] text-rose-500 font-semibold">
@@ -62,7 +69,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
               </p>
             </>
           ) : (
-            <span className="text-sm font-bold text-emerald-600">₪{product.min_price.toFixed(2)}</span>
+            <span className="text-sm font-bold text-emerald-600">{formatPriceLabel(product.min_price, product.unit_of_measure)}</span>
           )}
         </div>
       </div>

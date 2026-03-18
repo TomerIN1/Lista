@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ShoppingProduct } from '../types';
 import { X, ShoppingCart, Package } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { formatPriceRange } from '../utils/priceFormat';
 
 interface ShoppingListBreakdownModalProps {
   isOpen: boolean;
@@ -41,9 +42,8 @@ const ShoppingListBreakdownModal: React.FC<ShoppingListBreakdownModalProps> = ({
 
   if (!isOpen) return null;
 
-  const formatPrice = (min: number, max?: number) => {
-    if (!max || min === max) return `₪${min.toFixed(2)}`;
-    return `₪${min.toFixed(2)} - ₪${max.toFixed(2)}`;
+  const formatPrice = (min: number, max?: number, unitOfMeasure?: string | null) => {
+    return formatPriceRange(min, max, unitOfMeasure);
   };
 
   return (
@@ -98,7 +98,7 @@ const ShoppingListBreakdownModal: React.FC<ShoppingListBreakdownModalProps> = ({
                   </div>
                   {product.min_price > 0 && (
                     <div className="text-xs text-emerald-600 font-medium mt-0.5">
-                      {formatPrice(product.min_price, product.max_price)}
+                      {formatPrice(product.min_price, product.max_price, product.unit_of_measure)}
                     </div>
                   )}
                 </div>

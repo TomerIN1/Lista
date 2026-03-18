@@ -8,6 +8,7 @@ import { DbProduct, ShoppingProduct, Unit, DeliveryCheckResult } from '../types'
 import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
 import ProductCatalogArea from './ProductCatalogArea';
 import SmartListPanel from '../agents_and_ai/product-discovery-assistant/SmartListPanel';
+import { formatPriceRange } from '../utils/priceFormat';
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
@@ -104,9 +105,8 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
     setShowSmartList(false);
   };
 
-  const formatPrice = (min: number, max?: number) => {
-    if (!max || min === max) return `₪${min.toFixed(2)}`;
-    return `₪${min.toFixed(2)} – ₪${max.toFixed(2)}`;
+  const formatPrice = (min: number, max?: number, unitOfMeasure?: string | null) => {
+    return formatPriceRange(min, max, unitOfMeasure);
   };
 
   const hasContent = products.length > 0;
@@ -293,7 +293,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
                   <div className="text-[11px] text-slate-400 font-mono mt-0.5">{product.barcode}</div>
                   {product.min_price > 0 && (
                     <div className="text-xs font-bold text-emerald-600 mt-1">
-                      {formatPrice(product.min_price, product.max_price)}
+                      {formatPrice(product.min_price, product.max_price, product.unit_of_measure)}
                     </div>
                   )}
                 </div>

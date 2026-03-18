@@ -6,6 +6,7 @@ import { getCategories, browseProducts, searchProducts } from '../services/price
 import { useDebounce } from '../hooks/useDebounce';
 import ProductCard from './ProductCard';
 import ProductDetailModal from './ProductDetailModal';
+import { isWeightedProduct } from '../utils/priceFormat';
 
 // ─── Category icon helpers ──────────────────────────────────────────────────
 
@@ -495,7 +496,8 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
 
   const handleAddProduct = (product: DbProductEnhanced) => {
     if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
-    onSelectProduct({ ...product, amount: 1, unit: 'pcs' });
+    const weighted = isWeightedProduct(product.unit_of_measure);
+    onSelectProduct({ ...product, amount: 1, unit: weighted ? 'kg' : 'pcs' });
   };
 
   const handleLoadMore = () => {

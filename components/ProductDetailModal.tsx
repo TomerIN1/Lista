@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, Leaf, Tag, TrendingDown, AlertCircle } from 'lucide-react';
+import { X, Package, Leaf, Tag, TrendingDown, AlertCircle, Weight } from 'lucide-react';
 import { DbProductDetail, DbProductEnhanced, ProductStorePrice } from '../types';
 import { getProductDetail } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
+import { isWeightedProduct } from '../utils/priceFormat';
 
 interface ProductDetailModalProps {
   barcode: string;
@@ -68,6 +69,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
   const overallDiscountPct = cheapestPrice != null && mostExpensivePrice != null && mostExpensivePrice > cheapestPrice
     ? Math.round((1 - cheapestPrice / mostExpensivePrice) * 100)
     : 0;
+  const weighted = isWeightedProduct(product?.unit_of_measure || fallbackProduct?.unit_of_measure);
+  const priceSuffix = weighted ? ' / ק״ג' : '';
 
   const modal = (
     <div
@@ -162,12 +165,20 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                       {isRTL ? 'מחיר מינימלי' : 'Best Price'}
                     </p>
                     <p className="text-3xl font-black text-emerald-700 leading-none">
-                      ₪{cheapestPrice.toFixed(2)}
+                      ₪{cheapestPrice.toFixed(2)}{priceSuffix}
                     </p>
+                    {weighted && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <Weight className="w-3 h-3 text-amber-500" />
+                        <span className="text-[11px] text-amber-600 font-medium">
+                          {isRTL ? 'מוצר נמכר לפי משקל' : 'Sold by weight'}
+                        </span>
+                      </div>
+                    )}
                     {mostExpensivePrice != null && mostExpensivePrice !== cheapestPrice && (
                       <p className="text-xs text-slate-400 mt-1">
                         {isRTL ? 'עד' : 'up to'}{' '}
-                        <span className="line-through">₪{mostExpensivePrice.toFixed(2)}</span>
+                        <span className="line-through">₪{mostExpensivePrice.toFixed(2)}{priceSuffix}</span>
                         {' '}{isRTL ? 'בחנויות אחרות' : 'elsewhere'}
                       </p>
                     )}
@@ -277,7 +288,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                           {/* Price column */}
                           <div className="text-end flex-shrink-0">
                             <p className={`text-sm font-black ${isCheapest ? 'text-emerald-700' : hasDiscount ? 'text-rose-600' : 'text-slate-700'}`}>
-                              ₪{p.effective_price.toFixed(2)}
+                              ₪{p.effective_price.toFixed(2)}{priceSuffix}
                             </p>
                             {hasDiscount && (
                               <p className="text-[11px] text-slate-400 line-through">₪{p.price.toFixed(2)}</p>
