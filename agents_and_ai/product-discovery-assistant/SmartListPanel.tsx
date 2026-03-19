@@ -122,7 +122,7 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
     const shoppingProduct: ShoppingProduct = {
       ...product,
       amount: 1,
-      unit: defaultCartUnit(product.unit_of_measure),
+      unit: defaultCartUnit(product.unit_of_measure, product.is_weighted),
     };
     onConfirm([shoppingProduct]);
     setAddedInSession((prev) => new Set(prev).add(product.barcode));
@@ -134,7 +134,7 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
     const shoppingProducts: ShoppingProduct[] = toAdd.map((p) => ({
       ...p,
       amount: 1,
-      unit: defaultCartUnit(p.unit_of_measure),
+      unit: defaultCartUnit(p.unit_of_measure, p.is_weighted),
     }));
     onConfirm(shoppingProducts);
     setAddedInSession((prev) => {
@@ -236,7 +236,7 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
                                   <span className="text-[11px] text-slate-400">{product.manufacturer}</span>
                                   {product.min_price > 0 && (
                                     <span className="text-xs font-bold text-emerald-600">
-                                      {formatPriceLabel(product.min_price, product.unit_of_measure)}
+                                      {formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}
                                     </span>
                                   )}
                                 </div>

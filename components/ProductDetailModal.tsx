@@ -70,7 +70,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
     ? Math.round((1 - cheapestPrice / mostExpensivePrice) * 100)
     : 0;
   const uom = product?.unit_of_measure || fallbackProduct?.unit_of_measure;
-  const badge = unitBadgeLabel(uom);
+  const weighted = product?.is_weighted ?? fallbackProduct?.is_weighted;
+  const badge = unitBadgeLabel(uom, weighted);
   const priceSuffix = badge ? ` / ${badge}` : '';
 
   const modal = (

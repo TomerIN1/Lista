@@ -14,7 +14,7 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, onClick }) => {
   const { t, isRTL } = useLanguage();
   const [imgFailed, setImgFailed] = useState(false);
-  const badge = unitBadgeLabel(product.unit_of_measure);
+  const badge = unitBadgeLabel(product.unit_of_measure, product.is_weighted);
   const hasPromo = product.max_price != null && product.min_price < product.max_price;
   const discountPct = hasPromo && product.max_price
     ? Math.round((1 - product.min_price / product.max_price) * 100)
@@ -61,7 +61,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
           {hasPromo && product.max_price != null ? (
             <>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-sm font-black text-rose-600">{formatPriceLabel(product.min_price, product.unit_of_measure)}</span>
+                <span className="text-sm font-black text-rose-600">{formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}</span>
                 <span className="text-xs font-normal text-slate-400 line-through">₪{product.max_price.toFixed(2)}</span>
               </div>
               <p className="text-[11px] text-rose-500 font-semibold">
@@ -69,7 +69,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
               </p>
             </>
           ) : (
-            <span className="text-sm font-bold text-emerald-600">{formatPriceLabel(product.min_price, product.unit_of_measure)}</span>
+            <span className="text-sm font-bold text-emerald-600">{formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}</span>
           )}
         </div>
       </div>

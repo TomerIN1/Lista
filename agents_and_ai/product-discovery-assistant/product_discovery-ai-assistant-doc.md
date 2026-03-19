@@ -177,6 +177,23 @@ Five fixes implemented based on user simulation testing:
 - Shared utility `utils/priceFormat.ts` provides `formatPriceLabel()`, `formatPriceRange()`, `isWeightedProduct()`
 - `DbProduct.unit_of_measure` field added to types (value: `"kg"` for weighted, `null` for regular)
 
+## is_weighted Field Integration (v4.9.3)
+
+**Problem**: `unit_of_measure` alone was unreliable — it's a regulatory comparison unit, not a selling method indicator. Packaged milk showed "ל 100 מ"ל", packaged almonds showed "kg", and deli cheeses had price/unit mismatches.
+
+**Solution**: The API now provides `is_weighted` (boolean | null), sourced from the `bIsWeighted` field in supermarket XML price files. This is the authoritative source of truth for whether a product is sold by weight.
+
+**How it works**:
+- `is_weighted === true` → sold by weight, use `unit_of_measure` for display unit (kg, 100g, liter)
+- `is_weighted === false` → packaged product, ignore `unit_of_measure` entirely (it's regulatory)
+- `is_weighted === null` → unknown, fall back to `unit_of_measure` heuristic (backward-compatible)
+
+**Changes**:
+- `DbProduct.is_weighted` field added to types
+- `utils/priceFormat.ts` — new `effectiveUnit()` function gates all formatting by `is_weighted`; all exported functions accept optional `isWeighted` parameter
+- All 7 consumer components updated to pass `product.is_weighted` through to price formatting utilities
+- Data coverage: 576 products (true) + 8,789 (false) as of initial migration. Products with `null` fall back safely to old logic.
+
 ## Area-Aware Store Filtering (v4.8.2)
 
 **Problem**: AI assistant returned products from stores not available in the user's area (e.g., h-cohen products when searching in Jerusalem where only רמי לוי, שופרסל, ויקטורי are available).

@@ -496,7 +496,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
 
   const handleAddProduct = (product: DbProductEnhanced) => {
     if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
-    onSelectProduct({ ...product, amount: 1, unit: defaultCartUnit(product.unit_of_measure) });
+    onSelectProduct({ ...product, amount: 1, unit: defaultCartUnit(product.unit_of_measure, product.is_weighted) });
   };
 
   const handleLoadMore = () => {

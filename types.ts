@@ -86,7 +86,8 @@ export interface DbProduct {
   min_price: number;
   max_price?: number;   // absent from browse endpoint
   savings?: number;     // absent from browse endpoint
-  unit_of_measure?: string | null; // "kg" for weighted products, null for regular
+  unit_of_measure?: string | null; // "kg", "100 גרם", etc. — only meaningful when is_weighted is true
+  is_weighted?: boolean | null;    // true = sold by weight, false = packaged, null = unknown
   // Optional enhanced fields (present when using browse/detail endpoints)
   subcategory?: string | null;
   sub_subcategory?: string | null;

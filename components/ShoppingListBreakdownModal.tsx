@@ -42,8 +42,8 @@ const ShoppingListBreakdownModal: React.FC<ShoppingListBreakdownModalProps> = ({
 
   if (!isOpen) return null;
 
-  const formatPrice = (min: number, max?: number, unitOfMeasure?: string | null) => {
-    return formatPriceRange(min, max, unitOfMeasure);
+  const formatPrice = (min: number, max?: number, unitOfMeasure?: string | null, isWeighted?: boolean | null) => {
+    return formatPriceRange(min, max, unitOfMeasure, isWeighted);
   };
 
   return (
@@ -98,7 +98,7 @@ const ShoppingListBreakdownModal: React.FC<ShoppingListBreakdownModalProps> = ({
                   </div>
                   {product.min_price > 0 && (
                     <div className="text-xs text-emerald-600 font-medium mt-0.5">
-                      {formatPrice(product.min_price, product.max_price, product.unit_of_measure)}
+                      {formatPrice(product.min_price, product.max_price, product.unit_of_measure, product.is_weighted)}
                     </div>
                   )}
                 </div>

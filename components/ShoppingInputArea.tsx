@@ -105,8 +105,8 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
     setShowSmartList(false);
   };
 
-  const formatPrice = (min: number, max?: number, unitOfMeasure?: string | null) => {
-    return formatPriceRange(min, max, unitOfMeasure);
+  const formatPrice = (min: number, max?: number, unitOfMeasure?: string | null, isWeighted?: boolean | null) => {
+    return formatPriceRange(min, max, unitOfMeasure, isWeighted);
   };
 
   const hasContent = products.length > 0;
@@ -293,7 +293,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
                   <div className="text-[11px] text-slate-400 font-mono mt-0.5">{product.barcode}</div>
                   {product.min_price > 0 && (
                     <div className="text-xs font-bold text-emerald-600 mt-1">
-                      {formatPrice(product.min_price, product.max_price, product.unit_of_measure)}
+                      {formatPrice(product.min_price, product.max_price, product.unit_of_measure, product.is_weighted)}
                     </div>
                   )}
                 </div>

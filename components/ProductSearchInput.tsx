@@ -85,7 +85,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   const handleSelect = (product: DbProduct) => {
     // Don't add duplicates
     if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
-    onSelectProduct({ ...product, amount: 1, unit: defaultCartUnit(product.unit_of_measure) });
+    onSelectProduct({ ...product, amount: 1, unit: defaultCartUnit(product.unit_of_measure, product.is_weighted) });
     clearResults();
     setIsDropdownOpen(false);
   };
@@ -114,8 +114,8 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     }
   };
 
-  const formatPrice = (min: number, max: number, unitOfMeasure?: string | null) => {
-    return formatPriceRange(min, max, unitOfMeasure);
+  const formatPrice = (min: number, max: number, unitOfMeasure?: string | null, isWeighted?: boolean | null) => {
+    return formatPriceRange(min, max, unitOfMeasure, isWeighted);
   };
 
   return (
@@ -194,7 +194,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
                 </div>
               </div>
               <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
-                {formatPrice(product.min_price, product.max_price, product.unit_of_measure)}
+                {formatPrice(product.min_price, product.max_price, product.unit_of_measure, product.is_weighted)}
               </span>
             </button>
           ))}
@@ -231,7 +231,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
                 </div>
                 {product.min_price > 0 && (
                   <div className="text-sm font-bold text-emerald-600 mt-0.5">
-                    {formatPrice(product.min_price, product.max_price, product.unit_of_measure)}
+                    {formatPrice(product.min_price, product.max_price, product.unit_of_measure, product.is_weighted)}
                   </div>
                 )}
               </div>
