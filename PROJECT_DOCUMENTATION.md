@@ -606,9 +606,9 @@ Full product details rendered as a portal modal.
 **Layout**:
 1. **Fixed-height image** (200-240px) with gradient + product name/manufacturer overlay
 2. **Scrollable body**:
-   - Labeled info table: Barcode · Manufacturer · Package Size (`unit_qty`) · Category · Subcategory · Sub-subcategory
-   - Price hero card: best price (₪X) + unit price line for packaged products (e.g., "₪9.23 ל-100 גרם") + "חסוך ₪Y" badge vs most expensive store
-   - For weighted products: "מחיר ל-ק״ג" indicator with Weight icon
+   - Labeled info table: Barcode · Manufacturer · Package Size (`unit_qty`) · Sale Type (נמכר במשקל / יחידה) · Unit of Measure (ק״ג / ליטר) · Category · Subcategory · Sub-subcategory
+   - Price hero card: best price (₪X) with unit suffix for weighted (/ ק״ג) + unit price line for packaged products (e.g., "₪9.23 ל-100 גרם") + "חסוך ₪Y" badge vs most expensive store
+   - For weighted products: "מחיר ל-ק״ג" indicator with Weight icon + per-100g subprice (≈ ₪X.XX / 100 ג׳)
    - Vegan / labels badges + allergen chips (with AlertCircle icon)
    - Store price table (sorted cheapest first):
      - Cheapest row: green highlight + "הכי זול" badge + `-X%` badge (vs most expensive)
@@ -708,7 +708,7 @@ Client-side service for the Israeli food prices API, proxied through `/price-api
 Shared price formatting utilities used across all product-facing components. Central source of truth for how prices and units are displayed.
 
 **Core concept**: `is_weighted` (from supermarket XML `bIsWeighted` field) gates all unit display:
-- `true` → sold by weight — price IS per-unit, show unit suffix (/ ק״ג, / 100 ג׳, / ליטר)
+- `true` → sold by weight — price IS per-unit, show unit suffix (/ ק״ג, / 100 ג׳, / ליטר). Defaults to per-kg when `unit_of_measure` is null.
 - `false` → packaged product — ignore `unit_of_measure` (it's regulatory), use `unit_qty` for package size and unit price
 - `null` → unknown — fall back to `unit_of_measure` heuristic
 
@@ -721,7 +721,9 @@ Shared price formatting utilities used across all product-facing components. Cen
 | `isWeightedProduct` | `(unitOfMeasure?, isWeighted?) → boolean` | Check if product is sold by weight |
 | `unitBadgeLabel` | `(unitOfMeasure?, isWeighted?) → string \| null` | Badge text: `"ק״ג"`, `"100ג׳"`, `"ליטר"`, or null |
 | `defaultCartUnit` | `(unitOfMeasure?, isWeighted?) → 'kg' \| 'pcs'` | Default cart unit (kg for weighted, pcs otherwise) |
-| `normalizeUnitQty` | `(raw?) → string \| null` | Normalize whitespace and validate `unit_qty` has a leading number. Filters out bare unit names like `"קילוגרמים"` (regulatory, not package size). `"1  ליטר"` → `"1 ליטר"`, `"קילוגרמים"` → `null` |
+| `formatWeightedSubprice` | `(price, unitOfMeasure?, isWeighted?) → string \| null` | Per-100g/100ml subprice for weighted products: `"≈ ₪9.99 / 100 ג׳"` (per-kg), `"≈ ₪1.50 / 100 מ״ל"` (per-liter). Returns null for packaged or per-100g products. |
+| `computeWeightedTotal` | `(price, amount, cartUnit, unitOfMeasure?, isWeighted?) → number \| null` | Estimated total for weighted cart items based on amount/unit. Supports kg↔g, 100g↔g, liter↔ml conversions. |
+| `normalizeUnitQty` | `(raw?) → string \| null` | Normalize whitespace and validate `unit_qty`. Allows: strings with leading number (`"400 גרם"` → `"400 גרם"`), per-unit labels (`"יחידה"`). Filters: bare regulatory units (`"קילוגרמים"` → `null`). |
 | `parseUnitQty` | `(raw?) → ParsedUnitQty \| null` | Parse `unit_qty` into `{ value, unit, unitLabel }` (supports גרם, ק"ג, ליטר, מ"ל) |
 | `formatUnitPriceLine` | `(price, unitQty?, isWeighted?) → string \| null` | Computed unit price: `"₪9.23 ל-100 גרם"` (400g @ ₪29.90), `"₪8.60 לליטר"` (500ml @ ₪4.30). Returns null for weighted products or missing data. |
 
