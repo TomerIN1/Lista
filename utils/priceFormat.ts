@@ -38,12 +38,15 @@ function normalizeUnit(raw?: string | null): NormalizedUnit {
 /**
  * Returns the effective selling unit, gated by is_weighted.
  * - is_weighted === false → null (packaged, ignore unit_of_measure)
- * - is_weighted === true  → use unit_of_measure
+ * - is_weighted === true  → use unit_of_measure, default to 'kg' if missing
  * - is_weighted === null/undefined → fallback to unit_of_measure heuristic
  */
 function effectiveUnit(unitOfMeasure?: string | null, isWeighted?: boolean | null): NormalizedUnit {
   if (isWeighted === false) return null;
-  return normalizeUnit(unitOfMeasure);
+  const unit = normalizeUnit(unitOfMeasure);
+  // Weighted products without an explicit unit default to per-kg (the norm in Israeli supermarkets)
+  if (unit === null && isWeighted === true) return 'kg';
+  return unit;
 }
 
 /** Map normalized unit to display suffix */
