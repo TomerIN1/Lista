@@ -4,7 +4,7 @@ import { X, Package, Leaf, Tag, TrendingDown, AlertCircle, Weight } from 'lucide
 import { DbProductDetail, DbProductEnhanced, ProductStorePrice } from '../types';
 import { getProductDetail } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
-import { unitBadgeLabel } from '../utils/priceFormat';
+import { unitBadgeLabel, normalizeUnitQty, formatUnitPriceLine } from '../utils/priceFormat';
 
 interface ProductDetailModalProps {
   barcode: string;
@@ -73,6 +73,14 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
   const weighted = product?.is_weighted ?? fallbackProduct?.is_weighted;
   const badge = unitBadgeLabel(uom, weighted);
   const priceSuffix = badge ? ` / ${badge}` : '';
+
+  // Extract representative unit_qty from price entries (first non-null)
+  const representativeUnitQty = sortedPrices.find(p => p.unit_qty)?.unit_qty ?? null;
+  const displayUnitQty = normalizeUnitQty(representativeUnitQty);
+  // Unit price line for packaged products (e.g., "₪7.48 ל-100 גרם")
+  const cheapestUnitPriceLine = cheapestPrice != null
+    ? formatUnitPriceLine(cheapestPrice, representativeUnitQty, weighted)
+    : null;
 
   const modal = (
     <div
@@ -143,6 +151,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                 {[
                   { label: isRTL ? 'ברקוד' : 'Barcode', value: info.barcode, mono: true },
                   { label: isRTL ? 'יצרן' : 'Manufacturer', value: info.manufacturer },
+                  { label: isRTL ? 'גודל אריזה' : 'Package Size', value: displayUnitQty },
                   { label: isRTL ? 'קטגוריה' : 'Category', value: info.category },
                   { label: isRTL ? 'תת-קטגוריה' : 'Subcategory', value: info.subcategory },
                   { label: isRTL ? 'תת-תת-קטגוריה' : 'Sub-subcategory', value: info.sub_subcategory },
@@ -176,6 +185,11 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                           {isRTL ? `מחיר ל-${badge}` : `Price per ${badge}`}
                         </span>
                       </div>
+                    )}
+                    {cheapestUnitPriceLine && (
+                      <p className="text-[11px] text-slate-500 font-medium mt-1">
+                        {cheapestUnitPriceLine}
+                      </p>
                     )}
                     {mostExpensivePrice != null && mostExpensivePrice !== cheapestPrice && (
                       <p className="text-xs text-slate-400 mt-1">
@@ -247,6 +261,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                         : 0;
                       const promoLabel = p.promotion?.description
                         || (hasDiscount ? (isRTL ? 'מחיר מבצע' : 'Sale price') : null);
+                      const storeUnitQty = normalizeUnitQty(p.unit_qty);
+                      const storeUnitPriceLine = formatUnitPriceLine(p.effective_price, p.unit_qty, weighted);
 
                       return (
                         <div
@@ -285,6 +301,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                                 </p>
                               </div>
                             )}
+                            {storeUnitQty && (
+                              <p className="text-[10px] text-slate-400 mt-0.5">{storeUnitQty}</p>
+                            )}
                           </div>
 
                           {/* Price column */}
@@ -294,6 +313,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                             </p>
                             {hasDiscount && (
                               <p className="text-[11px] text-slate-400 line-through">₪{p.price.toFixed(2)}</p>
+                            )}
+                            {storeUnitPriceLine && (
+                              <p className="text-[10px] text-slate-400">{storeUnitPriceLine}</p>
                             )}
                             {!isCheapest && diff > 0.01 && (
                               <p className="text-[11px] text-slate-400 font-medium">+₪{diff.toFixed(2)}</p>

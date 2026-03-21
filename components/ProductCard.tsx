@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Package, Weight } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
-import { formatPriceLabel, unitBadgeLabel } from '../utils/priceFormat';
+import { formatPriceLabel, unitBadgeLabel, normalizeUnitQty, formatUnitPriceLine } from '../utils/priceFormat';
 
 interface ProductCardProps {
   product: DbProductEnhanced;
@@ -15,6 +15,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
   const { t, isRTL } = useLanguage();
   const [imgFailed, setImgFailed] = useState(false);
   const badge = unitBadgeLabel(product.unit_of_measure, product.is_weighted);
+  const displayUnitQty = normalizeUnitQty(product.unit_qty);
+  const unitPriceLine = formatUnitPriceLine(product.min_price, product.unit_qty, product.is_weighted);
   const hasPromo = product.max_price != null && product.min_price < product.max_price;
   const discountPct = hasPromo && product.max_price
     ? Math.round((1 - product.min_price / product.max_price) * 100)
@@ -54,8 +56,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
         <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-tight">
           {product.name}
         </p>
-        {product.manufacturer && (
-          <p className="text-[11px] text-slate-400 truncate">{product.manufacturer}</p>
+        {(product.manufacturer || displayUnitQty) && (
+          <p className="text-[11px] text-slate-400 truncate">
+            {[product.manufacturer, displayUnitQty].filter(Boolean).join(' | ')}
+          </p>
         )}
         <div className="mt-auto pt-1">
           {hasPromo && product.max_price != null ? (
@@ -64,12 +68,20 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
                 <span className="text-sm font-black text-rose-600">{formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}</span>
                 <span className="text-xs font-normal text-slate-400 line-through">₪{product.max_price.toFixed(2)}</span>
               </div>
+              {unitPriceLine && (
+                <p className="text-[10px] text-slate-400">{unitPriceLine}</p>
+              )}
               <p className="text-[11px] text-rose-500 font-semibold">
                 {isRTL ? `חיסכון ₪${(product.max_price - product.min_price).toFixed(2)}` : `Save ₪${(product.max_price - product.min_price).toFixed(2)}`}
               </p>
             </>
           ) : (
-            <span className="text-sm font-bold text-emerald-600">{formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}</span>
+            <>
+              <span className="text-sm font-bold text-emerald-600">{formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}</span>
+              {unitPriceLine && (
+                <p className="text-[10px] text-slate-400">{unitPriceLine}</p>
+              )}
+            </>
           )}
         </div>
       </div>

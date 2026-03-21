@@ -96,7 +96,7 @@ The application supports both authenticated users (via Google Sign-In) and guest
 
 ### 🛒 Shopping Mode — Supermarket-Style Product Catalog
 - **3-Level Category Navigation**: Browse products by category › subcategory › sub_subcategory with horizontal chip navigation. Categories display custom SVG illustration icons (served from `/public/category-icons/`) and are sorted in grocery-first order (produce, dairy, meat → lifestyle, pets, garden → other)
-- **Product Grid**: 2-col (mobile) / 3-col (desktop) card grid with product image, name, manufacturer, price
+- **Product Grid**: 2-col (mobile) / 3-col (desktop) card grid with product image, name, manufacturer + package size (e.g., "טירת צבי | 400 גרם"), price, and unit price (e.g., "₪9.23 ל-100 גרם")
 - **Promo Badges**: `-X%` rose pill on cards and in the detail modal when `min_price < max_price`; shows savings amount ("חיסכון ₪X")
 - **Filter Panel**: Vegan-only toggle + allergen-free multi-select (גלוטן, חלב, ביצים, etc.) + on-sale toggle + price range (min/max ₪) inputs, with active chip summary row
 - **Sort Dropdown**: 5 sort options (default, price low→high, price high→low, name א→ת, name ת→א). Browse view sorts client-side on loaded products; search view passes `sort_by=min_price` to the API for price sorts, name sorts are client-side.
@@ -104,9 +104,11 @@ The application supports both authenticated users (via Google Sign-In) and guest
 - **Search**: Debounced (300ms) full-text product search with result count; clears back to category view
 - **Product Detail Modal** (opens on card click):
   - Fixed-height image with product name/manufacturer overlaid on gradient
-  - Labeled info table: Barcode, Manufacturer, Category, Subcategory, Sub-subcategory (merged from browse + detail API responses)
-  - Price hero: best price + "חסוך ₪X" savings badge vs most expensive store
+  - Labeled info table: Barcode, Manufacturer, Package Size (`unit_qty`), Category, Subcategory, Sub-subcategory (merged from browse + detail API responses)
+  - Price hero: best price + unit price line for packaged products (e.g., "₪9.23 ל-100 גרם") + "חסוך ₪X" savings badge vs most expensive store
+  - For weighted products: "מחיר ל-ק״ג" indicator with Weight icon
   - Store price table sorted cheapest-first; cheapest row highlighted green + "הכי זול" badge + `-X%` discount badge
+  - Per-store `unit_qty` display (e.g., "400 גרם") and computed unit price per store
   - Per-store promo detection via `effective_price < price`; shows "במבצע: [description]" with Tag icon
   - `+₪X.XX` price difference vs cheapest shown on every non-cheapest row
   - Sticky "הוסף" / "נוסף" button pinned to modal bottom
@@ -227,8 +229,8 @@ Lista/
 │   ├── Sidebar.tsx                  # Navigation sidebar
 │   ├── ShoppingInputArea.tsx        # Shopping mode list builder with collapsible cart footer
 │   ├── ProductCatalogArea.tsx       # Supermarket-style browse/search with category nav & filters
-│   ├── ProductCard.tsx              # Product grid card with promo badge & savings display
-│   └── ProductDetailModal.tsx       # Rich product detail: info table, sorted price table, per-store promos
+│   ├── ProductCard.tsx              # Product grid card with promo badge, unit_qty, unit pricing display
+│   └── ProductDetailModal.tsx       # Rich product detail: info table, package size, unit pricing, sorted price table, per-store promos
 │
 ├── constants/                   # Static data
 │   ├── legalText.ts            # Privacy & Terms
@@ -243,6 +245,9 @@ Lista/
 │   ├── geminiService.ts        # OpenAI API (organize, recipes — shared AI functions)
 │   ├── govDataService.ts       # data.gov.il address autocomplete
 │   └── priceDbService.ts       # Israeli food prices API (browse, search, compare, delivery)
+│
+├── utils/                       # Shared utilities
+│   └── priceFormat.ts           # Price formatting: unit suffixes, unit_qty parsing, unit price computation
 │
 ├── agents_and_ai/               # AI-powered features (self-contained modules)
 │   └── product-discovery-assistant/
@@ -583,9 +588,11 @@ Individual product card for the browse/search grid.
 
 **Features**:
 - Product image with `Package` fallback on 404
-- Name (2-line clamp), manufacturer
+- Name (2-line clamp), manufacturer + package size (e.g., "טירת צבי | 400 גרם" via `unit_qty`)
+- Weighted product badge: amber pill with Weight icon + unit label (ק״ג / 100ג׳ / ליטר)
 - Promo badge: `-X%` rose pill (top-start) when `min_price < max_price`
 - Price section: sale price in rose + original struck through + "חיסכון ₪X / Save ₪X" line
+- Unit price line for packaged products (e.g., "₪9.23 ל-100 גרם") computed from `unit_qty`
 - Add / Added button (green CTA → disabled state once in cart)
 - Card body click opens `ProductDetailModal`
 
@@ -599,11 +606,13 @@ Full product details rendered as a portal modal.
 **Layout**:
 1. **Fixed-height image** (200-240px) with gradient + product name/manufacturer overlay
 2. **Scrollable body**:
-   - Labeled info table: Barcode · Manufacturer · Category · Subcategory · Sub-subcategory
-   - Price hero card: best price (₪X) + "חסוך ₪Y" badge vs most expensive store
+   - Labeled info table: Barcode · Manufacturer · Package Size (`unit_qty`) · Category · Subcategory · Sub-subcategory
+   - Price hero card: best price (₪X) + unit price line for packaged products (e.g., "₪9.23 ל-100 גרם") + "חסוך ₪Y" badge vs most expensive store
+   - For weighted products: "מחיר ל-ק״ג" indicator with Weight icon
    - Vegan / labels badges + allergen chips (with AlertCircle icon)
    - Store price table (sorted cheapest first):
      - Cheapest row: green highlight + "הכי זול" badge + `-X%` badge (vs most expensive)
+     - Per-store `unit_qty` display and computed unit price
      - Per-store promo detection via `effective_price < price` → shows `-X% מבצע` badge + "במבצע: [description]"
      - Other rows: `+₪X.XX` diff vs cheapest in slate text
 3. **Sticky Add button** pinned to modal bottom
@@ -667,7 +676,7 @@ Client-side service for the Israeli food prices API, proxied through `/price-api
 **`getProductDetail(barcode)`** — TTL 10min
 - `GET /api/products/{barcode}`
 - Returns `DbProductDetail` (product + `prices: ProductStorePrice[]`)
-- `ProductStorePrice` includes `supermarket`, `price`, `effective_price`, `promotion`, `store`
+- `ProductStorePrice` includes `supermarket`, `price`, `effective_price`, `unit_qty`, `promotion`, `store`
 
 **`searchProducts(query, limit, offset, city?, storeType?, is_vegan?, allergen_free?)`** — TTL 5min
 - `GET /api/products/search`
@@ -688,6 +697,33 @@ Client-side service for the Israeli food prices API, proxied through `/price-api
 #### Resolved Issues
 - **Browse by category returned no products when city selected** — The `browseProducts()` call passed the city as `city` query param, but the API expects `delivery_city_name`. This caused the browse endpoint to return 0–1 results when a city was selected (same class of bug as the search/city fix in `cd5a124`). **Fixed in frontend**: `priceDbService.ts` now maps `city` → `delivery_city_name` for the browse endpoint.
 - **`min_price` reflected only regular prices** — The browse/search endpoints computed `min_price` as `MIN(price)`, ignoring active promotions. This caused a visible inconsistency: a product card showed ₪14.90 as the best price while the detail modal showed ₪12.90 (Rami Levy promo). **Fixed in backend**: browse and search queries now compute `min_price` as `MIN(effective_price)` so the cheapest promotion price is always reflected in card display. `max_price` remains `MAX(price)` (the most expensive regular price, used as the "before discount" anchor).
+
+---
+
+### utils/priceFormat.ts
+**Location**: `utils/priceFormat.ts`
+
+Shared price formatting utilities used across all product-facing components. Central source of truth for how prices and units are displayed.
+
+**Core concept**: `is_weighted` (from supermarket XML `bIsWeighted` field) gates all unit display:
+- `true` → sold by weight — price IS per-unit, show unit suffix (/ ק״ג, / 100 ג׳, / ליטר)
+- `false` → packaged product — ignore `unit_of_measure` (it's regulatory), use `unit_qty` for package size and unit price
+- `null` → unknown — fall back to `unit_of_measure` heuristic
+
+#### Exported Functions
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `formatPriceLabel` | `(price, unitOfMeasure?, isWeighted?) → string` | Single price with unit suffix: `"₪8.90 / ק״ג"` or `"₪7.20"` |
+| `formatPriceRange` | `(min, max?, unitOfMeasure?, isWeighted?) → string` | Price range: `"₪8.90 – ₪12.00 / ק״ג"` |
+| `isWeightedProduct` | `(unitOfMeasure?, isWeighted?) → boolean` | Check if product is sold by weight |
+| `unitBadgeLabel` | `(unitOfMeasure?, isWeighted?) → string \| null` | Badge text: `"ק״ג"`, `"100ג׳"`, `"ליטר"`, or null |
+| `defaultCartUnit` | `(unitOfMeasure?, isWeighted?) → 'kg' \| 'pcs'` | Default cart unit (kg for weighted, pcs otherwise) |
+| `normalizeUnitQty` | `(raw?) → string \| null` | Normalize whitespace in `unit_qty` strings (`"1  ליטר"` → `"1 ליטר"`) |
+| `parseUnitQty` | `(raw?) → ParsedUnitQty \| null` | Parse `unit_qty` into `{ value, unit, unitLabel }` (supports גרם, ק"ג, ליטר, מ"ל) |
+| `formatUnitPriceLine` | `(price, unitQty?, isWeighted?) → string \| null` | Computed unit price: `"₪9.23 ל-100 גרם"` (400g @ ₪29.90), `"₪8.60 לליטר"` (500ml @ ₪4.30). Returns null for weighted products or missing data. |
+
+**Used by**: `ProductCard`, `ProductDetailModal`, `SmartListPanel`, `ShoppingInputArea`, `ProductSearchInput`, `ShoppingListBreakdownModal`, `ProductCatalogArea`
 
 ---
 
@@ -2945,7 +2981,7 @@ All products from the browse and detail endpoints include new fields: `subcatego
 | `SubCategoryNode` | `{name, count, sub_subcategories[]}` | Mid category level |
 | `CategoryNode` | `{name, count, subcategories[]}` | Top category level |
 | `ProductBrowseResult` | `{total, page, limit, products[]}` | Browse API response |
-| `ProductStorePrice` | `{supermarket, price, effective_price, promotion, store}` | Per-store price in detail |
+| `ProductStorePrice` | `{supermarket, price, effective_price, unit_qty, promotion, store}` | Per-store price in detail |
 | `DbProductDetail` | Extends `DbProductEnhanced` with `prices[]` | Full product detail |
 
 Also made `max_price` and `savings` optional on `DbProduct` (browse endpoint omits them) and added 5 optional enhanced fields to `DbProduct` for backward compatibility.
@@ -2956,7 +2992,7 @@ Also made `max_price` and `savings` optional on `DbProduct` (browse endpoint omi
 
 Individual product tile for the catalog grid.
 
-- **Layout**: Square image (with `Package` fallback), name (2-line clamp), manufacturer, `₪min_price`, promo `Tag` badge when `min_price < max_price`
+- **Layout**: Square image (with `Package` fallback), name (2-line clamp), manufacturer + package size (e.g., "טירת צבי | 400 גרם"), `₪min_price`, unit price line (e.g., "₪9.23 ל-100 גרם"), promo `Tag` badge when `min_price < max_price`, weighted product badge (amber, ק״ג/100ג׳/ליטר)
 - **Add button**: `+ הוסף` → `✓ נוסף` (green, disabled) when already in cart
 - Clicking the card body (not button) opens `ProductDetailModal`
 
@@ -2965,7 +3001,8 @@ Individual product tile for the catalog grid.
 Full-screen bottom-sheet modal (portalled via `createPortal`).
 
 - Fetches product detail via `getProductDetail(barcode)` on open
-- Shows: large image, category breadcrumb, name/manufacturer/barcode, vegan badge (only when `is_vegan === true`), labels, allergen chips, per-store prices table with promotion descriptions
+- Shows: large image, category breadcrumb, name/manufacturer/barcode, package size (`unit_qty`), vegan badge (only when `is_vegan === true`), labels, allergen chips, per-store prices table with `unit_qty` and unit price per store, promotion descriptions
+- Price hero includes unit price line for packaged products (e.g., "₪9.23 ל-100 גרם") and "מחיר ל-ק״ג" for weighted products
 - Escape key and backdrop click close the modal
 - Add to List button mirrors the card's `+ הוסף / ✓ נוסף` state
 

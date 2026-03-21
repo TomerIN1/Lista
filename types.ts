@@ -88,6 +88,7 @@ export interface DbProduct {
   savings?: number;     // absent from browse endpoint
   unit_of_measure?: string | null; // "kg", "100 גרם", etc. — only meaningful when is_weighted is true
   is_weighted?: boolean | null;    // true = sold by weight, false = packaged, null = unknown
+  unit_qty?: string | null;        // e.g. "1 ליטר", "400 גרם" — representative value from price entries, null for Rami Levy-only
   // Optional enhanced fields (present when using browse/detail endpoints)
   subcategory?: string | null;
   sub_subcategory?: string | null;
@@ -119,6 +120,7 @@ export interface ProductStorePrice {
   supermarket: string;
   price: number;
   effective_price: number;
+  unit_qty?: string | null; // e.g. "1 ליטר", "400 גרם", "1 ק"ג" — per-price, null for Rami Levy
   promotion: { description: string; type: string; ends_at: string | null } | null;
   store: { store_id: string; store_name: string; city: string | null; address: string | null; is_online: boolean };
 }

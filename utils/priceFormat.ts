@@ -106,3 +106,117 @@ export function unitBadgeLabel(unitOfMeasure?: string | null, isWeighted?: boole
 export function defaultCartUnit(unitOfMeasure?: string | null, isWeighted?: boolean | null): 'kg' | 'pcs' {
   return effectiveUnit(unitOfMeasure, isWeighted) === 'kg' ? 'kg' : 'pcs';
 }
+
+// ============================================
+// unit_qty helpers (package size from price entries)
+// ============================================
+
+/**
+ * Normalize whitespace in unit_qty strings.
+ * API may return "1  ליטר" (double space) or "400 גרם".
+ */
+export function normalizeUnitQty(raw?: string | null): string | null {
+  if (!raw) return null;
+  return raw.replace(/\s+/g, ' ').trim() || null;
+}
+
+interface ParsedUnitQty {
+  value: number;
+  unit: 'g' | 'kg' | 'ml' | 'l' | 'units';
+  unitLabel: string; // Hebrew display label
+}
+
+/**
+ * Parse unit_qty string into structured form.
+ * "400 גרם" → { value: 400, unit: 'g', unitLabel: 'גרם' }
+ * "1 ליטר"  → { value: 1, unit: 'l', unitLabel: 'ליטר' }
+ * "1 ק"ג"   → { value: 1, unit: 'kg', unitLabel: 'ק"ג' }
+ */
+export function parseUnitQty(raw?: string | null): ParsedUnitQty | null {
+  if (!raw) return null;
+  const normalized = raw.replace(/\s+/g, ' ').trim();
+
+  // Extract leading number (int or decimal)
+  const numMatch = normalized.match(/^([\d.]+)\s*/);
+  if (!numMatch) return null;
+  const value = parseFloat(numMatch[1]);
+  if (isNaN(value) || value <= 0) return null;
+
+  const rest = normalized.slice(numMatch[0].length).trim().toLowerCase();
+
+  // Detect unit
+  if (rest.includes('ק"ג') || rest.includes('ק״ג') || rest === 'קג' || rest === 'kg' || rest.includes('קילו')) {
+    return { value, unit: 'kg', unitLabel: 'ק״ג' };
+  }
+  if (rest.includes('גרם') || rest === 'g' || rest === 'gr') {
+    return { value, unit: 'g', unitLabel: 'גרם' };
+  }
+  if (rest.includes('ליטר') || rest === 'l' || rest === 'liter') {
+    return { value, unit: 'l', unitLabel: 'ליטר' };
+  }
+  if (rest.includes('מ"ל') || rest.includes('מ״ל') || rest === 'ml') {
+    return { value, unit: 'ml', unitLabel: 'מ״ל' };
+  }
+  if (rest.includes('יחידה') || rest.includes('יחידות') || rest === 'units' || rest === 'unit') {
+    return { value, unit: 'units', unitLabel: 'יח׳' };
+  }
+
+  return null;
+}
+
+/**
+ * Compute and format a unit price line for packaged products.
+ * For weight-based: "₪7.48 ל-100 גרם" (for a 400g product at ₪29.90)
+ * For volume-based: "₪8.60 לליטר" (for a 500ml product at ₪4.30)
+ * Returns null for weighted products (price IS already per-unit) or if unit_qty is missing/unparseable.
+ */
+export function formatUnitPriceLine(
+  price: number,
+  unitQty?: string | null,
+  isWeighted?: boolean | null
+): string | null {
+  // Weighted products already show price per unit — no conversion needed
+  if (isWeighted === true) return null;
+
+  const parsed = parseUnitQty(unitQty);
+  if (!parsed) return null;
+
+  // Convert to a standard reference unit and format
+  let perUnitPrice: number;
+  let label: string;
+
+  switch (parsed.unit) {
+    case 'g': {
+      // Show price per 100g
+      if (parsed.value <= 0) return null;
+      perUnitPrice = (price / parsed.value) * 100;
+      label = 'ל-100 גרם';
+      break;
+    }
+    case 'kg': {
+      // Show price per kg (already in kg)
+      if (parsed.value <= 0) return null;
+      perUnitPrice = price / parsed.value;
+      label = 'לק״ג';
+      break;
+    }
+    case 'ml': {
+      // Show price per liter
+      if (parsed.value <= 0) return null;
+      perUnitPrice = (price / parsed.value) * 1000;
+      label = 'לליטר';
+      break;
+    }
+    case 'l': {
+      // Show price per liter
+      if (parsed.value <= 0) return null;
+      perUnitPrice = price / parsed.value;
+      label = 'לליטר';
+      break;
+    }
+    default:
+      return null;
+  }
+
+  return `₪${perUnitPrice.toFixed(2)} ${label}`;
+}
