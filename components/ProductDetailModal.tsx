@@ -4,7 +4,7 @@ import { X, Package, Leaf, Tag, TrendingDown, AlertCircle, Weight } from 'lucide
 import { DbProductDetail, DbProductEnhanced, ProductStorePrice } from '../types';
 import { getProductDetail } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
-import { unitBadgeLabel, normalizeUnitQty, formatUnitPriceLine } from '../utils/priceFormat';
+import { unitBadgeLabel, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct } from '../utils/priceFormat';
 
 interface ProductDetailModalProps {
   barcode: string;
@@ -152,6 +152,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                   { label: isRTL ? 'ברקוד' : 'Barcode', value: info.barcode, mono: true },
                   { label: isRTL ? 'יצרן' : 'Manufacturer', value: info.manufacturer },
                   { label: isRTL ? 'גודל אריזה' : 'Package Size', value: displayUnitQty },
+                  { label: isRTL ? 'סוג מכירה' : 'Sale Type', value: isWeightedProduct(uom, weighted) ? (isRTL ? 'נמכר במשקל' : 'Sold by weight') : (isRTL ? 'יחידה' : 'Per unit') },
+                  { label: isRTL ? 'יחידת מידה' : 'Unit of Measure', value: badge },
                   { label: isRTL ? 'קטגוריה' : 'Category', value: info.category },
                   { label: isRTL ? 'תת-קטגוריה' : 'Subcategory', value: info.subcategory },
                   { label: isRTL ? 'תת-תת-קטגוריה' : 'Sub-subcategory', value: info.sub_subcategory },
