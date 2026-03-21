@@ -147,18 +147,29 @@ export function computeWeightedTotal(price: number, amount: number, cartUnit: st
 
 /**
  * Normalize whitespace in unit_qty strings and validate it's meaningful.
- * API may return "1  ליטר" (double space), "400 גרם", or bare unit names
- * like "קילוגרמים" (no number — regulatory label, not a real package size).
- * Only returns a value when it contains a parseable quantity + unit.
+ * API may return "1  ליטר" (double space), "400 גרם", or bare unit names.
+ *
+ * Allowed through:
+ *   - Strings starting with a number: "400 גרם", "1 ליטר"
+ *   - Per-unit labels: "יחידה", "יחידות" — tells users it's sold per-unit
+ *
+ * Blocked:
+ *   - Bare regulatory weight/volume units: "קילוגרמים", "ליטרים", "קילו" etc.
+ *     These are comparison units, not package sizes.
  */
 export function normalizeUnitQty(raw?: string | null): string | null {
   if (!raw) return null;
   const normalized = raw.replace(/\s+/g, ' ').trim();
   if (!normalized) return null;
-  // Only show if it starts with a number (e.g., "400 גרם", "1 ליטר")
-  // Skip bare unit names like "קילוגרמים" which are regulatory, not package size
-  if (!/^\d/.test(normalized)) return null;
-  return normalized;
+  // Allow strings starting with a number (e.g., "400 גרם", "1 ליטר")
+  if (/^\d/.test(normalized)) return normalized;
+  // Allow per-unit labels — informative for users
+  const lower = normalized.toLowerCase();
+  if (lower === 'יחידה' || lower === 'יחידות' || lower === 'unit' || lower === 'units') {
+    return normalized;
+  }
+  // Block bare regulatory unit names like "קילוגרמים", "ליטרים"
+  return null;
 }
 
 interface ParsedUnitQty {
