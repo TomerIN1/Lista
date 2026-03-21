@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Package, Weight } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
-import { formatPriceLabel, unitBadgeLabel, normalizeUnitQty, formatUnitPriceLine } from '../utils/priceFormat';
+import { formatPriceLabel, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct, formatWeightedSubprice } from '../utils/priceFormat';
 
 interface ProductCardProps {
   product: DbProductEnhanced;
@@ -14,9 +14,10 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, onClick }) => {
   const { t, isRTL } = useLanguage();
   const [imgFailed, setImgFailed] = useState(false);
-  const badge = unitBadgeLabel(product.unit_of_measure, product.is_weighted);
+  const weighted = isWeightedProduct(product.unit_of_measure, product.is_weighted);
   const displayUnitQty = normalizeUnitQty(product.unit_qty);
   const unitPriceLine = formatUnitPriceLine(product.min_price, product.unit_qty, product.is_weighted);
+  const weightedSubprice = formatWeightedSubprice(product.min_price, product.unit_of_measure, product.is_weighted);
   const hasPromo = product.max_price != null && product.min_price < product.max_price;
   const discountPct = hasPromo && product.max_price
     ? Math.round((1 - product.min_price / product.max_price) * 100)
@@ -44,11 +45,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
             -{discountPct}%
           </span>
         )}
-        {badge && (
-          <span className="absolute top-1.5 end-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-tight shadow-sm flex items-center gap-0.5">
-            <Weight className="w-2.5 h-2.5" />{badge}
-          </span>
-        )}
       </div>
 
       {/* Info */}
@@ -68,6 +64,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
                 <span className="text-sm font-black text-rose-600">{formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}</span>
                 <span className="text-xs font-normal text-slate-400 line-through">₪{product.max_price.toFixed(2)}</span>
               </div>
+              {weightedSubprice && (
+                <p className="text-[10px] text-slate-400">{weightedSubprice}</p>
+              )}
               {unitPriceLine && (
                 <p className="text-[10px] text-slate-400">{unitPriceLine}</p>
               )}
@@ -78,10 +77,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
           ) : (
             <>
               <span className="text-sm font-bold text-emerald-600">{formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}</span>
+              {weightedSubprice && (
+                <p className="text-[10px] text-slate-400">{weightedSubprice}</p>
+              )}
               {unitPriceLine && (
                 <p className="text-[10px] text-slate-400">{unitPriceLine}</p>
               )}
             </>
+          )}
+          {weighted && (
+            <div className="flex items-center gap-1 mt-1">
+              <Weight className="w-3 h-3 text-amber-500" />
+              <span className="text-[10px] text-amber-600 font-semibold">
+                {isRTL ? 'נמכר במשקל' : 'Sold by weight'}
+              </span>
+            </div>
           )}
         </div>
       </div>

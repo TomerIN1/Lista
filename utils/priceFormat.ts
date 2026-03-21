@@ -107,6 +107,40 @@ export function defaultCartUnit(unitOfMeasure?: string | null, isWeighted?: bool
   return effectiveUnit(unitOfMeasure, isWeighted) === 'kg' ? 'kg' : 'pcs';
 }
 
+/**
+ * For weighted products priced per-kg, returns the per-100g equivalent line.
+ * e.g. "≈ ₪1.09 / 100 ג׳" for a ₪10.90/kg product.
+ * For per-100g products returns null (price IS already per-100g).
+ * For per-liter products returns "≈ ₪X.XX / 100 מ״ל".
+ * Only for weighted products — returns null for packaged.
+ */
+export function formatWeightedSubprice(price: number, unitOfMeasure?: string | null, isWeighted?: boolean | null): string | null {
+  const unit = effectiveUnit(unitOfMeasure, isWeighted);
+  if (!unit) return null;
+  switch (unit) {
+    case 'kg': return `≈ ₪${(price / 10).toFixed(2)} / 100 ג׳`;
+    case 'liter': return `≈ ₪${(price / 10).toFixed(2)} / 100 מ״ל`;
+    case '100g': return null; // Already per-100g
+    default: return null;
+  }
+}
+
+/**
+ * Computes estimated total for a weighted product in the cart.
+ * amount is in the cart unit (kg, g, etc.), pricePerUnit is per the selling unit.
+ */
+export function computeWeightedTotal(price: number, amount: number, cartUnit: string, unitOfMeasure?: string | null, isWeighted?: boolean | null): number | null {
+  const unit = effectiveUnit(unitOfMeasure, isWeighted);
+  if (!unit) return null;
+  if (unit === 'kg' && cartUnit === 'kg') return price * amount;
+  if (unit === 'kg' && cartUnit === 'g') return (price / 1000) * amount;
+  if (unit === '100g' && cartUnit === 'g') return (price / 100) * amount;
+  if (unit === '100g' && cartUnit === 'kg') return price * 10 * amount;
+  if (unit === 'liter' && cartUnit === 'L') return price * amount;
+  if (unit === 'liter' && cartUnit === 'ml') return (price / 1000) * amount;
+  return null;
+}
+
 // ============================================
 // unit_qty helpers (package size from price entries)
 // ============================================

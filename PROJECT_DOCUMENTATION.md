@@ -589,9 +589,9 @@ Individual product card for the browse/search grid.
 **Features**:
 - Product image with `Package` fallback on 404
 - Name (2-line clamp), manufacturer + package size (e.g., "טירת צבי | 400 גרם" via `unit_qty`)
-- Weighted product badge: amber pill with Weight icon + unit label (ק״ג / 100ג׳ / ליטר)
 - Promo badge: `-X%` rose pill (top-start) when `min_price < max_price`
 - Price section: sale price in rose + original struck through + "חיסכון ₪X / Save ₪X" line
+- **Weighted products**: per-100g subprice line (e.g., "≈ ₪1.09 / 100 ג׳") via `formatWeightedSubprice()`, prominent "⚖️ נמכר במשקל" text label (amber, Weight icon) below price
 - Unit price line for packaged products (e.g., "₪9.23 ל-100 גרם") computed from `unit_qty`
 - Add / Added button (green CTA → disabled state once in cart)
 - Card body click opens `ProductDetailModal`
@@ -648,6 +648,8 @@ Shopping mode list builder. Hosts `ProductCatalogArea` (browse/search), an **AI 
 **Cart footer**:
 - **Collapsed**: `🛒 N מוצרים` + Compare Prices button
 - **Expanded** (max-h-96, scrollable): per-product rows showing name, manufacturer, category breadcrumb (category › subcategory › sub_subcategory), barcode, price, qty/unit controls, remove button
+- **Estimated total for weighted items**: when a product `isWeightedProduct()`, shows "≈ ₪X.XX משוער" computed via `computeWeightedTotal()` based on cart amount/unit
+- **Weighted items disclaimer**: amber banner "מוצרים הנמכרים במשקל — המחיר הסופי עשוי להשתנות בהתאם לשקילה בפועל" shown when any weighted product is in cart
 - Clear All button inside expanded panel
 - Toggle via ChevronUp/Down
 

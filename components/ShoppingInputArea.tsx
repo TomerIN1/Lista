@@ -8,7 +8,7 @@ import { DbProduct, ShoppingProduct, Unit, DeliveryCheckResult } from '../types'
 import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
 import ProductCatalogArea from './ProductCatalogArea';
 import SmartListPanel from '../agents_and_ai/product-discovery-assistant/SmartListPanel';
-import { formatPriceRange } from '../utils/priceFormat';
+import { formatPriceRange, isWeightedProduct, computeWeightedTotal } from '../utils/priceFormat';
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
@@ -296,6 +296,15 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
                       {formatPrice(product.min_price, product.max_price, product.unit_of_measure, product.is_weighted)}
                     </div>
                   )}
+                  {/* Estimated total for weighted products */}
+                  {product.min_price > 0 && isWeightedProduct(product.unit_of_measure, product.is_weighted) && (() => {
+                    const est = computeWeightedTotal(product.min_price, product.amount, product.unit, product.unit_of_measure, product.is_weighted);
+                    return est != null ? (
+                      <div className="text-[11px] text-amber-600 mt-0.5">
+                        {isRTL ? `≈ ₪${est.toFixed(2)} משוער` : `≈ ₪${est.toFixed(2)} est.`}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
                 {/* Amount & Unit Controls */}
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -337,6 +346,17 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
                 </button>
               </div>
             ))}
+
+            {/* Weighted items disclaimer */}
+            {products.some(p => isWeightedProduct(p.unit_of_measure, p.is_weighted)) && (
+              <div className="px-4 py-2 bg-amber-50/60 border-t border-amber-100">
+                <p className="text-[11px] text-amber-600">
+                  {isRTL
+                    ? '⚖️ מוצרים הנמכרים במשקל — המחיר הסופי עשוי להשתנות בהתאם לשקילה בפועל'
+                    : '⚖️ Weighted items — final price may vary based on actual weight'}
+                </p>
+              </div>
+            )}
 
             {/* Clear button inside expanded cart */}
             <div className="px-4 py-2 bg-slate-50/70 flex justify-end">
