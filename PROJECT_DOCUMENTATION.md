@@ -719,7 +719,7 @@ Shared price formatting utilities used across all product-facing components. Cen
 | `isWeightedProduct` | `(unitOfMeasure?, isWeighted?) → boolean` | Check if product is sold by weight |
 | `unitBadgeLabel` | `(unitOfMeasure?, isWeighted?) → string \| null` | Badge text: `"ק״ג"`, `"100ג׳"`, `"ליטר"`, or null |
 | `defaultCartUnit` | `(unitOfMeasure?, isWeighted?) → 'kg' \| 'pcs'` | Default cart unit (kg for weighted, pcs otherwise) |
-| `normalizeUnitQty` | `(raw?) → string \| null` | Normalize whitespace in `unit_qty` strings (`"1  ליטר"` → `"1 ליטר"`) |
+| `normalizeUnitQty` | `(raw?) → string \| null` | Normalize whitespace and validate `unit_qty` has a leading number. Filters out bare unit names like `"קילוגרמים"` (regulatory, not package size). `"1  ליטר"` → `"1 ליטר"`, `"קילוגרמים"` → `null` |
 | `parseUnitQty` | `(raw?) → ParsedUnitQty \| null` | Parse `unit_qty` into `{ value, unit, unitLabel }` (supports גרם, ק"ג, ליטר, מ"ל) |
 | `formatUnitPriceLine` | `(price, unitQty?, isWeighted?) → string \| null` | Computed unit price: `"₪9.23 ל-100 גרם"` (400g @ ₪29.90), `"₪8.60 לליטר"` (500ml @ ₪4.30). Returns null for weighted products or missing data. |
 

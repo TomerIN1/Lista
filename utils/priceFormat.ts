@@ -112,12 +112,19 @@ export function defaultCartUnit(unitOfMeasure?: string | null, isWeighted?: bool
 // ============================================
 
 /**
- * Normalize whitespace in unit_qty strings.
- * API may return "1  ליטר" (double space) or "400 גרם".
+ * Normalize whitespace in unit_qty strings and validate it's meaningful.
+ * API may return "1  ליטר" (double space), "400 גרם", or bare unit names
+ * like "קילוגרמים" (no number — regulatory label, not a real package size).
+ * Only returns a value when it contains a parseable quantity + unit.
  */
 export function normalizeUnitQty(raw?: string | null): string | null {
   if (!raw) return null;
-  return raw.replace(/\s+/g, ' ').trim() || null;
+  const normalized = raw.replace(/\s+/g, ' ').trim();
+  if (!normalized) return null;
+  // Only show if it starts with a number (e.g., "400 גרם", "1 ליטר")
+  // Skip bare unit names like "קילוגרמים" which are regulatory, not package size
+  if (!/^\d/.test(normalized)) return null;
+  return normalized;
 }
 
 interface ParsedUnitQty {
