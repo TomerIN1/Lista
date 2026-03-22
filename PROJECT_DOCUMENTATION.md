@@ -230,7 +230,9 @@ Lista/
 │   ├── ShoppingInputArea.tsx        # Shopping mode list builder with collapsible cart footer
 │   ├── ProductCatalogArea.tsx       # Supermarket-style browse/search with category nav & filters
 │   ├── ProductCard.tsx              # Product grid card with promo badge, unit_qty, unit pricing display
-│   └── ProductDetailModal.tsx       # Rich product detail: info table, package size, unit pricing, sorted price table, per-store promos
+│   ├── ProductDetailModal.tsx       # Rich product detail: info table, package size, unit pricing, sorted price table, per-store promos
+│   ├── BasketStrategyPicker.tsx    # Two-card strategy picker: single-store vs multi-store split
+│   └── BasketBreakdownView.tsx     # Per-store item breakdown for selected basket strategy
 │
 ├── constants/                   # Static data
 │   ├── legalText.ts            # Privacy & Terms
@@ -247,7 +249,8 @@ Lista/
 │   └── priceDbService.ts       # Israeli food prices API (browse, search, compare, delivery)
 │
 ├── utils/                       # Shared utilities
-│   └── priceFormat.ts           # Price formatting: unit suffixes, unit_qty parsing, unit price computation
+│   ├── priceFormat.ts           # Price formatting: unit suffixes, unit_qty parsing, unit price computation
+│   └── basketStrategies.ts     # Basket optimization: single-store vs multi-store split computation
 │
 ├── agents_and_ai/               # AI-powered features (self-contained modules)
 │   └── product-discovery-assistant/
@@ -1893,11 +1896,32 @@ The app was restructured into two top-level modes to separate the original free-
 - Clear button to reset product selection
 
 #### `components/ShoppingPriceStep.tsx`
-- Displays price comparison results inline as a main-flow step
-- Reuses `SavingsReport`, `ModeSelector`, and `LocationInput` components
-- Back button returns to build_list step
-- Physical mode: "Organize for Store" button triggers AI categorization with store recommendation
-- Online mode: "Build Cart" button opens PriceAgentChat directly
+- Displays price comparison results with **basket strategy picker** on top
+- Computes `BasketComparison` via `computeBasketComparison()` from `utils/basketStrategies.ts`
+- **Layout**: City chip → `BasketStrategyPicker` → `BasketBreakdownView` (when strategy selected) → Action button → Collapsible "View all stores" (`SavingsReport`)
+- Physical mode: "Organize for Store" button (single-store selection)
+- Multi-store and online PricePilot actions deferred (PricePilot not ready)
+
+#### `components/BasketStrategyPicker.tsx`
+- Two side-by-side cards: **Single Store** (emerald) vs **Multi-Store** (indigo)
+- Each card shows: store name(s), total cost, delivery fees (online), matched item count
+- "מומלץ" badge on the recommended strategy (multi if savings ≥ ₪2, else single)
+- Savings callout: "חסכו ₪X עם קנייה מ-Y חנויות" or "חנות אחת זולה יותר אחרי משלוח"
+- Multi-store card disabled when only one store has items (identical to single)
+- Minimum order warning badge when any store is below threshold
+
+#### `components/BasketBreakdownView.tsx`
+- Renders item-level breakdown for the selected strategy
+- **Single store**: Item list with promo badges, subtotal, delivery fee, total, missing items
+- **Multi store**: Per-store sections (store header + items + subtotal + delivery), grand total row, minimum order warnings (yellow), missing items
+
+#### `utils/basketStrategies.ts`
+- Pure computation utility, no side effects
+- **`computeBasketComparison(comparison, isOnline)`**: Takes `ListPriceComparison` and returns `BasketComparison` with both strategies
+- **Single store**: Best-ranked store from comparison (already sorted by match count + price)
+- **Multi store**: Uses `cheapestPerItem` from API to group items by cheapest store, sums per-store subtotals + delivery fees, checks minimum orders
+- **Recommendation**: Multi if savings ≥ ₪2 vs single, otherwise single
+- Physical mode: delivery fees set to 0
 
 ### Modified Components
 
@@ -3250,7 +3274,47 @@ Five improvements based on automated user simulation testing:
 
 ---
 
-**Last Updated**: March 18, 2026
-**Version**: 4.8.1
+### Basket Strategy Picker: Single-Store vs Multi-Store Split (v5.0.0, March 2026)
+
+#### Overview
+
+Added a basket optimization feature that computes and presents two shopping strategies to users after price comparison:
+
+1. **Single Store**: Cheapest single supermarket for the full list (existing behavior, formalized)
+2. **Multi-Store Split**: Buy each item at whichever store has the cheapest price, splitting across 2-3 stores
+
+The API already returned `cheapest_per_item` data (cheapest store per product barcode) but it was silently discarded in `compareListPrices()`. This change surfaces that data and uses it for multi-store computation.
+
+#### Data Layer Changes
+
+- **`types.ts`**: Added `BasketStrategyType`, `StoreBasketBreakdown`, `SingleStoreBasket`, `MultiStoreBasket`, `BasketComparison` types. Extended `ListPriceComparison` with `cheapestPerItem` field.
+- **`services/priceDbService.ts`**: `compareListPrices()` now maps `data.cheapest_per_item` (barcode → cheapest store + price) and includes it in `ListPriceComparison`. Store names mapped to Hebrew via `SUPERMARKET_NAME_MAP`.
+- **`utils/basketStrategies.ts`** (new): Pure computation utility. `computeBasketComparison(comparison, isOnline)` returns `BasketComparison` with both strategies + recommendation (multi if savings ≥ ₪2).
+
+#### UI Changes
+
+- **`components/BasketStrategyPicker.tsx`** (new): Two side-by-side cards (single=emerald, multi=indigo) with store name(s), totals, delivery fees, matched items, "מומלץ" badge, savings callout, minimum order warnings.
+- **`components/BasketBreakdownView.tsx`** (new): Item-level breakdown for selected strategy. Single: one store section. Multi: per-store sections with headers + grand total.
+- **`components/ShoppingPriceStep.tsx`** (rewritten): Strategy picker on top → breakdown below → action button → collapsible "View all stores" (SavingsReport). Uses `computeBasketComparison` via `useMemo`.
+
+#### Files Changed
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `types.ts` | Modified | Basket strategy types, `cheapestPerItem` on `ListPriceComparison` |
+| `services/priceDbService.ts` | Modified | Forward `cheapest_per_item` API data |
+| `utils/basketStrategies.ts` | New | `computeBasketComparison()` utility |
+| `components/BasketStrategyPicker.tsx` | New | Two-card strategy picker |
+| `components/BasketBreakdownView.tsx` | New | Per-store item breakdown |
+| `components/ShoppingPriceStep.tsx` | Rewritten | Integrated strategy picker + breakdown + collapsible SavingsReport |
+
+#### Future: PricePilot Integration
+
+PricePilot (automated cart-building agent) is not yet developed. The `StoreBasketBreakdown` type (with per-store item lists) is designed to feed directly into PricePilot's `CartItem[]` input when ready. Action buttons for cart building are deferred.
+
+---
+
+**Last Updated**: March 22, 2026
+**Version**: 5.0.0
 **Status**: Production Ready
 
