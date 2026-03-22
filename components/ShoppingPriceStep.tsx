@@ -1,7 +1,10 @@
-import React from 'react';
-import { ArrowLeft, ArrowRight, ShoppingCart, Laptop, Loader2, MapPin, Truck, AlertTriangle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ArrowLeft, ArrowRight, ShoppingCart, Loader2, MapPin, ChevronDown, ChevronUp } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ListPriceComparison, ShoppingMode } from '../types';
+import { ListPriceComparison, ShoppingMode, BasketStrategyType } from '../types';
+import { computeBasketComparison } from '../utils/basketStrategies';
+import BasketStrategyPicker from './BasketStrategyPicker';
+import BasketBreakdownView from './BasketBreakdownView';
 import SavingsReport from './SavingsReport';
 
 interface ShoppingPriceStepProps {
@@ -24,8 +27,19 @@ const ShoppingPriceStep: React.FC<ShoppingPriceStepProps> = ({
   isOrganizing,
 }) => {
   const { t, language, isRTL } = useLanguage();
+  const [selectedStrategy, setSelectedStrategy] = useState<BasketStrategyType | null>(null);
+  const [showAllStores, setShowAllStores] = useState(false);
 
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
+  const isOnline = shoppingMode === 'online';
+
+  const basketComparison = useMemo(
+    () => computeBasketComparison(comparison, isOnline),
+    [comparison, isOnline]
+  );
+
+  // Items for single-store breakdown (from the best-ranked store)
+  const singleStoreItems = comparison.stores[0]?.itemPrices ?? [];
 
   return (
     <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -53,112 +67,61 @@ const ShoppingPriceStep: React.FC<ShoppingPriceStepProps> = ({
           </div>
         )}
 
-        {/* Savings Report */}
-        <SavingsReport data={comparison} />
+        {/* Strategy picker */}
+        <BasketStrategyPicker
+          comparison={basketComparison}
+          selected={selectedStrategy}
+          onSelect={setSelectedStrategy}
+          isOnline={isOnline}
+        />
 
-        {/* Action based on mode */}
-        {shoppingMode === 'physical' && (
-          <div className="space-y-3">
-            {comparison.cheapestStoreId && (() => {
-              const cheapestStore = comparison.stores.find(
-                (s) => s.supermarketName === comparison.cheapestStoreId
-              );
-              const address = cheapestStore?.storeAddress;
-              return (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-                  <ShoppingCart className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-emerald-800">
-                    {language === 'he'
-                      ? `קנו ב-${comparison.cheapestStoreId} וחסכו ₪${comparison.savingsAmount.toFixed(2)}!`
-                      : `Shop at ${comparison.cheapestStoreId} and save ₪${comparison.savingsAmount.toFixed(2)}!`}
-                  </p>
-                  {address && (
-                    <p className="text-xs text-emerald-600 mt-1 flex items-center justify-center gap-1">
-                      <MapPin className="w-3 h-3" />
-                      {address}
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
-
-            <button
-              type="button"
-              onClick={onOrganizeForStore}
-              disabled={isOrganizing}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-sm hover:shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isOrganizing ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>{t('input.processing')}</span>
-                </>
-              ) : (
-                <>
-                  <ShoppingCart className="w-5 h-5" />
-                  <span>{t('appMode.organizeForStore')}</span>
-                </>
-              )}
-            </button>
-          </div>
+        {/* Breakdown for selected strategy */}
+        {selectedStrategy && (
+          <BasketBreakdownView
+            comparison={basketComparison}
+            selected={selectedStrategy}
+            isOnline={isOnline}
+            singleStoreItems={singleStoreItems}
+          />
         )}
 
-        {shoppingMode === 'online' && (() => {
-          const cheapestStore = comparison.stores.find(
-            (s) => s.supermarketName === comparison.cheapestStoreId
-          );
-          const hasDelivery = cheapestStore?.deliveryFee != null;
-          const headlineTotal = cheapestStore?.totalWithDelivery ?? comparison.cheapestTotal;
-          const isBelowMinimum = cheapestStore?.minimumOrder != null && cheapestStore.minimumOrder > 0 && (cheapestStore?.totalCost ?? 0) < cheapestStore.minimumOrder;
+        {/* Action button (physical mode — organize for store) */}
+        {shoppingMode === 'physical' && selectedStrategy === 'single' && (
+          <button
+            type="button"
+            onClick={onOrganizeForStore}
+            disabled={isOrganizing}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-sm hover:shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isOrganizing ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>{t('input.processing')}</span>
+              </>
+            ) : (
+              <>
+                <ShoppingCart className="w-5 h-5" />
+                <span>{t('appMode.organizeForStore')}</span>
+              </>
+            )}
+          </button>
+        )}
 
-          return (
-            <div className="space-y-3">
-              {comparison.cheapestStoreId && (
-                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-center">
-                  <Laptop className="w-6 h-6 text-indigo-600 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-indigo-800">
-                    {language === 'he'
-                      ? `קנו ב-${comparison.cheapestStoreId} וחסכו ₪${comparison.savingsAmount.toFixed(2)}!`
-                      : `Shop at ${comparison.cheapestStoreId} and save ₪${comparison.savingsAmount.toFixed(2)}!`}
-                  </p>
-                  {hasDelivery && (
-                    <div className="mt-2 space-y-0.5 text-xs text-indigo-600">
-                      <div className="flex items-center justify-center gap-1">
-                        <ShoppingCart className="w-3 h-3" />
-                        <span>{t('priceComparison.subtotal')}: ₪{cheapestStore!.totalCost.toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center justify-center gap-1">
-                        <Truck className="w-3 h-3" />
-                        <span>{t('priceComparison.deliveryFee')}: ₪{cheapestStore!.deliveryFee!.toFixed(2)}</span>
-                      </div>
-                      <div className="font-semibold text-indigo-800 pt-0.5">
-                        {t('priceComparison.totalWithDelivery')}: ₪{headlineTotal.toFixed(2)}
-                      </div>
-                    </div>
-                  )}
-                  {isBelowMinimum && (
-                    <div className="mt-2 flex items-center justify-center gap-1.5 text-xs text-amber-700">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                      <span>{t('priceComparison.belowMinimum')} (₪{cheapestStore!.minimumOrder})</span>
-                    </div>
-                  )}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={onStartOnlineAgent}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
-              >
-                <Laptop className="w-5 h-5" />
-                <span>
-                  {language === 'he'
-                    ? `בנה עגלה ב-${comparison.cheapestStoreId}`
-                    : `Build Cart at ${comparison.cheapestStoreId}`}
-                </span>
-              </button>
-            </div>
-          );
-        })()}
+        {/* Explore all stores (collapsible SavingsReport) */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowAllStores(v => !v)}
+            className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors w-full justify-center py-2"
+          >
+            <span>{isRTL ? 'הצג את כל החנויות' : 'View all stores'}</span>
+            {showAllStores
+              ? <ChevronUp className="w-4 h-4" />
+              : <ChevronDown className="w-4 h-4" />
+            }
+          </button>
+          {showAllStores && <SavingsReport data={comparison} />}
+        </div>
       </div>
     </div>
   );

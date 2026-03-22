@@ -528,6 +528,18 @@ export async function compareListPrices(
     }
   }
 
+  // Map cheapest_per_item: barcode → { storeName (Hebrew), price, promotionDescription }
+  const cheapestPerItem: Record<string, { storeName: string; price: number; promotionDescription: string | null }> = {};
+  if (data.cheapest_per_item) {
+    for (const [barcode, info] of Object.entries(data.cheapest_per_item)) {
+      cheapestPerItem[barcode] = {
+        storeName: SUPERMARKET_NAME_MAP[info.store_name] || info.store_name,
+        price: info.effective_unit_price,
+        promotionDescription: info.promotion_description,
+      };
+    }
+  }
+
   const result: ListPriceComparison = {
     stores,
     cheapestStoreId: cheapestStore?.supermarketName ?? '',
@@ -537,6 +549,7 @@ export async function compareListPrices(
     savingsPercent,
     unmatchedItems: globalUnmatched,
     totalListItems: request.items.length,
+    cheapestPerItem,
   };
 
   cache.set(cacheKey, result, PRICES_TTL);

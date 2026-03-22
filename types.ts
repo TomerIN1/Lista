@@ -263,6 +263,55 @@ export interface ListPriceComparison {
   savingsPercent: number;
   unmatchedItems: string[];
   totalListItems: number;
+  cheapestPerItem?: Record<string, {
+    storeName: string;
+    price: number;
+    promotionDescription: string | null;
+  }>;
+}
+
+// ============================================
+// Basket Strategy Types
+// ============================================
+
+export type BasketStrategyType = 'single' | 'multi';
+
+export interface StoreBasketBreakdown {
+  storeName: string;
+  items: ItemPriceDetail[];
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  belowMinimum: boolean;
+  minimumOrder: number | null;
+}
+
+export interface SingleStoreBasket {
+  type: 'single';
+  storeName: string;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  matchedItems: number;
+  missingItems: string[];
+}
+
+export interface MultiStoreBasket {
+  type: 'multi';
+  storeBreakdowns: StoreBasketBreakdown[];
+  subtotal: number;
+  totalDeliveryFees: number;
+  total: number;
+  storeCount: number;
+  matchedItems: number;
+  missingItems: string[];
+}
+
+export interface BasketComparison {
+  single: SingleStoreBasket;
+  multi: MultiStoreBasket;
+  recommended: BasketStrategyType;
+  savingsAmount: number;  // positive = multi is cheaper
 }
 
 // ============================================
