@@ -593,7 +593,8 @@ Individual product card for the browse/search grid.
 - Price section: sale price in rose + original struck through + "חיסכון ₪X / Save ₪X" line
 - **Weighted products**: per-100g subprice line (e.g., "≈ ₪1.09 / 100 ג׳") via `formatWeightedSubprice()`, prominent "⚖️ נמכר במשקל" text label (amber, Weight icon) below price
 - Unit price line for packaged products (e.g., "₪9.23 ל-100 גרם") computed from `unit_qty`
-- Add / Added button (green CTA → disabled state once in cart)
+- **Quantity selector**: +/− buttons with amount and unit label. Weighted products step by 0.5 kg (starting at 0.5, label "ק״ג"), per-unit products step by 1 (starting at 1, label "יח׳"). Hidden once product is added.
+- Add / Added button (green CTA → disabled state once in cart). `onAdd(amount)` passes selected quantity to cart.
 - Card body click opens `ProductDetailModal`
 
 ---
@@ -615,7 +616,7 @@ Full product details rendered as a portal modal.
      - Per-store `unit_qty` display and computed unit price
      - Per-store promo detection via `effective_price < price` → shows `-X% מבצע` badge + "במבצע: [description]"
      - Other rows: `+₪X.XX` diff vs cheapest in slate text
-3. **Sticky Add button** pinned to modal bottom
+3. **Sticky footer** pinned to modal bottom: quantity selector (+/− with same weighted/per-unit logic as ProductCard) + Add button. `onAdd(product, amount)` passes selected quantity.
 
 **Data merging**: Detail API omits several fields; modal accepts `fallbackProduct: DbProductEnhanced` prop from the browse card to fill gaps.
 
@@ -624,7 +625,7 @@ Full product details rendered as a portal modal.
 {
   barcode: string;
   onClose: () => void;
-  onAdd: (product: DbProductEnhanced) => void;
+  onAdd: (product: DbProductEnhanced, amount: number) => void;
   isAdded: boolean;
   fallbackImageUrl?: string | null;
   fallbackProduct?: DbProductEnhanced | null;
