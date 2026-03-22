@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, Leaf, Tag, TrendingDown, AlertCircle, Weight } from 'lucide-react';
+import { X, Package, Leaf, Tag, TrendingDown, AlertCircle, Weight, Plus, Minus } from 'lucide-react';
 import { DbProductDetail, DbProductEnhanced, ProductStorePrice } from '../types';
 import { getProductDetail } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -9,7 +9,7 @@ import { unitBadgeLabel, normalizeUnitQty, formatUnitPriceLine, isWeightedProduc
 interface ProductDetailModalProps {
   barcode: string;
   onClose: () => void;
-  onAdd: (product: DbProductEnhanced) => void;
+  onAdd: (product: DbProductEnhanced, amount: number) => void;
   isAdded: boolean;
   fallbackImageUrl?: string | null;
   fallbackProduct?: DbProductEnhanced | null;
@@ -20,6 +20,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
   const [product, setProduct] = useState<DbProductDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [imgFailed, setImgFailed] = useState(false);
+  const [qty, setQty] = useState<number | null>(null); // initialized after product loads
 
   useEffect(() => {
     setIsLoading(true);
@@ -71,6 +72,14 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
     : 0;
   const uom = product?.unit_of_measure || fallbackProduct?.unit_of_measure;
   const weighted = product?.is_weighted ?? fallbackProduct?.is_weighted;
+  const isWeight = isWeightedProduct(uom, weighted);
+  const qtyStep = isWeight ? 0.5 : 1;
+  const minQty = isWeight ? 0.5 : 1;
+
+  // Initialize qty when product data arrives
+  useEffect(() => {
+    if (product || fallbackProduct) setQty(minQty);
+  }, [product, fallbackProduct, minQty]);
   const badge = unitBadgeLabel(uom, weighted);
   const priceSuffix = badge ? ` / ${badge}` : '';
 
@@ -333,12 +342,35 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
           )}
         </div>
 
-        {/* ── Sticky Add button ────────────────────────────── */}
+        {/* ── Sticky Add button with quantity selector ────── */}
         {!isLoading && product && (
-          <div className="flex-shrink-0 px-4 py-3 border-t border-slate-100 bg-white rounded-b-3xl sm:rounded-b-2xl">
+          <div className="flex-shrink-0 px-4 py-3 border-t border-slate-100 bg-white rounded-b-3xl sm:rounded-b-2xl space-y-2">
+            {!isAdded && qty != null && (
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setQty(Math.max(minQty, +(qty - qtyStep).toFixed(1)))}
+                  disabled={qty <= minQty}
+                  className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-30 disabled:cursor-default"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <div className="flex flex-col items-center min-w-[3.5rem]">
+                  <span className="text-lg font-bold text-slate-700">{qty}</span>
+                  <span className="text-xs text-slate-400 leading-none">{isWeight ? (isRTL ? 'ק״ג' : 'kg') : (isRTL ? 'יח׳' : 'pcs')}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQty(+(qty + qtyStep).toFixed(1))}
+                  className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             <button
               type="button"
-              onClick={() => { if (!isAdded) onAdd(product); }}
+              onClick={() => { if (!isAdded && qty != null) onAdd(product, qty); }}
               className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
                 isAdded
                   ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default'

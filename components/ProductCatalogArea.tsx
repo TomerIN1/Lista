@@ -494,9 +494,10 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
     setPriceMax('');
   };
 
-  const handleAddProduct = (product: DbProductEnhanced) => {
+  const handleAddProduct = (product: DbProductEnhanced, amount?: number) => {
     if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
-    onSelectProduct({ ...product, amount: 1, unit: defaultCartUnit(product.unit_of_measure, product.is_weighted) });
+    const unit = defaultCartUnit(product.unit_of_measure, product.is_weighted);
+    onSelectProduct({ ...product, amount: amount ?? 1, unit });
   };
 
   const handleLoadMore = () => {
@@ -787,7 +788,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                     key={product.barcode}
                     product={product}
                     isSelected={selectedProducts.some((p) => p.barcode === product.barcode)}
-                    onAdd={() => handleAddProduct(product)}
+                    onAdd={(amount) => handleAddProduct(product, amount)}
                     onClick={() => { setDetailBarcode(product.barcode); setDetailImageUrl(product.image_url ?? null); setDetailProduct(product); }}
                   />
                 ))}
@@ -818,8 +819,8 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           fallbackImageUrl={detailImageUrl}
           fallbackProduct={detailProduct}
           onClose={() => setDetailBarcode(null)}
-          onAdd={(product) => {
-            handleAddProduct(product);
+          onAdd={(product, amount) => {
+            handleAddProduct(product, amount);
             setDetailBarcode(null);
           }}
           isAdded={selectedProducts.some((p) => p.barcode === detailBarcode)}

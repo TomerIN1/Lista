@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Package, Weight } from 'lucide-react';
+import { Package, Weight, Plus, Minus } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { formatPriceLabel, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct, formatWeightedSubprice } from '../utils/priceFormat';
@@ -7,7 +7,7 @@ import { formatPriceLabel, normalizeUnitQty, formatUnitPriceLine, isWeightedProd
 interface ProductCardProps {
   product: DbProductEnhanced;
   isSelected: boolean;
-  onAdd: () => void;
+  onAdd: (amount: number) => void;
   onClick: () => void;
 }
 
@@ -15,6 +15,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
   const { t, isRTL } = useLanguage();
   const [imgFailed, setImgFailed] = useState(false);
   const weighted = isWeightedProduct(product.unit_of_measure, product.is_weighted);
+  const step = weighted ? 0.5 : 1;
+  const minQty = weighted ? 0.5 : 1;
+  const [qty, setQty] = useState(minQty);
   const displayUnitQty = normalizeUnitQty(product.unit_qty);
   const unitPriceLine = formatUnitPriceLine(product.min_price, product.unit_qty, product.is_weighted);
   const weightedSubprice = formatWeightedSubprice(product.min_price, product.unit_of_measure, product.is_weighted);
@@ -96,14 +99,34 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
         </div>
       </div>
 
-      {/* Add button */}
-      <div className="px-2.5 pb-2.5">
+      {/* Quantity selector + Add button */}
+      <div className="px-2.5 pb-2.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+        {!isSelected && (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => setQty(Math.max(minQty, +(qty - step).toFixed(1)))}
+              disabled={qty <= minQty}
+              className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-30 disabled:cursor-default"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <div className="flex flex-col items-center min-w-[3rem]">
+              <span className="text-sm font-bold text-slate-700">{qty}</span>
+              <span className="text-[10px] text-slate-400 leading-none">{weighted ? (isRTL ? 'ק״ג' : 'kg') : (isRTL ? 'יח׳' : 'pcs')}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setQty(+(qty + step).toFixed(1))}
+              className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!isSelected) onAdd();
-          }}
+          onClick={() => { if (!isSelected) onAdd(qty); }}
           className={`w-full py-1.5 rounded-lg text-xs font-semibold transition-all ${
             isSelected
               ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default'
