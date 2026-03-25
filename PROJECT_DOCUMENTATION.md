@@ -3314,7 +3314,36 @@ PricePilot (automated cart-building agent) is not yet developed. The `StoreBaske
 
 ---
 
-**Last Updated**: March 22, 2026
-**Version**: 5.0.0
+### Google ADK Builder Agent: Skills System (v5.1.0, March 2026)
+
+#### Overview
+
+Added a custom Claude Code agent (`google-adk-builder`) with 5 preloaded skills for designing, building, debugging, and deploying agent systems with Google Agent Development Kit (ADK). All skills are grounded in the official ADK documentation (https://google.github.io/adk-docs/).
+
+#### Skills Created
+
+| Skill | Directory | Purpose |
+|-------|-----------|---------|
+| `adk-architecture` | `.claude/skills/adk-architecture/` | Agent types (LlmAgent, Sequential, Parallel, Loop, Custom), multi-agent patterns, decision tree for architecture selection |
+| `adk-tool-development` | `.claude/skills/adk-tool-development/` | FunctionTool, ToolContext API, LongRunningFunctionTool, parameter design, return shapes, built-in tools |
+| `adk-state-memory-artifacts` | `.claude/skills/adk-state-memory-artifacts/` | Sessions, state prefixes (session/user/app/temp), MemoryService, ArtifactService, when to use each |
+| `adk-debugging` | `.claude/skills/adk-debugging/` | Diagnosis table for common symptoms, tool/routing/state/memory/callback issues and fixes |
+| `adk-deployment` | `.claude/skills/adk-deployment/` | Local dev setup, Cloud Run, Agent Engine (Vertex AI), GKE, FastAPI server, production checklist |
+
+#### Files Changed
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `.claude/agents/google-adk-builder.md` | Modified | Added `skills` frontmatter field referencing all 5 skills |
+| `.claude/skills/adk-architecture/SKILL.md` | New | Architecture patterns and decision criteria |
+| `.claude/skills/adk-tool-development/SKILL.md` | New | Tool development guide with code examples |
+| `.claude/skills/adk-state-memory-artifacts/SKILL.md` | New | State/memory/artifact persistence guide |
+| `.claude/skills/adk-debugging/SKILL.md` | New | Debugging guide with symptom → cause → fix tables |
+| `.claude/skills/adk-deployment/SKILL.md` | New | Deployment options and production checklist |
+
+---
+
+**Last Updated**: March 26, 2026
+**Version**: 5.1.0
 **Status**: Production Ready
 
