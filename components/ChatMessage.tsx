@@ -3,6 +3,28 @@ import { ChatMessage as ChatMessageType, ChatButton, AgentProduct, AgentSavingsR
 import { useLanguage } from '../contexts/LanguageContext';
 import { Bot, User, Package, TrendingDown, ChevronDown, ChevronRight, Store, Plus, Search } from 'lucide-react';
 
+/** Render text with clickable URLs */
+function renderTextWithLinks(text: string): React.ReactNode {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    urlRegex.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-indigo-600 underline hover:text-indigo-800 break-all"
+      >
+        {part}
+      </a>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    )
+  );
+}
+
 interface ChatMessageProps {
   message: ChatMessageType;
   onButtonClick?: (action: string) => void;
@@ -48,9 +70,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
               : 'bg-indigo-600 text-white'
           }`}
         >
-          {/* Text content with preserved line breaks */}
+          {/* Text content with preserved line breaks and clickable links */}
           <div className="whitespace-pre-wrap text-sm leading-relaxed">
-            {message.text}
+            {renderTextWithLinks(message.text)}
           </div>
 
           {/* Store selection UI */}
