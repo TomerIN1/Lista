@@ -26,6 +26,12 @@ const ISRAELI_SUPERMARKETS: AgentStore[] = [
 // Stores that have a working PricePilot adapter
 export const SUPPORTED_ONLINE_STORES = new Set(['רמי לוי', 'Rami Levy', 'rami levy']);
 
+// Map Hebrew store names to default store IDs for PricePilot
+const STORE_DEFAULT_IDS: Record<string, string> = {
+  'רמי לוי': '331',
+  'Rami Levy': '331',
+};
+
 // Store categories (supermarket-focused)
 const STORE_CATEGORIES: StoreCategory[] = [
   {
@@ -211,9 +217,10 @@ export async function startAgentSession(
   }
 
   try {
+    const effectiveStoreId = storeId || STORE_DEFAULT_IDS[storeName] || '';
     const apiResponse = await apiBuildCart(
       storeName,
-      storeId || '',
+      effectiveStoreId,
       groceryList,
       userCity,
     );
