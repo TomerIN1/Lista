@@ -4,12 +4,8 @@ These tools handle cart preview (price calculation), cart persistence
 (saving to user's store account), and checkout URL generation.
 
 Design note: The cart preview works without auth. Persistence requires
-a JWT token obtained via WebView login. The agent handles the auth flow
-conversationally when persistence is needed.
-
-get_checkout_info is wrapped in LongRunningFunctionTool in agent.py —
-it returns login config to the frontend immediately, and the ADK framework
-suspends the tool call until the frontend sends back the auth token.
+an auth token obtained via the OTP login flow (see auth_tools.py).
+The agent handles the auth flow conversationally when persistence is needed.
 """
 
 from __future__ import annotations
@@ -201,15 +197,8 @@ async def get_checkout_info(
 ) -> dict[str, Any]:
     """Get checkout URL and login configuration for a store.
 
-    This function is wrapped in LongRunningFunctionTool in agent.py.
-    When called:
-    1. Returns login config immediately (frontend opens WebView)
-    2. ADK suspends — waits for frontend to send back auth token
-    3. Agent resumes with the token and proceeds to persist_cart_to_store
-
-    The frontend receives the login_config, opens a WebView, runs the
-    token_extraction_js after login, and sends the token back via the
-    ADK session update mechanism.
+    Returns the checkout URL and current auth state. Used as a fallback
+    when OTP login is not available or when the user declines to log in.
 
     Args:
         store_name: Chain name.

@@ -43,6 +43,11 @@ class Settings:
         self.rami_levy_api_url: str = os.getenv(
             "RAMI_LEVY_API_URL", "https://www-api.rami-levy.co.il"
         )
+        # Anonymous bearer token from RL JS bundle (used for login endpoint).
+        # Set via RAMI_LEVY_API_CLIENT_TOKEN env var.
+        self.rami_levy_api_client_token: str = os.getenv(
+            "RAMI_LEVY_API_CLIENT_TOKEN", ""
+        )
 
         # -- HTTP --
         self.http_timeout: float = float(os.getenv("HTTP_TIMEOUT", "15.0"))

@@ -9,8 +9,8 @@ API endpoints discovered via manual probing (documented in pricepilot-agent_v2.m
 Key discoveries:
 - Catalog and cart-calc work WITHOUT auth.
 - Cart persist requires Authorization + ecomtoken headers (same JWT for both).
-- Login is a Vue.js modal, no dedicated login page URL.
-- All auth endpoints require reCAPTCHA -> must use WebView.
+- Login is OTP-based: POST /api/auth/login twice (send OTP, then verify OTP).
+- reCAPTCHA may be required; we attempt with null and fall back gracefully.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from typing import Any
 
 import httpx
 
+from pricepilot.config import get_settings
 from pricepilot.stores.base import StoreAdapter
 from pricepilot.types import (
     CartPreview,
@@ -38,9 +39,11 @@ BASE_URL = "https://www.rami-levy.co.il"
 API_URL = "https://www-api.rami-levy.co.il"
 DEFAULT_STORE_ID = "331"  # Rami Levy Online
 
+LOGIN_ENDPOINT = f"{API_URL}/api/v2/site/auth/login"
 CATALOG_ENDPOINT = f"{BASE_URL}/api/catalog"
 CART_ENDPOINT = f"{BASE_URL}/api/v2/cart"
 CUSTOMER_ENDPOINT = f"{API_URL}/api/v2/site/clubs/customer"
+
 
 COMMON_HEADERS = {
     "content-type": "application/json;charset=UTF-8",
@@ -214,6 +217,148 @@ class RamiLevyAdapter(StoreAdapter):
         except httpx.HTTPError as exc:
             logger.error("Rami Levy cart persist failed: %s", exc)
             return False
+
+    # ---- OTP auth ----
+
+    async def request_login_otp(
+        self,
+        email: str,
+        delivery_method: str = "sms",
+        recaptcha_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Step 1: Send OTP code to the user's registered phone.
+
+        Posts to the login endpoint with email only (no otp_code).
+        Requires a reCAPTCHA token solved on the frontend.
+
+        Args:
+            email: User's Rami Levy account email.
+            delivery_method: "sms" (default) or "voice".
+            recaptcha_token: reCAPTCHA response token from frontend.
+
+        Returns:
+            Dict with status, phone_last_digits hint, or error info.
+        """
+        settings = get_settings()
+        payload = {
+            "username": email,
+            "password": None,
+            "otp_code": None,
+            "recaptcha": recaptcha_token,
+            "phone": None,
+            "deliveryMethod": delivery_method,
+        }
+
+        extra_headers: dict[str, str] = {}
+        if settings.rami_levy_api_client_token:
+            extra_headers["Authorization"] = (
+                f"Bearer {settings.rami_levy_api_client_token}"
+            )
+
+        try:
+            resp = await self._client.post(
+                LOGIN_ENDPOINT, json=payload, headers=extra_headers
+            )
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            logger.error("Rami Levy OTP request failed: %s", exc)
+            return {"status": "error", "error": f"Network error: {exc}"}
+
+        # Check for reCAPTCHA enforcement
+        if resp.status_code == 403 or (
+            isinstance(data, dict) and "captcha" in str(data).lower()
+        ):
+            logger.warning("Rami Levy login blocked by reCAPTCHA")
+            return {
+                "status": "error",
+                "error": "recaptcha_required",
+                "message": (
+                    "The store requires human verification (reCAPTCHA). "
+                    "OTP login is not available right now."
+                ),
+            }
+
+        if resp.status_code >= 400:
+            error_msg = data.get("message", data.get("error", "Unknown error"))
+            logger.warning(
+                "Rami Levy OTP request returned %d: %s",
+                resp.status_code,
+                error_msg,
+            )
+            return {"status": "error", "error": str(error_msg)}
+
+        # Success — the API should have sent an OTP to the user's phone.
+        phone_hint = data.get("phoneLastDigits", data.get("phone_last_digits"))
+        return {
+            "status": "otp_sent",
+            "phone_last_digits": phone_hint,
+            "delivery_method": delivery_method,
+        }
+
+    async def verify_login_otp(
+        self, email: str, otp_code: str, delivery_method: str = "sms"
+    ) -> dict[str, Any]:
+        """Step 2: Verify OTP code and obtain JWT token.
+
+        Posts to /api/auth/login with email + otp_code.
+        On success, the response contains a JWT token.
+
+        Args:
+            email: User's Rami Levy account email.
+            otp_code: 6-digit code the user received via SMS/voice.
+            delivery_method: "sms" or "voice".
+
+        Returns:
+            Dict with status and token on success, or error info.
+        """
+        settings = get_settings()
+        payload = {
+            "username": email,
+            "password": None,
+            "otp_code": otp_code,
+            "recaptcha": None,
+            "phone": None,
+            "deliveryMethod": delivery_method,
+        }
+
+        extra_headers: dict[str, str] = {}
+        if settings.rami_levy_api_client_token:
+            extra_headers["Authorization"] = (
+                f"Bearer {settings.rami_levy_api_client_token}"
+            )
+
+        try:
+            resp = await self._client.post(
+                LOGIN_ENDPOINT, json=payload, headers=extra_headers
+            )
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            logger.error("Rami Levy OTP verify failed: %s", exc)
+            return {"status": "error", "error": f"Network error: {exc}"}
+
+        if resp.status_code >= 400:
+            error_msg = data.get("message", data.get("error", "Unknown error"))
+            logger.warning(
+                "Rami Levy OTP verify returned %d: %s",
+                resp.status_code,
+                error_msg,
+            )
+            return {"status": "error", "error": str(error_msg)}
+
+        # Extract JWT token from response
+        token = data.get("token")
+        if not token:
+            logger.error("Rami Levy OTP verify succeeded but no token in response")
+            return {
+                "status": "error",
+                "error": "no_token",
+                "message": "Login succeeded but no token was returned.",
+            }
+
+        return {
+            "status": "success",
+            "token": token,
+        }
 
     # ---- auth & checkout ----
 

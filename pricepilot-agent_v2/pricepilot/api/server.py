@@ -82,6 +82,10 @@ class MessageRequest(BaseModel):
         default=None,
         description="JWT token from WebView login, sent when user completes auth",
     )
+    recaptcha_token: str | None = Field(
+        default=None,
+        description="reCAPTCHA response token solved on the frontend, needed for OTP login",
+    )
 
 
 class MessageResponse(BaseModel):
@@ -221,14 +225,16 @@ async def send_message(request: MessageRequest):
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # If auth_token is provided, inject it into the message
+    # Inject auth_token and/or recaptcha_token into session state
     message = request.message
     if request.auth_token:
-        # Store the token in state directly for the agent to use
+        session.state["auth_token"] = request.auth_token
         message = (
-            f"{message}\n\n[SYSTEM: Auth token received from WebView login. "
+            f"{message}\n\n[SYSTEM: Auth token received. "
             f"Token: {request.auth_token}]"
         )
+    if request.recaptcha_token:
+        session.state["recaptcha_token"] = request.recaptcha_token
 
     messages = await _run_agent(request.session_id, request.user_id, message)
 

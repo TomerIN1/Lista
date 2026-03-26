@@ -8,11 +8,12 @@ Tool design principles:
 - Tools return structured data (dicts with "status" key), never raw API responses.
 - Tools handle their own errors and return descriptive error messages.
 - Store-specific logic lives in adapters, not in tools.
-
-Note: get_checkout_info is wrapped in LongRunningFunctionTool in agent.py
-for human-in-the-loop auth flow. The raw function is exported here.
 """
 
+from pricepilot.tools.auth_tools import (
+    request_login_otp,
+    verify_login_otp,
+)
 from pricepilot.tools.cart_tools import (
     calculate_cart_preview,
     persist_cart_to_store,
@@ -25,6 +26,8 @@ from pricepilot.tools.product_tools import (
 )
 
 __all__ = [
+    "request_login_otp",
+    "verify_login_otp",
     "calculate_cart_preview",
     "persist_cart_to_store",
     "get_checkout_info",

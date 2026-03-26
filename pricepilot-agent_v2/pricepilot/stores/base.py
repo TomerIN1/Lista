@@ -106,6 +106,51 @@ class StoreAdapter(abc.ABC):
     def get_checkout_url(self) -> str:
         """Return the checkout page URL (user opens after cart is persisted)."""
 
+    # ---- OTP auth (optional, store-specific) ----
+
+    async def request_login_otp(
+        self,
+        email: str,
+        delivery_method: str = "sms",
+        recaptcha_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Step 1 of OTP login: send a verification code to the user's phone.
+
+        Args:
+            email: User's registered email address (used as username).
+            delivery_method: "sms" or "voice".
+            recaptcha_token: reCAPTCHA response token from frontend.
+
+        Returns:
+            Dict with status and phone hint (last digits).
+
+        Raises:
+            NotImplementedError: If the store does not support OTP login.
+        """
+        raise NotImplementedError(
+            f"{self.chain_name} does not support OTP login."
+        )
+
+    async def verify_login_otp(
+        self, email: str, otp_code: str, delivery_method: str = "sms"
+    ) -> dict[str, Any]:
+        """Step 2 of OTP login: verify the code and obtain a JWT token.
+
+        Args:
+            email: User's registered email address.
+            otp_code: 6-digit OTP code received via SMS/voice.
+            delivery_method: "sms" or "voice".
+
+        Returns:
+            Dict with token on success, or error details on failure.
+
+        Raises:
+            NotImplementedError: If the store does not support OTP login.
+        """
+        raise NotImplementedError(
+            f"{self.chain_name} does not support OTP login."
+        )
+
     # ---- optional helpers ----
 
     async def verify_token(self, auth_token: str) -> bool:

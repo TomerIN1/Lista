@@ -7,18 +7,17 @@ Most operations are direct HTTP calls to store APIs, no LLM involvement.
 The agent orchestrates 5 phases:
 1. RESOLVE:  Match Lista items to store product IDs (barcode -> name -> LLM)
 2. PREVIEW:  Calculate cart with prices, delivery, promotions
-3. AUTH:     Guide user through WebView login (human-in-the-loop)
+3. AUTH:     In-chat OTP login (email + SMS code) — no WebView needed
 4. PERSIST:  Save cart to user's store account
 5. CHECKOUT: Provide checkout URL
 
 Google ADK version: 1.x (LlmAgent, tools, session state).
-Human-in-the-loop: get_checkout_info is a LongRunningFunctionTool — the agent
-sends login config to the frontend, then waits for the user to complete the
-WebView login and return the auth token before proceeding.
+Auth flow: Two-step OTP via request_login_otp / verify_login_otp tools.
+The agent collects email and OTP code conversationally — no external login
+UI or LongRunningFunctionTool needed.
 """
 
 from google.adk.agents import LlmAgent
-from google.adk.tools import LongRunningFunctionTool
 
 from pricepilot.config import get_settings
 from pricepilot.tools.product_tools import (
@@ -30,6 +29,10 @@ from pricepilot.tools.cart_tools import (
     calculate_cart_preview,
     persist_cart_to_store,
     get_checkout_info,
+)
+from pricepilot.tools.auth_tools import (
+    request_login_otp,
+    verify_login_otp,
 )
 
 # ------------------------------------------------------------------
@@ -93,15 +96,27 @@ Then tell the user:
 
 ### If auth_token is NOT available (default):
 Ask the user in Hebrew:
-"רוצה שאשמור את העגלה ישירות בחשבון רמי לוי שלך? (זה ידרוש התחברות לחשבון)"
+"רוצה שאשמור את העגלה ישירות בחשבון רמי לוי שלך?"
 
-- **If the user says yes**: Call `get_checkout_info`. This is a LongRunningFunctionTool —
-  it sends login configuration to the frontend, which handles the login popup automatically.
-  Once the frontend completes the login and returns the auth token, call `persist_cart_to_store`
-  to save the cart to the user's store account. Then tell the user:
-  "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
-  לחץ כאן כדי לעבור לקופה ולשלם:
-  [checkout_url]"
+- **If the user says yes** — start the in-chat login flow:
+  1. Ask for their email: "מה כתובת המייל שלך ברמי לוי?"
+  2. Call `request_login_otp` with the email.
+  3. If OTP was sent successfully, tell the user:
+     "שלחתי קוד אימות ב-SMS לטלפון שלך. מה הקוד בן 6 הספרות?"
+     (If the tool returned phone_last_digits, add: "...לטלפון שנגמר ב-XXXX")
+  4. The user provides the 6-digit code.
+  5. Call `verify_login_otp` with the email + code.
+  6. If success: call `persist_cart_to_store` to save the cart, then:
+     "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
+     לחץ כאן כדי לעבור לקופה ולשלם:
+     [checkout_url]"
+  7. If the code is wrong: "הקוד לא תקין. רוצה לנסות שוב או שאשלח קוד חדש?"
+     - Retry: ask for the code again, call verify_login_otp.
+     - Resend: call request_login_otp again.
+  8. If login fails entirely (e.g. reCAPTCHA block, network error):
+     Fall back gracefully — call get_checkout_info for the checkout URL and say:
+     "לא הצלחתי להתחבר כרגע. הנה לינק ישיר לקופה באתר [store]:
+     [checkout_url]"
 
 - **If the user says no**: Present the results positively — the user got real-time pricing,
   promotions, and a complete price comparison. Then provide the checkout link:
@@ -120,10 +135,10 @@ Ask the user in Hebrew:
   [checkout_url]"
 
 IMPORTANT:
-- Never ask users to extract tokens, open console, or do anything technical.
-- Never mention "console", "F12", "localStorage", "JSON.parse", or "JWT".
-- If the user wants to connect their account, call get_checkout_info — the frontend
-  handles the login flow automatically. You do NOT need to explain how login works.
+- NEVER mention "token", "JWT", "API", "reCAPTCHA", "console", "F12",
+  "localStorage", "JSON.parse", or any technical terms to the user.
+- Frame everything naturally: "email", "verification code", "SMS code".
+- If OTP fails, offer to resend or skip to checkout URL — never block the flow.
 - Present the checkout URL as a direct link the user can click.
 
 ## Important Rules
@@ -135,9 +150,9 @@ IMPORTANT:
 - Never persist the cart without the user's explicit confirmation.
 - NEVER ask users to open developer tools, console, localStorage, or extract tokens.
   This is a consumer app — users are not developers.
-- Never mention "API", "HTTP", "JSON", "token", "JWT", "F12", "Console" to the user.
-- If no auth_token is available, just show the cart preview and provide the checkout URL.
-  Do NOT block the flow waiting for authentication.
+- Never mention "API", "HTTP", "JSON", "token", "JWT", "F12", "Console", "reCAPTCHA" to the user.
+- If no auth_token is available, offer the in-chat OTP login. If OTP fails,
+  fall back to the checkout URL. Do NOT block the flow waiting for authentication.
 - If something fails, explain what happened and what the user can do.
 
 ## Disambiguation Guidelines
@@ -155,7 +170,9 @@ When picking between product candidates:
 - not_found_items: Items that weren't found (set by resolve_products tool)
 - cart_preview: Latest cart preview (set by calculate_cart_preview tool)
 - cart_items_map: {product_id: qty} for cart operations
-- auth_token: JWT for store auth
+- auth_token: Auth credential for store API calls (set by verify_login_otp)
+- login_email: User's email used for OTP login (set by request_login_otp)
+- login_delivery_method: OTP delivery method (set by request_login_otp)
 - cart_persisted: Whether cart has been saved
 - checkout_url: URL for checkout page
 """
@@ -180,11 +197,9 @@ pricepilot_agent = LlmAgent(
         search_product_by_name,
         calculate_cart_preview,
         persist_cart_to_store,
-        # Human-in-the-loop: get_checkout_info returns login config to the
-        # frontend, then waits for the user to complete WebView login and
-        # send back the auth token. The ADK framework suspends the tool call
-        # until the frontend provides the update with the token.
-        LongRunningFunctionTool(func=get_checkout_info),
+        get_checkout_info,
+        request_login_otp,
+        verify_login_otp,
     ],
 )
 
