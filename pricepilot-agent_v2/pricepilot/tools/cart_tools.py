@@ -152,10 +152,9 @@ async def persist_cart_to_store(
     if not token_valid:
         return {
             "status": "error",
-            "error": "auth_token_expired",
             "message": (
-                "Your session has expired. Please reconnect to your "
-                f"{adapter.chain_name_he} account."
+                f"ההתחברות ל-{adapter.chain_name_he} פגה. "
+                "צריך להתחבר מחדש."
             ),
         }
 
@@ -183,10 +182,9 @@ async def persist_cart_to_store(
     else:
         return {
             "status": "error",
-            "error": "persist_failed",
             "message": (
-                f"Failed to save cart to {adapter.chain_name_he}. "
-                "The auth token may be expired. Please try reconnecting."
+                f"לא הצלחתי לשמור את העגלה ב-{adapter.chain_name_he}. "
+                "ייתכן שההתחברות פגה. אפשר לנסות להתחבר מחדש."
             ),
         }
 

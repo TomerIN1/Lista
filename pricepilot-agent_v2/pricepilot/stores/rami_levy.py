@@ -240,13 +240,17 @@ class RamiLevyAdapter(StoreAdapter):
             Dict with status, phone_last_digits hint, or error info.
         """
         settings = get_settings()
-        payload = {
+        payload: dict[str, Any] = {
             "username": email,
             "password": None,
             "otp_code": None,
             "recaptcha": recaptcha_token,
             "phone": None,
             "deliveryMethod": delivery_method,
+            # OAuth client credentials — may allow the API to skip reCAPTCHA
+            # for recognized first-party clients.
+            "client_id": "3",
+            "client_secret": "ftsV5tiUXp4PsVBHCxbURUEgNAYNoWSlhXLoCtEn",
         }
 
         extra_headers: dict[str, str] = {}
@@ -259,23 +263,27 @@ class RamiLevyAdapter(StoreAdapter):
             resp = await self._client.post(
                 LOGIN_ENDPOINT, json=payload, headers=extra_headers
             )
-            data = resp.json()
+            try:
+                data = resp.json()
+            except Exception:
+                # Got non-JSON (e.g. HTML redirect) — treat as login_unavailable
+                logger.warning("Rami Levy login returned non-JSON (status %d)", resp.status_code)
+                return {"status": "error", "error": "login_unavailable"}
         except httpx.HTTPError as exc:
             logger.error("Rami Levy OTP request failed: %s", exc)
-            return {"status": "error", "error": f"Network error: {exc}"}
+            return {"status": "error", "error": "network_error"}
 
-        # Check for reCAPTCHA enforcement
+        # Check for reCAPTCHA enforcement (status 403, 422 with captcha msg)
+        response_text = str(data).lower()
         if resp.status_code == 403 or (
-            isinstance(data, dict) and "captcha" in str(data).lower()
+            resp.status_code == 422 and ("captcha" in response_text or "רובוט" in response_text)
+        ) or (
+            isinstance(data, dict) and "captcha" in response_text
         ):
-            logger.warning("Rami Levy login blocked by reCAPTCHA")
+            logger.warning("Rami Levy login blocked by reCAPTCHA (status %d)", resp.status_code)
             return {
                 "status": "error",
-                "error": "recaptcha_required",
-                "message": (
-                    "The store requires human verification (reCAPTCHA). "
-                    "OTP login is not available right now."
-                ),
+                "error": "login_unavailable",
             }
 
         if resp.status_code >= 400:
@@ -331,10 +339,14 @@ class RamiLevyAdapter(StoreAdapter):
             resp = await self._client.post(
                 LOGIN_ENDPOINT, json=payload, headers=extra_headers
             )
-            data = resp.json()
+            try:
+                data = resp.json()
+            except Exception:
+                logger.warning("Rami Levy OTP verify returned non-JSON (status %d)", resp.status_code)
+                return {"status": "error", "error": "login_unavailable"}
         except httpx.HTTPError as exc:
             logger.error("Rami Levy OTP verify failed: %s", exc)
-            return {"status": "error", "error": f"Network error: {exc}"}
+            return {"status": "error", "error": "network_error"}
 
         if resp.status_code >= 400:
             error_msg = data.get("message", data.get("error", "Unknown error"))

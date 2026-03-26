@@ -3454,7 +3454,57 @@ Cart Preview shown
 
 ---
 
+### PricePilot Auth Error Sanitization & Graceful Fallback (v5.3.0, March 2026)
+
+#### Overview
+
+Fixed two critical UX issues: (1) the agent was leaking technical terms (reCAPTCHA, OTP, auth_token, API) to users, and (2) reCAPTCHA domain binding blocked in-chat OTP login since the sitekey belongs to rami-levy.co.il.
+
+**Solution**: Sanitized all tool error messages to user-friendly Hebrew, strengthened agent instructions to never mention technical terms, and made the "no auth" checkout URL flow the graceful fallback. Removed broken frontend reCAPTCHA code.
+
+#### Key Changes
+
+1. **Error sanitization** (`pricepilot-agent_v2/pricepilot/tools/auth_tools.py`): Added `_sanitize_error()` that maps technical error codes (recaptcha_required, network_error, auth_token_expired) to natural Hebrew messages. All tool returns now use `message` field with Hebrew text instead of raw `error` field.
+
+2. **Agent instruction hardened** (`pricepilot-agent_v2/pricepilot/agent.py`): Added explicit blocklist of 25+ technical terms the agent must NEVER say. Agent now uses the Hebrew `message` field from tools, never the `error` field. Login failure immediately falls back to checkout URL with no technical explanation.
+
+3. **Rami Levy adapter robustness** (`pricepilot-agent_v2/pricepilot/stores/rami_levy.py`): Added client_id/client_secret to login payload (OAuth client credentials attempt). Improved reCAPTCHA detection for 422 status. Added JSON parse error handling (302 redirect returns HTML). Error codes sanitized to generic keys (login_unavailable, network_error).
+
+4. **Cart tools sanitized** (`pricepilot-agent_v2/pricepilot/tools/cart_tools.py`): persist_cart error messages now in Hebrew. Removed raw error codes from tool responses.
+
+5. **Frontend cleanup** (`services/agentService.ts`): Removed all reCAPTCHA code (loadRecaptchaScript, solveRecaptcha, RECAPTCHA_SITEKEY) — cross-domain reCAPTCHA tokens are rejected. Removed email detection for reCAPTCHA trigger. Simplified apiSendMessage signature.
+
+#### Auth Flow (Current)
+
+```
+Cart Preview shown
+  → Agent asks: "רוצה שאשמור את העגלה בחשבון שלך?"
+  ├─ User says "לא" → Checkout URL provided → Done
+  └─ User says "כן"
+      → Agent asks for email
+      → Agent tries OTP login
+      → reCAPTCHA blocks it (domain binding)
+      → Agent says: "לא הצלחתי להתחבר כרגע. הנה לינק ישיר לקופה:"
+      → Checkout URL provided → User completes on rami-levy.co.il
+```
+
+#### Known Limitation
+
+reCAPTCHA sitekey `6LcbrMcqAAAAAG3zZqwyELvzuJlNHdW9Leq71AHy` is bound to rami-levy.co.il. Tokens generated from Lista's domain are rejected by Google's verification. In-chat OTP login requires a future solution (auth proxy, browser extension, or Rami Levy API change).
+
+#### Files Changed
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `pricepilot-agent_v2/pricepilot/tools/auth_tools.py` | Modified | `_sanitize_error()`, all errors return Hebrew `message` field |
+| `pricepilot-agent_v2/pricepilot/agent.py` | Modified | 25+ term blocklist, use `message` not `error` field |
+| `pricepilot-agent_v2/pricepilot/stores/rami_levy.py` | Modified | client credentials, JSON error handling, sanitized error codes |
+| `pricepilot-agent_v2/pricepilot/tools/cart_tools.py` | Modified | Hebrew error messages |
+| `services/agentService.ts` | Modified | Removed reCAPTCHA code, simplified message flow |
+
+---
+
 **Last Updated**: March 26, 2026
-**Version**: 5.2.1
+**Version**: 5.3.0
 **Status**: Production Ready
 

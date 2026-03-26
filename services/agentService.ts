@@ -10,73 +10,6 @@ import {
 import { looksLikeJwt } from './storeAuthService';
 
 // ============================================
-// reCAPTCHA helpers (for store OTP login)
-// ============================================
-
-/** Rami Levy's reCAPTCHA v2 sitekey */
-const RECAPTCHA_SITEKEY = '6LcbrMcqAAAAAG3zZqwyELvzuJlNHdW9Leq71AHy';
-
-let recaptchaLoaded = false;
-let recaptchaWidgetId: number | null = null;
-
-/** Load the reCAPTCHA script if not already loaded */
-function loadRecaptchaScript(): Promise<void> {
-  if (recaptchaLoaded) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = `https://www.google.com/recaptcha/api.js?render=explicit`;
-    script.async = true;
-    script.onload = () => { recaptchaLoaded = true; resolve(); };
-    script.onerror = () => reject(new Error('Failed to load reCAPTCHA'));
-    document.head.appendChild(script);
-  });
-}
-
-/** Solve reCAPTCHA and return the response token */
-export async function solveRecaptcha(): Promise<string | null> {
-  try {
-    await loadRecaptchaScript();
-    const grecaptcha = (window as any).grecaptcha;
-    if (!grecaptcha) return null;
-
-    return new Promise((resolve) => {
-      // Create a temporary invisible container
-      let container = document.getElementById('pricepilot-recaptcha');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = 'pricepilot-recaptcha';
-        container.style.display = 'none';
-        document.body.appendChild(container);
-      }
-
-      // Render or reset the widget
-      if (recaptchaWidgetId !== null) {
-        grecaptcha.reset(recaptchaWidgetId);
-      } else {
-        recaptchaWidgetId = grecaptcha.render(container, {
-          sitekey: RECAPTCHA_SITEKEY,
-          size: 'invisible',
-          callback: (token: string) => resolve(token),
-          'error-callback': () => resolve(null),
-        });
-      }
-
-      grecaptcha.execute(recaptchaWidgetId);
-
-      // Timeout after 10s
-      setTimeout(() => resolve(null), 10000);
-    });
-  } catch {
-    return null;
-  }
-}
-
-/** Check if text looks like an email address */
-function looksLikeEmail(text: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text.trim());
-}
-
-// ============================================
 // Configuration
 // ============================================
 
@@ -278,7 +211,6 @@ async function apiSendMessage(
   userId: string,
   message: string,
   authToken?: string,
-  recaptchaToken?: string,
 ): Promise<MessageApiResponse> {
   const res = await fetch(`${PRICEPILOT_API_URL}/api/message`, {
     method: 'POST',
@@ -288,7 +220,6 @@ async function apiSendMessage(
       user_id: userId,
       message,
       auth_token: authToken,
-      recaptcha_token: recaptchaToken,
     }),
   });
   if (!res.ok) throw new Error(`PricePilot API error: ${res.status}`);
@@ -476,18 +407,11 @@ export async function processUserMessage(
   }
 
   try {
-    // If user sent an email (likely for OTP login), solve reCAPTCHA first
-    let recaptchaToken: string | undefined;
-    if (looksLikeEmail(text) && !detectedToken) {
-      recaptchaToken = (await solveRecaptcha()) || undefined;
-    }
-
     const apiResponse = await apiSendMessage(
       sessionId,
       meta.pricepilotUserId,
       detectedToken ? 'User has logged in. Here is the auth token.' : text,
       detectedToken,
-      recaptchaToken,
     );
 
     // Update metadata
