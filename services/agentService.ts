@@ -7,6 +7,7 @@ import {
   Language,
   StoreCategory,
 } from '../types';
+import { looksLikeJwt } from './storeAuthService';
 
 // ============================================
 // Configuration
@@ -85,6 +86,7 @@ const sessions = new Map<string, AgentSession>();
 /** Extra PricePilot v2 state per session */
 interface PricePilotSessionMeta {
   pricepilotUserId: string;
+  storeName?: string;
   checkoutUrl?: string;
   cartPersisted?: boolean;
   phase?: string;
@@ -127,18 +129,58 @@ interface MessageApiResponse {
   checkout_url?: string;
 }
 
+/** Keywords that indicate the agent is asking the user to connect their account */
+const LOGIN_HINT_PATTERNS = [
+  'התחבר', 'להתחבר', 'חשבון', 'לשמור את העגלה', 'שאשמור',
+  'connect', 'log in', 'login', 'save the cart', 'save your cart',
+];
+
+/** Keywords that indicate a checkout URL is present */
+const CHECKOUT_HINT_PATTERNS = ['לקופה', 'checkout', 'להזמין', 'לשלם'];
+
 /**
  * Convert PricePilot v2 API messages to ChatMessage format.
+ * Automatically adds login/checkout buttons based on message content.
  */
-function mapApiMessages(apiMessages: PricePilotMessage[]): ChatMessage[] {
+function mapApiMessages(apiMessages: PricePilotMessage[], storeName?: string): ChatMessage[] {
   return apiMessages
     .filter((msg) => msg.role === 'model')
-    .map((msg) => ({
-      id: generateId(),
-      type: 'bot' as const,
-      text: msg.text,
-      timestamp: Date.now(),
-    }));
+    .map((msg) => {
+      const buttons: ChatButton[] = [];
+      const textLower = msg.text.toLowerCase();
+
+      // Detect if agent is asking about account connection → add login button
+      const mentionsLogin = LOGIN_HINT_PATTERNS.some((p) => textLower.includes(p));
+      const mentionsCheckout = CHECKOUT_HINT_PATTERNS.some((p) => textLower.includes(p));
+
+      if (mentionsLogin && storeName) {
+        buttons.push({
+          id: 'login-store',
+          label: `התחבר ל-${storeName}`,
+          action: `login:${storeName}`,
+          variant: 'primary',
+        });
+      }
+
+      // Detect checkout URLs in text and add a checkout button
+      const urlMatch = msg.text.match(/https?:\/\/[^\s]+/);
+      if (urlMatch && mentionsCheckout) {
+        buttons.push({
+          id: 'checkout',
+          label: 'עבור לקופה',
+          action: `checkout:${urlMatch[0]}`,
+          variant: 'primary',
+        });
+      }
+
+      return {
+        id: generateId(),
+        type: 'bot' as const,
+        text: msg.text,
+        timestamp: Date.now(),
+        buttons: buttons.length > 0 ? buttons : undefined,
+      };
+    });
 }
 
 async function apiBuildCart(
@@ -241,10 +283,11 @@ export async function startAgentSession(
     // Store PricePilot v2 metadata
     sessionMeta.set(session.id, {
       pricepilotUserId: apiResponse.user_id,
+      storeName,
     });
 
     // Convert API messages to ChatMessage format
-    const newMessages = mapApiMessages(apiResponse.messages);
+    const newMessages = mapApiMessages(apiResponse.messages, storeName);
 
     session.messages.push(...newMessages);
     sessions.set(session.id, session);
@@ -295,19 +338,23 @@ export async function handleButtonAction(
     meta.cartPersisted = apiResponse.cart_persisted;
     meta.checkoutUrl = apiResponse.checkout_url ?? meta.checkoutUrl;
 
-    const botMessages = mapApiMessages(apiResponse.messages);
+    const botMessages = mapApiMessages(apiResponse.messages, meta.storeName);
 
-    // If checkout URL available, add a checkout button to the last message
+    // If checkout URL available and not already added by mapApiMessages, add button
     if (apiResponse.checkout_url && botMessages.length > 0) {
       const lastMsg = botMessages[botMessages.length - 1];
-      lastMsg.buttons = [
-        {
-          id: 'checkout',
-          label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
-          action: `checkout:${apiResponse.checkout_url}`,
-          variant: 'primary',
-        },
-      ];
+      const hasCheckout = lastMsg.buttons?.some(b => b.action.startsWith('checkout:'));
+      if (!hasCheckout) {
+        lastMsg.buttons = [
+          ...(lastMsg.buttons || []),
+          {
+            id: 'checkout',
+            label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
+            action: `checkout:${apiResponse.checkout_url}`,
+            variant: 'primary',
+          },
+        ];
+      }
     }
 
     session.messages.push(...botMessages);
@@ -339,8 +386,13 @@ export async function processUserMessage(
   const meta = sessionMeta.get(sessionId);
   const newMessages: ChatMessage[] = [];
 
+  // Auto-detect JWT tokens pasted by the user
+  const detectedToken = authToken || (looksLikeJwt(text) ? text.trim() : undefined);
+
   // Add user message locally
-  const userMessage = createUserMessage(text);
+  const userMessage = createUserMessage(
+    detectedToken && !authToken ? (language === 'he' ? '🔑 טוקן התחברות התקבל' : '🔑 Login token received') : text
+  );
   session.messages.push(userMessage);
   newMessages.push(userMessage);
 
@@ -361,8 +413,8 @@ export async function processUserMessage(
     const apiResponse = await apiSendMessage(
       sessionId,
       meta.pricepilotUserId,
-      text,
-      authToken,
+      detectedToken ? 'User has logged in. Here is the auth token.' : text,
+      detectedToken,
     );
 
     // Update metadata
@@ -370,19 +422,23 @@ export async function processUserMessage(
     meta.cartPersisted = apiResponse.cart_persisted;
     meta.checkoutUrl = apiResponse.checkout_url ?? meta.checkoutUrl;
 
-    const botMessages = mapApiMessages(apiResponse.messages);
+    const botMessages = mapApiMessages(apiResponse.messages, meta.storeName);
 
-    // If checkout URL available, add a checkout button
+    // If checkout URL available and not already added by mapApiMessages, add button
     if (apiResponse.checkout_url && botMessages.length > 0) {
       const lastMsg = botMessages[botMessages.length - 1];
-      lastMsg.buttons = [
-        {
-          id: 'checkout',
-          label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
-          action: `checkout:${apiResponse.checkout_url}`,
-          variant: 'primary',
-        },
-      ];
+      const hasCheckout = lastMsg.buttons?.some(b => b.action.startsWith('checkout:'));
+      if (!hasCheckout) {
+        lastMsg.buttons = [
+          ...(lastMsg.buttons || []),
+          {
+            id: 'checkout',
+            label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
+            action: `checkout:${apiResponse.checkout_url}`,
+            variant: 'primary',
+          },
+        ];
+      }
     }
 
     session.messages.push(...botMessages);

@@ -3412,7 +3412,49 @@ Since Lista is a PWA (not native), WebView JS injection isn't available. Current
 
 ---
 
+### PricePilot Auth & UX Improvements (v5.2.1, March 2026)
+
+#### Overview
+
+Improved PricePilot's auth and checkout UX. The agent now **offers optional cart saving** to the user's store account instead of silently skipping it. The frontend auto-detects JWT tokens pasted in chat and dynamically adds login/checkout buttons based on agent response content.
+
+#### Key Changes
+
+1. **Agent instruction update** (`pricepilot-agent_v2/pricepilot/agent.py`): Phase 3 rewritten — agent now asks "רוצה שאשמור את העגלה ישירות בחשבון רמי לוי שלך?" after cart preview. If yes → triggers login flow via `get_checkout_info`. If no → shows prices + checkout URL. Agent never mentions console/F12/JWT/tokens to users.
+
+2. **Auto-detect JWT tokens** (`services/agentService.ts`): `processUserMessage` now detects JWT-like strings (starts with "ey", 3+ dot segments, 50+ chars) pasted by users and automatically sends them as `auth_token` to the PricePilot API. User sees "🔑 טוקן התחברות התקבל" instead of raw token text.
+
+3. **Dynamic login/checkout buttons** (`services/agentService.ts`): `mapApiMessages` now scans agent response text for login-related keywords (התחבר, חשבון, שאשמור, etc.) and auto-adds a "התחבר ל-[store]" button. Also detects checkout URLs in text and adds clickable "עבור לקופה" buttons. Prevents duplicate buttons when API response also includes checkout URL.
+
+4. **Session metadata tracking** (`services/agentService.ts`): `PricePilotSessionMeta` now tracks `storeName` for button generation across the session lifecycle.
+
+5. **Store auth service cleanup** (`services/storeAuthService.ts`): Removed `getTokenExtractionInstructions()` (no more F12/console instructions for users). Added `looksLikeJwt()` utility for JWT detection. Kept `openStoreLoginPopup()` for the popup login flow.
+
+#### Auth UX Flow
+
+```
+Cart Preview shown
+  → Agent asks: "רוצה שאשמור את העגלה בחשבון שלך?"
+  ├─ User says "לא" → Checkout URL provided → Done
+  └─ User says "כן"
+      → "התחבר ל-רמי לוי" button appears in chat
+      → User clicks → Rami Levy opens in popup
+      → User logs in → pastes JWT in chat
+      → Frontend auto-detects JWT → sends as auth_token
+      → Agent persists cart → "העגלה נשמרה ✅" + checkout URL
+```
+
+#### Files Changed
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `pricepilot-agent_v2/pricepilot/agent.py` | Modified | Phase 3 offers optional cart saving, no technical jargon |
+| `services/agentService.ts` | Modified | JWT auto-detection, dynamic login/checkout buttons, storeName in meta |
+| `services/storeAuthService.ts` | Modified | Removed F12 instructions, added `looksLikeJwt()` |
+
+---
+
 **Last Updated**: March 26, 2026
-**Version**: 5.2.0
+**Version**: 5.2.1
 **Status**: Production Ready
 

@@ -2,13 +2,14 @@
  * Store authentication helpers for PWA context.
  *
  * Since Lista is a PWA (not a native app), we can't use WebView JS injection.
- * Instead, we open the store's website in a popup for the user to log in,
- * then guide them to extract the auth token.
+ * We open the store's website in a popup for the user to log in. Token
+ * extraction is handled automatically when possible, or via user paste.
  */
 
 export interface StoreLoginConfig {
   loginUrl: string;
   nameHe: string;
+  /** JS expression to extract the JWT from the store's localStorage */
   tokenExtractionJs: string;
 }
 
@@ -27,6 +28,7 @@ export const STORE_LOGIN_CONFIG: Record<string, StoreLoginConfig> = {
 
 /**
  * Open the store's login page in a popup window.
+ * Returns the popup window reference.
  */
 export function openStoreLoginPopup(storeName: string): Window | null {
   const config = STORE_LOGIN_CONFIG[storeName];
@@ -40,27 +42,9 @@ export function openStoreLoginPopup(storeName: string): Window | null {
 }
 
 /**
- * Get instructions for token extraction (shown in the chat).
+ * Check if a string looks like a JWT token (starts with "ey", has 2+ dots).
  */
-export function getTokenExtractionInstructions(storeName: string, language: 'he' | 'en'): string {
-  const config = STORE_LOGIN_CONFIG[storeName];
-  if (!config) return '';
-
-  if (language === 'he') {
-    return [
-      `1. היכנס לחשבון שלך ב-${config.nameHe}`,
-      '2. פתח את כלי המפתחים (F12)',
-      '3. עבור ללשונית Console',
-      `4. הדבק: ${config.tokenExtractionJs}`,
-      '5. העתק את התוצאה והדבק אותה כאן',
-    ].join('\n');
-  }
-
-  return [
-    `1. Log in to your ${storeName} account`,
-    '2. Open Developer Tools (F12)',
-    '3. Go to the Console tab',
-    `4. Paste: ${config.tokenExtractionJs}`,
-    '5. Copy the result and paste it here',
-  ].join('\n');
+export function looksLikeJwt(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.startsWith('ey') && trimmed.split('.').length >= 3 && trimmed.length > 50;
 }
