@@ -31,7 +31,9 @@ class Settings:
 
         # -- Server --
         self.host: str = os.getenv("PRICEPILOT_HOST", "0.0.0.0")
-        self.port: int = int(os.getenv("PRICEPILOT_PORT", "8000"))
+        self.port: int = int(
+            os.getenv("PORT", os.getenv("PRICEPILOT_PORT", "8000"))
+        )
 
         # -- Rami Levy --
         self.rami_levy_store_id: str = os.getenv("RAMI_LEVY_STORE_ID", "331")
