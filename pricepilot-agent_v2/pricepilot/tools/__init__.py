@@ -11,8 +11,9 @@ Tool design principles:
 """
 
 from pricepilot.tools.auth_tools import (
-    request_login_otp,
-    verify_login_otp,
+    browser_request_otp,
+    browser_verify_otp,
+    shutdown_browser,
 )
 from pricepilot.tools.cart_tools import (
     calculate_cart_preview,
@@ -26,8 +27,9 @@ from pricepilot.tools.product_tools import (
 )
 
 __all__ = [
-    "request_login_otp",
-    "verify_login_otp",
+    "browser_request_otp",
+    "browser_verify_otp",
+    "shutdown_browser",
     "calculate_cart_preview",
     "persist_cart_to_store",
     "get_checkout_info",

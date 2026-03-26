@@ -7,14 +7,14 @@ Most operations are direct HTTP calls to store APIs, no LLM involvement.
 The agent orchestrates 5 phases:
 1. RESOLVE:  Match Lista items to store product IDs (barcode -> name -> LLM)
 2. PREVIEW:  Calculate cart with prices, delivery, promotions
-3. AUTH:     In-chat OTP login (email + SMS code) — no WebView needed
+3. AUTH:     In-chat OTP login via headless browser (email + SMS code)
 4. PERSIST:  Save cart to user's store account
 5. CHECKOUT: Provide checkout URL
 
 Google ADK version: 1.x (LlmAgent, tools, session state).
-Auth flow: Two-step OTP via request_login_otp / verify_login_otp tools.
-The agent collects email and OTP code conversationally — no external login
-UI or LongRunningFunctionTool needed.
+Auth flow: Two-step browser-based OTP via browser_request_otp / browser_verify_otp.
+A headless Playwright browser automates the login on the store's website,
+bypassing reCAPTCHA that blocks direct API calls.
 """
 
 from google.adk.agents import LlmAgent
@@ -31,8 +31,8 @@ from pricepilot.tools.cart_tools import (
     get_checkout_info,
 )
 from pricepilot.tools.auth_tools import (
-    request_login_otp,
-    verify_login_otp,
+    browser_request_otp,
+    browser_verify_otp,
 )
 
 # ------------------------------------------------------------------
@@ -100,20 +100,20 @@ Ask the user in Hebrew:
 
 - **If the user says yes** — start the in-chat login flow:
   1. Ask for their email: "מה כתובת המייל שלך ברמי לוי?"
-  2. Call `request_login_otp` with the email.
+  2. Call `browser_request_otp` with the store name and email.
   3. If OTP was sent successfully, tell the user:
      "שלחתי קוד אימות ב-SMS לטלפון שלך. מה הקוד בן 6 הספרות?"
      (If the tool returned phone_last_digits, add: "...לטלפון שנגמר ב-XXXX")
   4. The user provides the 6-digit code.
-  5. Call `verify_login_otp` with the email + code.
+  5. Call `browser_verify_otp` with the store name and the code.
   6. If success: call `persist_cart_to_store` to save the cart, then:
      "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
      לחץ כאן כדי לעבור לקופה ולשלם:
      [checkout_url]"
   7. If the code is wrong: "הקוד לא תקין. רוצה לנסות שוב או שאשלח קוד חדש?"
-     - Retry: ask for the code again, call verify_login_otp.
-     - Resend: call request_login_otp again.
-  8. If login fails entirely (e.g. reCAPTCHA block, network error):
+     - Retry: ask for the code again, call browser_verify_otp.
+     - Resend: call browser_request_otp again (this creates a fresh browser session).
+  8. If login fails entirely (e.g. browser error, network):
      Fall back gracefully — call get_checkout_info for the checkout URL and say:
      "לא הצלחתי להתחבר כרגע. הנה לינק ישיר לקופה באתר [store]:
      [checkout_url]"
@@ -136,9 +136,10 @@ Ask the user in Hebrew:
 
 CRITICAL — NEVER SAY THESE WORDS TO THE USER:
 token, JWT, API, reCAPTCHA, OTP, auth_token, recaptcha_required, console, F12,
-localStorage, JSON, request_login_otp, verify_login_otp, persist_cart_to_store,
+localStorage, JSON, browser_request_otp, browser_verify_otp, persist_cart_to_store,
 resolve_products, calculate_cart_preview, get_checkout_info, search_product_by_barcode,
-search_product_by_name, tool_context, session state, HTTP, endpoint, 401, 403, 422.
+search_product_by_name, tool_context, session state, HTTP, endpoint, 401, 403, 422,
+Playwright, headless, browser session, BrowserContext.
 
 Instead use natural Hebrew: "אימייל", "קוד אימות", "קוד SMS", "התחברות".
 When tools return error messages, relay the Hebrew message field to the user.
@@ -173,9 +174,9 @@ When picking between product candidates:
 - not_found_items: Items that weren't found (set by resolve_products tool)
 - cart_preview: Latest cart preview (set by calculate_cart_preview tool)
 - cart_items_map: {product_id: qty} for cart operations
-- auth_token: Auth credential for store API calls (set by verify_login_otp)
-- login_email: User's email used for OTP login (set by request_login_otp)
-- login_delivery_method: OTP delivery method (set by request_login_otp)
+- auth_token: Auth credential for store API calls (set by browser_verify_otp)
+- login_email: User's email used for OTP login (set by browser_request_otp)
+- login_delivery_method: OTP delivery method (set by browser_request_otp)
 - cart_persisted: Whether cart has been saved
 - checkout_url: URL for checkout page
 """
@@ -201,8 +202,8 @@ pricepilot_agent = LlmAgent(
         calculate_cart_preview,
         persist_cart_to_store,
         get_checkout_info,
-        request_login_otp,
-        verify_login_otp,
+        browser_request_otp,
+        browser_verify_otp,
     ],
 )
 

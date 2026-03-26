@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from pricepilot.agent import pricepilot_agent
 from pricepilot.config import get_settings
 from pricepilot.stores import list_supported_stores
+from pricepilot.tools.auth_tools import shutdown_browser
 from pricepilot.types import CartBuildRequest
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("shutdown")
+async def _shutdown_event():
+    """Clean up Playwright browser on server shutdown."""
+    await shutdown_browser()
 
 # ------------------------------------------------------------------
 # ADK runner setup
@@ -81,10 +88,6 @@ class MessageRequest(BaseModel):
     auth_token: str | None = Field(
         default=None,
         description="JWT token from WebView login, sent when user completes auth",
-    )
-    recaptcha_token: str | None = Field(
-        default=None,
-        description="reCAPTCHA response token solved on the frontend, needed for OTP login",
     )
 
 
@@ -161,8 +164,11 @@ async def build_cart(request: CartBuildRequest):
     user_id = f"lista-user-{uuid.uuid4().hex[:8]}"
     session_id = f"cart-{uuid.uuid4().hex[:12]}"
 
-    # Create session with initial state
+    # Create session with initial state.
+    # session_id is stored in state so browser auth tools can use it
+    # as a key for the Playwright browser session registry.
     initial_state: dict[str, Any] = {
+        "session_id": session_id,
         "store_name": request.store_name,
         "store_id": request.store_id,
         "items_to_add": [item.model_dump() for item in request.items],
@@ -225,7 +231,10 @@ async def send_message(request: MessageRequest):
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Inject auth_token and/or recaptcha_token into session state
+    # Ensure session_id is available in state for browser auth tools
+    session.state["session_id"] = request.session_id
+
+    # Inject auth_token into session state if provided externally
     message = request.message
     if request.auth_token:
         session.state["auth_token"] = request.auth_token
@@ -233,8 +242,6 @@ async def send_message(request: MessageRequest):
             f"{message}\n\n[SYSTEM: Auth token received. "
             f"Token: {request.auth_token}]"
         )
-    if request.recaptcha_token:
-        session.state["recaptcha_token"] = request.recaptcha_token
 
     messages = await _run_agent(request.session_id, request.user_id, message)
 

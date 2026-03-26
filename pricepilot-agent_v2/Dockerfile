@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Use Playwright's official image — includes system deps (fonts, libs)
+FROM mcr.microsoft.com/playwright/python:v1.49.0-noble
 
 WORKDIR /app
 
@@ -6,8 +7,10 @@ WORKDIR /app
 COPY pyproject.toml .
 COPY pricepilot/ pricepilot/
 
-# Install
-RUN pip install --no-cache-dir .
+# Install Python deps, then install matching Chromium browser
+RUN pip install --no-cache-dir . && \
+    pip install --no-cache-dir playwright-stealth && \
+    playwright install chromium
 
 # Cloud Run injects PORT env var
 ENV PRICEPILOT_HOST=0.0.0.0
