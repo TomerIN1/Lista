@@ -277,9 +277,31 @@ adk run pricepilot
 
 **Status**: End-to-end flow working for Rami Levy with single item.
 
+---
+
+### Session 1b — March 26, 2026: Multi-Item Test & Price Accuracy Fix
+
+**What was done**:
+1. Tested with 12 items (11 by barcode + 1 by name only)
+2. All 11 barcode items resolved successfully, agent handled "בננות" (name-only) gracefully
+3. Cart preview showed correct itemized pricing with promotions
+4. Cart persisted and visible at checkout
+
+**Issue discovered: Price mismatch (21.70 NIS)**:
+- Agent (anonymous API): 219.81 + 29.90 = 249.71 NIS
+- Website (logged-in user): 241.51 + 29.90 = 271.41 NIS
+- Root cause: Rami Levy API returns **different prices** when called with auth headers (address-based pricing based on delivery zone) vs without auth (generic online prices)
+
+**Fix applied**:
+- `StoreAdapter.calculate_cart()` now accepts optional `auth_token` parameter
+- `RamiLevyAdapter.calculate_cart()` passes Authorization + ecomtoken headers when token provided
+- `calculate_cart_preview` tool reads `auth_token` from session state if available
+- Agent instruction updated: when auth token is available early, do auth before cart preview for accurate pricing
+- All stub adapters updated with new signature
+
+**Status**: Multi-item flow working. Price accuracy improved when auth token is available.
+
 **Next steps**:
-- Test with multiple items (15+ item cart)
-- Test disambiguation flow (name search with multiple candidates)
-- Research Shufersal, Victory, Market Warehouses APIs
 - Integrate with Lista frontend (WebView auth flow)
+- Research Shufersal, Victory, Market Warehouses APIs
 - Add multi-store cart support (when basket strategy is "multi-store")

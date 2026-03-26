@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, ShoppingCart, Loader2, MapPin, ChevronDown, Chev
 import { useLanguage } from '../contexts/LanguageContext';
 import { ListPriceComparison, ShoppingMode, BasketStrategyType } from '../types';
 import { computeBasketComparison } from '../utils/basketStrategies';
+import { SUPPORTED_ONLINE_STORES } from '../services/agentService';
 import BasketStrategyPicker from './BasketStrategyPicker';
 import BasketBreakdownView from './BasketBreakdownView';
 import SavingsReport from './SavingsReport';
@@ -13,7 +14,7 @@ interface ShoppingPriceStepProps {
   cityName: string;
   onBack: () => void;
   onOrganizeForStore: () => void;
-  onStartOnlineAgent: () => void;
+  onStartOnlineAgent: (storeName: string) => void;
   isOrganizing: boolean;
 }
 
@@ -82,7 +83,38 @@ const ShoppingPriceStep: React.FC<ShoppingPriceStepProps> = ({
             selected={selectedStrategy}
             isOnline={isOnline}
             singleStoreItems={singleStoreItems}
+            onBuildCart={isOnline ? onStartOnlineAgent : undefined}
           />
+        )}
+
+        {/* Action button (online mode — build cart) */}
+        {shoppingMode === 'online' && selectedStrategy === 'single' && (
+          (() => {
+            const bestStore = basketComparison.single.storeName;
+            const isSupported = SUPPORTED_ONLINE_STORES.has(bestStore);
+            return (
+              <button
+                type="button"
+                onClick={() => onStartOnlineAgent(bestStore)}
+                disabled={!isSupported}
+                className={`w-full flex items-center justify-center gap-2 py-3 font-semibold rounded-xl shadow-sm transition-all active:scale-[0.98] ${
+                  isSupported
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-md'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                <ShoppingCart className="w-5 h-5" />
+                <span>
+                  {isRTL ? `בנה עגלה ב-${bestStore}` : `Build Cart at ${bestStore}`}
+                </span>
+                {!isSupported && (
+                  <span className="text-xs bg-slate-300 text-slate-500 px-2 py-0.5 rounded-full">
+                    {isRTL ? 'בקרוב' : 'Coming soon'}
+                  </span>
+                )}
+              </button>
+            );
+          })()
         )}
 
         {/* Action button (physical mode — organize for store) */}

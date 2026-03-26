@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
             changeOrigin: true,
             rewrite: (path: string) => path.replace(/^\/gov-data-api/, ''),
           },
+          '/pricepilot-api': {
+            target: env.PRICEPILOT_API_TARGET || 'http://localhost:8080',
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/pricepilot-api/, ''),
+          },
         },
       },
       plugins: [react()],
@@ -30,7 +35,8 @@ export default defineConfig(({ mode }) => {
         'process.env.FIREBASE_PROJECT_ID': JSON.stringify(env.FIREBASE_PROJECT_ID || env.projectId),
         'process.env.FIREBASE_STORAGE_BUCKET': JSON.stringify(env.FIREBASE_STORAGE_BUCKET || env.storageBucket),
         'process.env.FIREBASE_MESSAGING_SENDER_ID': JSON.stringify(env.FIREBASE_MESSAGING_SENDER_ID || env.messagingSenderId),
-        'process.env.FIREBASE_APP_ID': JSON.stringify(env.FIREBASE_APP_ID || env.appId)
+        'process.env.FIREBASE_APP_ID': JSON.stringify(env.FIREBASE_APP_ID || env.appId),
+        'process.env.PRICEPILOT_API_URL': JSON.stringify(env.PRICEPILOT_API_URL || '/pricepilot-api')
       },
       resolve: {
         alias: {

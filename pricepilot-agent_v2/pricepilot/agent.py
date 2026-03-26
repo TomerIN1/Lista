@@ -63,12 +63,19 @@ After the tool returns:
   to skip them or search with a different name.
 
 ## Phase 2: Cart Preview
-Call `calculate_cart_preview` to get pricing. Show the user:
+Call `calculate_cart_preview` to get pricing. If auth_token is already in session state
+(from a previous session or provided upfront), the prices will reflect the user's
+delivery address. Without auth, prices are generic and may differ slightly from checkout.
+
+Show the user:
 - Each item with price and quantity
 - Promotions that were applied
 - Delivery fee
 - Total cost
 Ask the user to confirm before proceeding.
+
+NOTE: If the user already has an auth_token available, consider doing auth BEFORE
+cart preview so prices match their delivery address exactly.
 
 ## Phase 3: Authentication
 If the user hasn't provided an auth_token yet, call `get_checkout_info` to get the

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Store, Truck, AlertTriangle, Tag } from 'lucide-react';
+import { Store, Truck, AlertTriangle, Tag, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { SUPPORTED_ONLINE_STORES } from '../services/agentService';
 import {
   BasketComparison,
   BasketStrategyType,
@@ -15,6 +16,7 @@ interface BasketBreakdownViewProps {
   selected: BasketStrategyType;
   isOnline: boolean;
   singleStoreItems: ItemPriceDetail[]; // items from comparison.stores[0].itemPrices
+  onBuildCart?: (storeName: string) => void;
 }
 
 const ItemRow: React.FC<{ item: ItemPriceDetail; isRTL: boolean }> = ({ item, isRTL }) => {
@@ -97,8 +99,8 @@ const SingleStoreView: React.FC<{ basket: SingleStoreBasket; items: ItemPriceDet
   </div>
 );
 
-const StoreSection: React.FC<{ breakdown: StoreBasketBreakdown; isOnline: boolean; isRTL: boolean }> = ({
-  breakdown, isOnline, isRTL,
+const StoreSection: React.FC<{ breakdown: StoreBasketBreakdown; isOnline: boolean; isRTL: boolean; onBuildCart?: (storeName: string) => void }> = ({
+  breakdown, isOnline, isRTL, onBuildCart,
 }) => (
   <div className="rounded-xl border border-slate-200 overflow-hidden">
     {/* Store header */}
@@ -142,15 +144,44 @@ const StoreSection: React.FC<{ breakdown: StoreBasketBreakdown; isOnline: boolea
         </span>
       </div>
     )}
+
+    {/* Build Cart button (multi-store) */}
+    {onBuildCart && (
+      (() => {
+        const isSupported = SUPPORTED_ONLINE_STORES.has(breakdown.storeName);
+        return (
+          <div className="px-3 py-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => onBuildCart(breakdown.storeName)}
+              disabled={!isSupported}
+              className={`w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                isSupported
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              <span>{isRTL ? `בנה עגלה` : `Build Cart`}</span>
+              {!isSupported && (
+                <span className="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full">
+                  {isRTL ? 'בקרוב' : 'Soon'}
+                </span>
+              )}
+            </button>
+          </div>
+        );
+      })()
+    )}
   </div>
 );
 
-const MultiStoreView: React.FC<{ basket: MultiStoreBasket; isOnline: boolean; isRTL: boolean }> = ({
-  basket, isOnline, isRTL,
+const MultiStoreView: React.FC<{ basket: MultiStoreBasket; isOnline: boolean; isRTL: boolean; onBuildCart?: (storeName: string) => void }> = ({
+  basket, isOnline, isRTL, onBuildCart,
 }) => (
   <div className="space-y-3">
     {basket.storeBreakdowns.map((breakdown, i) => (
-      <StoreSection key={i} breakdown={breakdown} isOnline={isOnline} isRTL={isRTL} />
+      <StoreSection key={i} breakdown={breakdown} isOnline={isOnline} isRTL={isRTL} onBuildCart={onBuildCart} />
     ))}
 
     {/* Grand total */}
@@ -190,6 +221,7 @@ const BasketBreakdownView: React.FC<BasketBreakdownViewProps> = ({
   selected,
   isOnline,
   singleStoreItems,
+  onBuildCart,
 }) => {
   const { isRTL } = useLanguage();
 
@@ -209,6 +241,7 @@ const BasketBreakdownView: React.FC<BasketBreakdownViewProps> = ({
       basket={comparison.multi}
       isOnline={isOnline}
       isRTL={isRTL}
+      onBuildCart={onBuildCart}
     />
   );
 };

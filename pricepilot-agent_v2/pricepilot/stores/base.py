@@ -66,13 +66,18 @@ class StoreAdapter(abc.ABC):
         store_id: str,
         items: dict[str, int],
         is_club: bool = False,
+        auth_token: str | None = None,
     ) -> CartPreview:
-        """Stateless cart price calculation. No auth required.
+        """Cart price calculation. Auth optional but recommended for accurate pricing.
+
+        When auth_token is provided, the API returns prices based on the user's
+        delivery address and membership status, which may differ from anonymous pricing.
 
         Args:
             store_id: Branch ID.
             items: Mapping of store_product_id -> quantity.
             is_club: Whether to use club member pricing.
+            auth_token: Optional JWT for address-based pricing.
 
         Returns:
             CartPreview with itemized prices, delivery fee, promotions.

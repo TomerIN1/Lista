@@ -373,6 +373,7 @@ export interface AgentShoppingItem {
   name: string;
   quantity: number;
   unit?: string;
+  barcode?: string;
   brand?: string;
   category?: 'grocery' | 'electronics' | 'fashion' | 'home' | 'beauty' | 'sports' | 'other';
   attributes?: string[];
@@ -509,6 +510,7 @@ export function itemToShoppingItem(item: Item): AgentShoppingItem {
     name: item.name,
     quantity: item.amount,
     unit: item.unit,
+    barcode: item.barcode,
     category: 'grocery',
   };
 }

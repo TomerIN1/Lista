@@ -46,6 +46,7 @@ class HCohenAdapter(StoreAdapter):
         store_id: str,
         items: dict[str, int],
         is_club: bool = False,
+        auth_token: str | None = None,
     ) -> CartPreview:
         raise NotImplementedError(
             "H. Cohen adapter is not implemented yet."

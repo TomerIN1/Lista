@@ -30,9 +30,10 @@ async def calculate_cart_preview(
     tool_context: ToolContext,
     is_club: bool = False,
 ) -> dict[str, Any]:
-    """Calculate cart prices for all resolved items. No auth required.
+    """Calculate cart prices for all resolved items.
 
     Reads resolved_items from session state (set by resolve_products).
+    If auth_token is available in state, passes it to get address-based pricing.
     Returns itemized pricing, delivery fee, promotions, and total.
 
     Args:
@@ -63,8 +64,13 @@ async def calculate_cart_preview(
         # Aggregate if same product appears multiple times
         items_map[pid] = items_map.get(pid, 0) + qty
 
+    # Use auth token if available for address-based pricing
+    auth_token = tool_context.state.get("auth_token")
+
     try:
-        preview = await adapter.calculate_cart(store_id, items_map, is_club=is_club)
+        preview = await adapter.calculate_cart(
+            store_id, items_map, is_club=is_club, auth_token=auth_token
+        )
     except (RuntimeError, NotImplementedError) as exc:
         return {"status": "error", "error": str(exc)}
 

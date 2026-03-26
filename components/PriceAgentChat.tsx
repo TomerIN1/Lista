@@ -11,7 +11,9 @@ import {
   handleButtonAction,
   processUserMessage,
   getSession,
+  getSessionMeta,
 } from '../services/agentService';
+import { openStoreLoginPopup } from '../services/storeAuthService';
 import ChatMessage from './ChatMessage';
 
 interface PriceAgentChatProps {
@@ -20,6 +22,9 @@ interface PriceAgentChatProps {
   userId: string;
   listId: string;
   groceryList: AgentShoppingItem[];
+  storeName?: string;
+  storeId?: string;
+  userCity?: string;
 }
 
 const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
@@ -28,6 +33,9 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
   userId,
   listId,
   groceryList,
+  storeName,
+  storeId,
+  userCity,
 }) => {
   const { language, isRTL } = useLanguage();
   const [session, setSession] = useState<AgentSession | null>(null);
@@ -60,7 +68,10 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
         userId,
         listId,
         groceryList,
-        language
+        language,
+        storeName,
+        storeId,
+        userCity,
       );
       setSession(newSession);
       setMessages(newMessages);
@@ -103,6 +114,20 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
       setSession(null);
       setMessages([]);
       initializeSession();
+      return;
+    }
+
+    // Handle checkout URL action
+    if (action.startsWith('checkout:')) {
+      const url = action.replace('checkout:', '');
+      window.open(url, '_blank');
+      return;
+    }
+
+    // Handle store login popup action
+    if (action.startsWith('login:')) {
+      const store = action.replace('login:', '');
+      openStoreLoginPopup(store);
       return;
     }
 
@@ -213,7 +238,9 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
             <div>
               <h2 className="font-bold text-white">PricePilot</h2>
               <p className="text-xs text-white/80">
-                {language === 'he' ? 'מוצא את המחירים הטובים ביותר' : 'Find the best prices anywhere'}
+                {storeName
+                  ? (language === 'he' ? `בונה עגלה ב-${storeName}` : `Building cart at ${storeName}`)
+                  : (language === 'he' ? 'מוצא את המחירים הטובים ביותר' : 'Find the best prices anywhere')}
               </p>
             </div>
           </div>

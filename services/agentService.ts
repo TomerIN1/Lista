@@ -1,32 +1,30 @@
 import {
   AgentSession,
-  AgentWorkflowState,
   AgentShoppingItem,
-  AgentProduct,
   AgentStore,
-  AgentSavingsReport,
-  AgentPricingPlan,
-  AgentDisambiguationItem,
   ChatMessage,
   ChatButton,
   Language,
   StoreCategory,
-  ListPriceComparison,
 } from '../types';
 
 // ============================================
 // Configuration
 // ============================================
 
-const AGENT_API_URL = process.env.NEXT_PUBLIC_AGENT_API_URL || 'http://localhost:8000';
+const PRICEPILOT_API_URL = process.env.PRICEPILOT_API_URL || '/pricepilot-api';
 
 // Real Israeli supermarket chains from the DB
 const ISRAELI_SUPERMARKETS: AgentStore[] = [
+  { id: 'rami-levy', name: 'רמי לוי', nameHe: 'רמי לוי', deliveryFee: 30 },
   { id: 'shufersal', name: 'שופרסל', nameHe: 'שופרסל', deliveryFee: 30 },
   { id: 'victory', name: 'ויקטורי', nameHe: 'ויקטורי', deliveryFee: 20 },
   { id: 'market-warehouses', name: 'מחסני השוק', nameHe: 'מחסני השוק', deliveryFee: 25 },
   { id: 'h-cohen', name: 'ח. כהן', nameHe: 'ח. כהן', deliveryFee: 25 },
 ];
+
+// Stores that have a working PricePilot adapter
+export const SUPPORTED_ONLINE_STORES = new Set(['רמי לוי', 'Rami Levy', 'rami levy']);
 
 // Store categories (supermarket-focused)
 const STORE_CATEGORIES: StoreCategory[] = [
@@ -73,13 +71,26 @@ function createUserMessage(text: string): ChatMessage {
 }
 
 // ============================================
-// Session Management (via PricePilot Agent API)
+// Session Management
 // ============================================
 
 const sessions = new Map<string, AgentSession>();
 
+/** Extra PricePilot v2 state per session */
+interface PricePilotSessionMeta {
+  pricepilotUserId: string;
+  checkoutUrl?: string;
+  cartPersisted?: boolean;
+  phase?: string;
+}
+const sessionMeta = new Map<string, PricePilotSessionMeta>();
+
 export function getSession(sessionId: string): AgentSession | undefined {
   return sessions.get(sessionId);
+}
+
+export function getSessionMeta(sessionId: string): PricePilotSessionMeta | undefined {
+  return sessionMeta.get(sessionId);
 }
 
 function updateSession(session: AgentSession): void {
@@ -88,38 +99,85 @@ function updateSession(session: AgentSession): void {
 }
 
 // ============================================
-// API Communication
+// PricePilot v2 API Communication
 // ============================================
 
-async function apiCreateSession(
-  userId: string,
-  listId: string,
-  groceryList: AgentShoppingItem[]
-): Promise<{ session_id: string; messages: Array<{ id: string; type: string; text: string; timestamp: number }> }> {
-  const res = await fetch(`${AGENT_API_URL}/sessions`, {
+interface PricePilotMessage {
+  role: string;   // "model" | "user"
+  text: string;
+  author: string;
+}
+
+interface BuildCartApiResponse {
+  session_id: string;
+  user_id: string;
+  messages: PricePilotMessage[];
+}
+
+interface MessageApiResponse {
+  messages: PricePilotMessage[];
+  phase?: string;
+  cart_persisted: boolean;
+  checkout_url?: string;
+}
+
+/**
+ * Convert PricePilot v2 API messages to ChatMessage format.
+ */
+function mapApiMessages(apiMessages: PricePilotMessage[]): ChatMessage[] {
+  return apiMessages
+    .filter((msg) => msg.role === 'model')
+    .map((msg) => ({
+      id: generateId(),
+      type: 'bot' as const,
+      text: msg.text,
+      timestamp: Date.now(),
+    }));
+}
+
+async function apiBuildCart(
+  storeName: string,
+  storeId: string,
+  items: AgentShoppingItem[],
+  userCity?: string,
+  authToken?: string,
+): Promise<BuildCartApiResponse> {
+  const res = await fetch(`${PRICEPILOT_API_URL}/api/build-cart`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      user_id: userId,
-      list_id: listId,
-      grocery_list: groceryList,
+      store_name: storeName,
+      store_id: storeId,
+      items: items.map((item) => ({
+        name: item.name,
+        barcode: item.barcode || '',
+        quantity: item.quantity,
+      })),
+      user_city: userCity,
+      auth_token: authToken,
     }),
   });
-  if (!res.ok) throw new Error(`Agent API error: ${res.status}`);
+  if (!res.ok) throw new Error(`PricePilot API error: ${res.status}`);
   return res.json();
 }
 
 async function apiSendMessage(
   sessionId: string,
   userId: string,
-  text: string
-): Promise<{ messages: Array<{ id: string; type: string; text: string; timestamp: number }>; workflow_phase?: string }> {
-  const res = await fetch(`${AGENT_API_URL}/sessions/${sessionId}/message`, {
+  message: string,
+  authToken?: string,
+): Promise<MessageApiResponse> {
+  const res = await fetch(`${PRICEPILOT_API_URL}/api/message`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: userId, text }),
+    body: JSON.stringify({
+      session_id: sessionId,
+      user_id: userId,
+      message,
+      auth_token: authToken,
+    }),
   });
-  if (!res.ok) throw new Error(`Agent API error: ${res.status}`);
+  if (!res.ok) throw new Error(`PricePilot API error: ${res.status}`);
   return res.json();
 }
 
@@ -134,55 +192,66 @@ export interface AgentResponse {
 
 /**
  * Start a new agent session.
- * Creates a session via the PricePilot Agent API and returns the initial messages.
+ * Calls PricePilot v2 /api/build-cart and returns initial messages.
  */
 export async function startAgentSession(
   userId: string,
   listId: string,
   groceryList: AgentShoppingItem[],
-  language: Language
+  language: Language,
+  storeName?: string,
+  storeId?: string,
+  userCity?: string,
 ): Promise<AgentResponse> {
   const now = Date.now();
 
+  // If no store specified, fall back to local mode
+  if (!storeName) {
+    return startAgentSessionLocal(userId, listId, groceryList, language);
+  }
+
   try {
-    // Call the PricePilot Agent API
-    const apiResponse = await apiCreateSession(userId, listId, groceryList);
+    const apiResponse = await apiBuildCart(
+      storeName,
+      storeId || '',
+      groceryList,
+      userCity,
+    );
 
     // Create local session for state tracking
     const session: AgentSession = {
       id: apiResponse.session_id,
       userId,
       listId,
-      state: 'CONFIRMING_CONTEXT',
+      state: 'BUILDING_CART',
       groceryList,
-      selectedStores: ISRAELI_SUPERMARKETS.map((s) => s.id),
+      selectedStores: [storeName],
       messages: [],
       createdAt: now,
       updatedAt: now,
     };
 
+    // Store PricePilot v2 metadata
+    sessionMeta.set(session.id, {
+      pricepilotUserId: apiResponse.user_id,
+    });
+
     // Convert API messages to ChatMessage format
-    const newMessages: ChatMessage[] = apiResponse.messages.map((msg) => ({
-      id: msg.id || generateId(),
-      type: msg.type as ChatMessage['type'],
-      text: msg.text,
-      timestamp: msg.timestamp || now,
-    }));
+    const newMessages = mapApiMessages(apiResponse.messages);
 
     session.messages.push(...newMessages);
     sessions.set(session.id, session);
 
     return { session, newMessages };
   } catch (error) {
-    console.error('Failed to create agent session via API, falling back to local:', error);
-    // Fallback to local session if API is unavailable
+    console.error('Failed to create PricePilot session, falling back to local:', error);
     return startAgentSessionLocal(userId, listId, groceryList, language);
   }
 }
 
 /**
  * Process a button action from the user.
- * Sends the action as a text message to the agent API.
+ * Sends the action as a text message to PricePilot v2 /api/message.
  */
 export async function handleButtonAction(
   sessionId: string,
@@ -194,6 +263,7 @@ export async function handleButtonAction(
     throw new Error('Session not found');
   }
 
+  const meta = sessionMeta.get(sessionId);
   const newMessages: ChatMessage[] = [];
 
   // Add user action as a message locally
@@ -201,17 +271,37 @@ export async function handleButtonAction(
   session.messages.push(userMessage);
   newMessages.push(userMessage);
 
-  try {
-    // Send to agent API
-    const apiResponse = await apiSendMessage(sessionId, session.userId, action);
+  // If no PricePilot metadata, use local fallback
+  if (!meta) {
+    return handleButtonActionLocal(session, action, language, newMessages);
+  }
 
-    // Convert API response messages
-    const botMessages: ChatMessage[] = apiResponse.messages.map((msg) => ({
-      id: msg.id || generateId(),
-      type: msg.type as ChatMessage['type'],
-      text: msg.text,
-      timestamp: msg.timestamp || Date.now(),
-    }));
+  try {
+    const apiResponse = await apiSendMessage(
+      sessionId,
+      meta.pricepilotUserId,
+      action,
+    );
+
+    // Update metadata
+    meta.phase = apiResponse.phase ?? meta.phase;
+    meta.cartPersisted = apiResponse.cart_persisted;
+    meta.checkoutUrl = apiResponse.checkout_url ?? meta.checkoutUrl;
+
+    const botMessages = mapApiMessages(apiResponse.messages);
+
+    // If checkout URL available, add a checkout button to the last message
+    if (apiResponse.checkout_url && botMessages.length > 0) {
+      const lastMsg = botMessages[botMessages.length - 1];
+      lastMsg.buttons = [
+        {
+          id: 'checkout',
+          label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
+          action: `checkout:${apiResponse.checkout_url}`,
+          variant: 'primary',
+        },
+      ];
+    }
 
     session.messages.push(...botMessages);
     newMessages.push(...botMessages);
@@ -219,25 +309,27 @@ export async function handleButtonAction(
 
     return { session, newMessages };
   } catch (error) {
-    console.error('Failed to send button action via API, falling back to local:', error);
+    console.error('Failed to send action via PricePilot API:', error);
     return handleButtonActionLocal(session, action, language, newMessages);
   }
 }
 
 /**
  * Process a text message from the user.
- * Sends the message to the agent API.
+ * Sends to PricePilot v2 /api/message.
  */
 export async function processUserMessage(
   sessionId: string,
   text: string,
-  language: Language
+  language: Language,
+  authToken?: string,
 ): Promise<AgentResponse> {
   const session = getSession(sessionId);
   if (!session) {
     throw new Error('Session not found');
   }
 
+  const meta = sessionMeta.get(sessionId);
   const newMessages: ChatMessage[] = [];
 
   // Add user message locally
@@ -245,17 +337,46 @@ export async function processUserMessage(
   session.messages.push(userMessage);
   newMessages.push(userMessage);
 
-  try {
-    // Send to agent API
-    const apiResponse = await apiSendMessage(sessionId, session.userId, text);
+  // If no PricePilot metadata, show error
+  if (!meta) {
+    const errorMsg = createBotMessage(
+      language === 'he'
+        ? 'שגיאה: לא נמצא חיבור לשרת PricePilot.'
+        : 'Error: PricePilot server connection not found.'
+    );
+    session.messages.push(errorMsg);
+    newMessages.push(errorMsg);
+    updateSession(session);
+    return { session, newMessages };
+  }
 
-    // Convert API response messages
-    const botMessages: ChatMessage[] = apiResponse.messages.map((msg) => ({
-      id: msg.id || generateId(),
-      type: msg.type as ChatMessage['type'],
-      text: msg.text,
-      timestamp: msg.timestamp || Date.now(),
-    }));
+  try {
+    const apiResponse = await apiSendMessage(
+      sessionId,
+      meta.pricepilotUserId,
+      text,
+      authToken,
+    );
+
+    // Update metadata
+    meta.phase = apiResponse.phase ?? meta.phase;
+    meta.cartPersisted = apiResponse.cart_persisted;
+    meta.checkoutUrl = apiResponse.checkout_url ?? meta.checkoutUrl;
+
+    const botMessages = mapApiMessages(apiResponse.messages);
+
+    // If checkout URL available, add a checkout button
+    if (apiResponse.checkout_url && botMessages.length > 0) {
+      const lastMsg = botMessages[botMessages.length - 1];
+      lastMsg.buttons = [
+        {
+          id: 'checkout',
+          label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
+          action: `checkout:${apiResponse.checkout_url}`,
+          variant: 'primary',
+        },
+      ];
+    }
 
     session.messages.push(...botMessages);
     newMessages.push(...botMessages);
@@ -263,8 +384,7 @@ export async function processUserMessage(
 
     return { session, newMessages };
   } catch (error) {
-    console.error('Failed to send message via API, falling back to local:', error);
-    // Fallback: prompt to use buttons
+    console.error('Failed to send message via PricePilot API:', error);
     const promptMessage = createBotMessage(
       language === 'he'
         ? 'שגיאה בתקשורת עם השרת. נסו שוב.'
@@ -316,10 +436,6 @@ const messages = {
     completed: 'בניית העגלה הושלמה! אינטגרציה עם חנויות בקרוב.',
   },
 };
-
-function formatCurrency(amount: number): string {
-  return `₪${amount.toFixed(2)}`;
-}
 
 function formatShoppingList(items: AgentShoppingItem[], _language: Language): string {
   return items
@@ -387,13 +503,9 @@ function handleButtonActionLocal(
     session.messages.push(buildingMessage);
     newMessages.push(buildingMessage);
 
-    const cartLines = session.groceryList.map((item) =>
-      m.cartItem(item.name, formatCurrency(0), item.quantity)
-    );
-
     session.state = 'COMPLETED';
     const cartMessage = createBotMessage(
-      `${m.completed}\n\n${cartLines.join('\n')}`,
+      m.completed,
       [{ id: 'restart', label: m.restart, action: 'cancel:restart', variant: 'secondary' }]
     );
     session.messages.push(cartMessage);

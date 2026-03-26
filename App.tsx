@@ -758,7 +758,9 @@ const App: React.FC = () => {
     setShoppingStep('ready');
   };
 
-  const handleShoppingOnline = () => {
+  const [onlineStoreName, setOnlineStoreName] = useState<string | null>(null);
+
+  const handleShoppingOnline = (storeName?: string) => {
     if (!priceComparison) return;
 
     // Build temporary groups from DB products for the agent
@@ -779,6 +781,7 @@ const App: React.FC = () => {
     ];
 
     setLocalGroups(tempGroups);
+    setOnlineStoreName(storeName || null);
     setIsPriceAgentOpen(true);
   };
 
@@ -1039,10 +1042,12 @@ const App: React.FC = () => {
       {/* Price Agent Chat Panel */}
       <PriceAgentChat
         isOpen={isPriceAgentOpen}
-        onClose={() => setIsPriceAgentOpen(false)}
+        onClose={() => { setIsPriceAgentOpen(false); setOnlineStoreName(null); }}
         userId={user?.uid || 'guest'}
         listId={activeListId || 'guest-list'}
         groceryList={groupsToShoppingItems(localGroups)}
+        storeName={onlineStoreName || undefined}
+        userCity={shoppingCity || undefined}
       />
     </div>
   );

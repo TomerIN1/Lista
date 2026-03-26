@@ -133,13 +133,16 @@ class RamiLevyAdapter(StoreAdapter):
         store_id: str,
         items: dict[str, int],
         is_club: bool = False,
+        auth_token: str | None = None,
     ) -> CartPreview:
-        """Calculate cart prices without auth.
+        """Calculate cart prices. Pass auth_token for address-based pricing.
 
         Args:
             store_id: Branch ID (e.g. "331").
             items: {store_product_id: quantity} mapping.
             is_club: Club member pricing.
+            auth_token: Optional JWT — when provided, API returns prices
+                based on user's delivery address (may differ from anonymous).
         """
         tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime(
             "%Y-%m-%dT00:00:00.000Z"
@@ -152,8 +155,17 @@ class RamiLevyAdapter(StoreAdapter):
             "meta": None,
         }
 
+        extra_headers = {}
+        if auth_token:
+            extra_headers = {
+                "Authorization": f"Bearer {auth_token}",
+                "ecomtoken": auth_token,
+            }
+
         try:
-            resp = await self._client.post(CART_ENDPOINT, json=payload)
+            resp = await self._client.post(
+                CART_ENDPOINT, json=payload, headers=extra_headers
+            )
             resp.raise_for_status()
             data = resp.json()
         except httpx.HTTPError as exc:

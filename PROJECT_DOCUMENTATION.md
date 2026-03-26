@@ -3308,9 +3308,9 @@ The API already returned `cheapest_per_item` data (cheapest store per product ba
 | `components/BasketBreakdownView.tsx` | New | Per-store item breakdown |
 | `components/ShoppingPriceStep.tsx` | Rewritten | Integrated strategy picker + breakdown + collapsible SavingsReport |
 
-#### Future: PricePilot Integration
+#### PricePilot Integration (Implemented in v5.2.0)
 
-PricePilot (automated cart-building agent) is not yet developed. The `StoreBasketBreakdown` type (with per-store item lists) is designed to feed directly into PricePilot's `CartItem[]` input when ready. Action buttons for cart building are deferred.
+PricePilot v2 is now integrated. The `StoreBasketBreakdown` type feeds into PricePilot's cart-building flow. "Build Cart" buttons appear in online mode for supported stores (currently Rami Levy). See [PricePilot v2 Frontend Integration](#pricepilot-v2-frontend-integration-v520-march-2026) for details.
 
 ---
 
@@ -3343,7 +3343,76 @@ Added a custom Claude Code agent (`google-adk-builder`) with 5 preloaded skills 
 
 ---
 
+### PricePilot v2 Frontend Integration (v5.2.0, March 2026)
+
+#### Overview
+
+Integrated the PricePilot v2 ADK agent (FastAPI backend) into the Lista frontend shopping flow. Users can now tap "Build Cart at [Store]" from the price comparison results to have PricePilot automatically build an online grocery cart via the store's REST API. Currently only Rami Levy is fully supported; other stores show "Coming soon".
+
+#### Architecture
+
+```
+Lista Frontend (PWA)
+  → "Build Cart at רמי לוי" button
+  → PriceAgentChat slide-over panel
+  → agentService.ts (PricePilot v2 API client)
+  → Vite proxy (/pricepilot-api)
+  → PricePilot v2 FastAPI server
+  → ADK Agent (gemini-2.5-flash)
+  → Rami Levy REST API
+```
+
+#### Key Changes
+
+1. **API contract rewrite** (`services/agentService.ts`): Replaced old `/sessions` endpoints with PricePilot v2's `/api/build-cart` and `/api/message`. Added session metadata tracking (`pricepilotUserId`, `checkoutUrl`, `cartPersisted`, `phase`). Maps v2 response format (`{role, text, author}`) to Lista's `ChatMessage` format. Added `storeName`, `storeId`, `userCity` parameters.
+
+2. **"Build Cart" button for online mode** (`components/ShoppingPriceStep.tsx`): Added online-mode button that appears when user selects single-store strategy. Button shows store name (e.g., "בנה עגלה ב-רמי לוי"). Disabled with "בקרוב" badge for unsupported stores.
+
+3. **Per-store build buttons in multi-store view** (`components/BasketBreakdownView.tsx`): Added `onBuildCart` prop. Each `StoreSection` in multi-store breakdown gets a "Build Cart" button. Supported stores (Rami Levy) are enabled; others disabled with "Coming soon".
+
+4. **Store-aware PriceAgentChat** (`components/PriceAgentChat.tsx`): Added `storeName`, `storeId`, `userCity` props. Header subtitle shows "Building cart at [Store]". Handles `checkout:` actions (opens checkout URL in new tab) and `login:` actions (opens store login popup).
+
+5. **Store auth service** (`services/storeAuthService.ts`): New service for PWA-based store authentication. `openStoreLoginPopup()` opens the store's website in a popup for manual login. Token extraction instructions provided for developer-mode fallback.
+
+6. **Barcode passthrough** (`types.ts`): Added `barcode?: string` to `AgentShoppingItem`. Updated `itemToShoppingItem()` to include barcode from `Item` → enables barcode-based product resolution in PricePilot.
+
+7. **Vite proxy** (`vite.config.ts`): Added `/pricepilot-api` proxy pointing to PricePilot v2 dev server (`localhost:8080`, configurable via `PRICEPILOT_API_TARGET`). Added `PRICEPILOT_API_URL` env var define.
+
+#### Supported Stores
+
+| Chain | Status | Notes |
+|-------|--------|-------|
+| Rami Levy (רמי לוי) | Fully supported | Build cart button enabled, end-to-end tested |
+| Shufersal (שופרסל) | Coming soon | Button disabled, adapter stub on backend |
+| Victory (ויקטורי) | Coming soon | Button disabled, adapter stub on backend |
+| Market Warehouses (מחסני השוק) | Coming soon | Button disabled, adapter stub on backend |
+| H. Cohen (ח. כהן) | Coming soon | Button disabled, adapter stub on backend |
+
+#### Files Changed
+
+| File | Action | Key Changes |
+|------|--------|-------------|
+| `types.ts` | Modified | Added `barcode?: string` to `AgentShoppingItem`, updated `itemToShoppingItem()` |
+| `vite.config.ts` | Modified | Added `/pricepilot-api` proxy, `PRICEPILOT_API_URL` env define |
+| `services/agentService.ts` | Rewritten | PricePilot v2 API contract (`/api/build-cart`, `/api/message`), session metadata |
+| `services/storeAuthService.ts` | New | Store login popup, token extraction helpers |
+| `components/PriceAgentChat.tsx` | Modified | Store-aware props, checkout/login action handlers |
+| `components/ShoppingPriceStep.tsx` | Modified | Online-mode "Build Cart at [Store]" button |
+| `components/BasketBreakdownView.tsx` | Modified | Per-store "Build Cart" buttons with coming-soon logic |
+| `App.tsx` | Modified | `onlineStoreName` state, store context wiring to PriceAgentChat |
+
+#### Auth Flow (PWA)
+
+Since Lista is a PWA (not native), WebView JS injection isn't available. Current auth flow:
+1. Agent asks for authentication → chat shows login instructions
+2. User opens store website in popup (via "Open [Store] Login" button)
+3. User logs in, extracts JWT via browser console
+4. User pastes token in chat → sent to PricePilot via `/api/message` with `auth_token` field
+5. Future: auth-proxy service or browser extension for seamless token extraction
+
+---
+
 **Last Updated**: March 26, 2026
-**Version**: 5.1.0
+**Version**: 5.2.0
 **Status**: Production Ready
 
