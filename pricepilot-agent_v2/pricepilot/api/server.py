@@ -30,6 +30,13 @@ from pricepilot.stores import list_supported_stores
 from pricepilot.tools.auth_tools import shutdown_browser
 from pricepilot.types import CartBuildRequest
 
+# Configure root logger so all pricepilot.* loggers output to stdout
+# (Cloud Run captures stdout/stderr as logs)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s %(name)s: %(message)s",
+)
+
 logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------

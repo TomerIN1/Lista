@@ -111,30 +111,41 @@ _browser: Any = None
 _browser_lock = asyncio.Lock()
 
 
+_playwright_instance: Any = None
+
+
 async def _get_browser() -> Any:
     """Get or create the shared Playwright Browser instance.
 
     Uses a lock to prevent multiple concurrent browser launches.
-    The browser runs in headless mode with minimal args for Cloud Run
-    compatibility (no-sandbox, disable-gpu, etc.).
+    If the browser has crashed, it is re-created automatically.
     """
-    global _browser
+    global _browser, _playwright_instance
 
     async with _browser_lock:
-        if _browser is not None and _browser.is_connected():
-            return _browser
+        # Check if existing browser is still alive
+        if _browser is not None:
+            try:
+                if _browser.is_connected():
+                    return _browser
+            except Exception:
+                pass
+            logger.warning("Browser died, re-creating...")
+            _browser = None
 
         from playwright.async_api import async_playwright
 
-        pw = await async_playwright().start()
-        _browser = await pw.chromium.launch(
+        if _playwright_instance is None:
+            _playwright_instance = await async_playwright().start()
+
+        _browser = await _playwright_instance.chromium.launch(
             headless=True,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
-                "--single-process",
+                # NOTE: do NOT use --single-process — it crashes in containers
             ],
         )
         logger.info("Playwright browser launched (headless Chromium)")
@@ -543,13 +554,45 @@ async def browser_verify_otp(
     should_cleanup = True  # Default: cleanup after this call
 
     try:
+        # --- Debug: log page state ---
+        try:
+            page_url = page.url
+            logger.info(
+                "browser_verify_otp: page URL=%s for session %s",
+                page_url, session_id,
+            )
+        except Exception as e:
+            logger.error(
+                "browser_verify_otp: page is dead for session %s: %s",
+                session_id, e,
+            )
+            return {
+                "status": "error",
+                "message": "פג תוקף ההתחברות. רוצים שאשלח קוד אימות חדש?",
+            }
+
         # --- Find OTP input (should already be visible) ---
         otp_input = page.locator(OTP_INPUT_SELECTOR).first
 
         try:
             await otp_input.wait_for(state="visible", timeout=5_000)
+            logger.info("OTP input found for session %s", session_id)
         except Exception:
-            logger.error("OTP input not visible for session %s", session_id)
+            # Debug: dump all visible inputs on the page
+            try:
+                all_inputs = await page.evaluate("""
+                    () => Array.from(document.querySelectorAll('input:not([type=hidden])')).map(
+                        el => ({tag: el.tagName, type: el.type, name: el.name,
+                                placeholder: el.placeholder, maxLength: el.maxLength,
+                                visible: el.offsetParent !== null})
+                    ).slice(0, 20)
+                """)
+                logger.error(
+                    "OTP input not visible. All inputs: %s",
+                    json.dumps(all_inputs, default=str),
+                )
+            except Exception:
+                logger.error("OTP input not visible, couldn't dump inputs")
             return {
                 "status": "error",
                 "message": _sanitize_error("timeout", store_he),
@@ -559,6 +602,10 @@ async def browser_verify_otp(
         # Handle split digit inputs (some sites use 6 separate fields)
         digit_inputs = page.locator(DIGIT_INPUT_SELECTOR)
         digit_count = await digit_inputs.count()
+        logger.info(
+            "Digit inputs found: %d, OTP code: %s, session: %s",
+            digit_count, otp_code, session_id,
+        )
 
         if digit_count >= 4:
             for i, digit in enumerate(otp_code[:digit_count]):
@@ -571,7 +618,7 @@ async def browser_verify_otp(
             )
         else:
             await otp_input.fill(otp_code)
-            logger.info("OTP entered for session %s", session_id)
+            logger.info("OTP entered in single input for session %s", session_id)
 
         # --- Submit ---
         verify_btn = page.locator(
@@ -587,7 +634,9 @@ async def browser_verify_otp(
 
         try:
             await verify_btn.click(timeout=5_000)
-        except Exception:
+            logger.info("OTP verify button clicked for session %s", session_id)
+        except Exception as e:
+            logger.info("Submit btn failed (%s), pressing Enter", e)
             await otp_input.press("Enter")
 
         logger.info("OTP submitted for session %s", session_id)
@@ -597,18 +646,25 @@ async def browser_verify_otp(
         # successful authentication.
         token_data = None
         deadline = time.monotonic() + BROWSER_OTP_VERIFY_TIMEOUT_S
+        poll_count = 0
 
         while time.monotonic() < deadline:
+            poll_count += 1
             # Check for token
             try:
                 raw = await page.evaluate(TOKEN_EXTRACTION_JS)
                 if raw:
                     token_data = json.loads(raw)
                     if token_data and token_data.get("token"):
+                        logger.info(
+                            "JWT found after %d polls for session %s",
+                            poll_count, session_id,
+                        )
                         break
                     token_data = None
-            except Exception:
-                pass
+            except Exception as e:
+                if poll_count <= 2:
+                    logger.warning("Token extraction error (poll %d): %s", poll_count, e)
 
             # Check for "wrong code" error on the page
             try:
@@ -632,23 +688,57 @@ async def browser_verify_otp(
             except Exception:
                 pass
 
+            # Log page URL periodically (it may navigate after OTP)
+            if poll_count % 5 == 0:
+                try:
+                    cur_url = page.url
+                    logger.info(
+                        "Polling for token... poll=%d url=%s session=%s",
+                        poll_count, cur_url, session_id,
+                    )
+                except Exception:
+                    pass
+
             await asyncio.sleep(1)
 
         if not token_data or not token_data.get("token"):
-            logger.error(
-                "JWT not found in localStorage after OTP for session %s",
-                session_id,
-            )
+            # Debug: dump localStorage keys to understand what the site stored
+            try:
+                ls_keys = await page.evaluate(
+                    "() => Object.keys(localStorage).slice(0, 20)"
+                )
+                logger.error(
+                    "JWT not found. localStorage keys: %s, page URL: %s, session: %s",
+                    ls_keys, page.url, session_id,
+                )
+            except Exception:
+                logger.error(
+                    "JWT not found in localStorage after OTP for session %s",
+                    session_id,
+                )
             return {
                 "status": "error",
                 "message": _sanitize_error("no_token", store_he),
             }
 
-        # --- Success: save token to session state ---
+        # --- Success: save token and cookies to session state ---
         token = token_data["token"]
         tool_context.state["auth_token"] = token
         if token_data.get("userId"):
             tool_context.state["store_user_id"] = str(token_data["userId"])
+
+        # Extract browser cookies — needed for cart persistence
+        try:
+            cookies = await page.context.cookies()
+            cookie_str = "; ".join(
+                f"{c['name']}={c['value']}" for c in cookies
+            )
+            tool_context.state["browser_cookies"] = cookie_str
+            logger.info(
+                "Extracted %d cookies for session %s", len(cookies), session_id,
+            )
+        except Exception as e:
+            logger.warning("Failed to extract cookies: %s", e)
 
         logger.info(
             "Auth token extracted for session %s (user_id: %s)",

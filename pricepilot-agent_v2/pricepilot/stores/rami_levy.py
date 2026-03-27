@@ -183,11 +183,13 @@ class RamiLevyAdapter(StoreAdapter):
         items: dict[str, int],
         auth_token: str,
         is_club: bool = False,
+        cookies: str | None = None,
     ) -> bool:
         """Persist cart to user's Rami Levy account.
 
-        Same endpoint as calculate_cart but WITH auth headers.
-        The auth token is used for both Authorization and ecomtoken headers.
+        Same endpoint as calculate_cart but WITH auth headers and browser
+        cookies. The cookies are essential — without them the API calculates
+        prices but does NOT actually save the cart to the user's account.
         """
         tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime(
             "%Y-%m-%dT00:00:00.000Z"
@@ -199,21 +201,34 @@ class RamiLevyAdapter(StoreAdapter):
             "items": {str(k): str(v) for k, v in items.items()},
             "meta": None,
         }
-        auth_headers = {
+        auth_headers: dict[str, str] = {
             "Authorization": f"Bearer {auth_token}",
             "ecomtoken": auth_token,
+            "locale": "he",
         }
+        if cookies:
+            auth_headers["cookie"] = cookies
 
         try:
+            logger.info(
+                "Persisting cart: endpoint=%s, store=%s, items=%s, has_cookies=%s",
+                CART_ENDPOINT, store_id, payload["items"], bool(cookies),
+            )
             resp = await self._client.post(
                 CART_ENDPOINT, json=payload, headers=auth_headers
+            )
+            logger.info(
+                "Cart persist response: status=%d, body=%s",
+                resp.status_code, resp.text[:500],
             )
             if resp.status_code == 401:
                 logger.warning("Rami Levy auth token expired or invalid")
                 return False
             resp.raise_for_status()
             data = resp.json()
-            return data.get("status") == 200
+            result = data.get("status") == 200
+            logger.info("Cart persist data.status=%s, success=%s", data.get("status"), result)
+            return result
         except httpx.HTTPError as exc:
             logger.error("Rami Levy cart persist failed: %s", exc)
             return False

@@ -7,10 +7,10 @@ WORKDIR /app
 COPY pyproject.toml .
 COPY pricepilot/ pricepilot/
 
-# Install Python deps, then install matching Chromium browser
+# Install Python deps, stealth plugin, then install matching Chromium browser
 RUN pip install --no-cache-dir . && \
     pip install --no-cache-dir playwright-stealth && \
-    playwright install chromium
+    python -m playwright install chromium
 
 # Cloud Run injects PORT env var
 ENV PRICEPILOT_HOST=0.0.0.0

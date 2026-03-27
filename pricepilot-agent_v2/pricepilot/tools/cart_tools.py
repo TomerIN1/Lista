@@ -143,13 +143,20 @@ async def persist_cart_to_store(
             "error": "No cart to persist. Run calculate_cart_preview first.",
         }
 
+    logger.info(
+        "persist_cart_to_store called: store=%s, store_id=%s, items=%s, token_len=%d",
+        store_name, store_id, items_map, len(auth_token) if auth_token else 0,
+    )
+
     # Verify token is valid
     try:
         token_valid = await adapter.verify_token(auth_token)
+        logger.info("Token verification result: %s", token_valid)
     except NotImplementedError:
         token_valid = True  # Stub adapters don't implement verification
 
     if not token_valid:
+        logger.warning("Token invalid for %s", store_name)
         return {
             "status": "error",
             "message": (
@@ -158,10 +165,15 @@ async def persist_cart_to_store(
             ),
         }
 
+    # Pass browser cookies if available (needed for cart persistence)
+    browser_cookies = tool_context.state.get("browser_cookies")
+
     try:
         success = await adapter.persist_cart(
-            store_id, items_map, auth_token, is_club=is_club
+            store_id, items_map, auth_token, is_club=is_club,
+            cookies=browser_cookies,
         )
+        logger.info("persist_cart result: %s", success)
     except NotImplementedError as exc:
         return {"status": "error", "error": str(exc)}
 
@@ -170,6 +182,7 @@ async def persist_cart_to_store(
         tool_context.state["auth_token"] = auth_token
         checkout_url = adapter.get_checkout_url()
         tool_context.state["checkout_url"] = checkout_url
+        logger.info("Cart persisted! checkout_url=%s", checkout_url)
 
         return {
             "status": "success",
@@ -180,6 +193,7 @@ async def persist_cart_to_store(
             ),
         }
     else:
+        logger.error("persist_cart returned False for %s", store_name)
         return {
             "status": "error",
             "message": (
