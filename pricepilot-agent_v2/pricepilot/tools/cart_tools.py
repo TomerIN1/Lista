@@ -531,6 +531,55 @@ async def persist_cart_to_store(
     )
 
     if result.get("status") == "success":
+        cart_data = result.get("cart_data", {})
+        response_items = cart_data.get("items", [])
+
+        # Detect old items: items in the API response that we did NOT send
+        sent_ids = set(str(k) for k in items_map.keys())
+        old_items = []
+        all_items_summary = []
+        for item in response_items:
+            is_delivery = item.get("is_delivery", False)
+            if is_delivery or "משלוח" in item.get("name", ""):
+                continue
+            item_id = str(item.get("id", ""))
+            item_info = {
+                "store_product_id": item_id,
+                "name": item.get("name", ""),
+                "quantity": item.get("quantity", 1),
+                "price": item.get("price", 0),
+                "total_price": item.get("FormatedTotalPrice", 0),
+            }
+            all_items_summary.append(item_info)
+            if item_id not in sent_ids:
+                old_items.append(item_info)
+
+        if old_items:
+            # Old items detected — DON'T clean up browser session yet,
+            # user may want to clear and re-persist
+            logger.info(
+                "Old items detected: %d old items in cart, session=%s",
+                len(old_items), session_id,
+            )
+            tool_context.state["old_cart_items"] = old_items
+            checkout_url = adapter.get_checkout_url()
+
+            return {
+                "status": "old_items_detected",
+                "old_items": old_items,
+                "old_item_count": len(old_items),
+                "all_items": all_items_summary,
+                "all_item_count": len(all_items_summary),
+                "checkout_url": checkout_url,
+                "message": (
+                    f"יש לך {len(old_items)} מוצרים בעגלה מקנייה קודמת. "
+                    "מה תרצה לעשות?\n"
+                    "1. להתחיל עגלה חדשה (למחוק את הישנים)\n"
+                    "2. להשאיר הכל (הישנים + החדשים)"
+                ),
+            }
+
+        # No old items — success
         tool_context.state["cart_persisted"] = True
         checkout_url = adapter.get_checkout_url()
         tool_context.state["checkout_url"] = checkout_url
@@ -542,6 +591,8 @@ async def persist_cart_to_store(
         return {
             "status": "success",
             "checkout_url": checkout_url,
+            "all_items": all_items_summary,
+            "all_item_count": len(all_items_summary),
             "message": (
                 f"העגלה נשמרה בחשבון {adapter.chain_name_he} שלך. "
                 f"לחץ על הלינק כדי לעבור לקופה ולשלם."

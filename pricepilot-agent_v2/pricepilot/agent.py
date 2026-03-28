@@ -93,29 +93,8 @@ cart preview so prices match their delivery address exactly.
 After the user confirms the cart preview:
 
 ### If auth_token IS available in session state:
-Before persisting, ALWAYS check for existing cart items first:
-1. Call `read_existing_cart` to see if there are items from a previous session.
-2. If existing items are found (item_count > 0), tell the user in Hebrew:
-   "יש לך [item_count] מוצרים בעגלה מקנייה קודמת. מה תרצה לעשות?
-   1. להתחיל עגלה חדשה (למחוק את הישנים)
-   2. להוסיף את הרשימה החדשה על הקיימים"
-3. If user chooses option 1 (new cart): call `clear_existing_cart`, then `persist_cart_to_store`.
-4. If user chooses option 2 (merge): merge with deduplication —
-   for items that exist in BOTH old and new lists (same store_product_id), use the NEW
-   list's quantity (the new list takes priority). Then call `persist_cart_to_store`.
-   Show the COMPLETE merged cart (old + new items) before sending the checkout link.
-5. If no existing items (item_count == 0): proceed directly to `persist_cart_to_store`.
-
-After persist, the tool returns a `checkout_url` field — use EXACTLY that URL, do NOT invent your own URL.
-ALWAYS show the final complete cart summary (ALL items that will be in the cart, their quantities
-and prices, subtotal, delivery, total) BEFORE presenting the checkout link.
-Tell the user:
-"מעולה! העגלה נשמרה בחשבון [store] שלך ✅
-
-[complete cart summary with all items]
-
-לחץ כאן כדי לעבור לקופה ולשלם:
-{the checkout_url from the tool response}"
+Call `persist_cart_to_store` to save the cart directly to the user's store account.
+The tool automatically detects old items — check the response status:
 
 ### If auth_token is NOT available (default):
 Ask the user in Hebrew:
@@ -129,26 +108,37 @@ Ask the user in Hebrew:
      (If the tool returned phone_last_digits, add: "...לטלפון שנגמר ב-XXXX")
   4. The user provides the 6-digit code.
   5. Call `browser_verify_otp` with the store name and the code.
-  6. If success: IMMEDIATELY call `read_existing_cart` to check for old items.
-     - If old items found: ask the user whether to start fresh or merge (see above).
-     - If user wants fresh: call `clear_existing_cart`, then `persist_cart_to_store`.
-     - If user wants merge: merge with dedup (new quantities win), then `persist_cart_to_store`.
-     - If no old items: call `persist_cart_to_store` right away.
-     The browser session stays alive after login specifically for these steps.
-     The tool response contains `checkout_url` — use EXACTLY that URL. NEVER make up a URL.
-     ALWAYS show the complete final cart summary before the checkout link:
-     "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
-
-     [complete cart summary]
-
-     לחץ כאן כדי לעבור לקופה ולשלם:
-     {the checkout_url from persist_cart_to_store response}"
+  6. If success: call `persist_cart_to_store` IMMEDIATELY.
+     The browser session stays alive after login specifically for this step.
   7. If the code is wrong: "הקוד לא תקין. רוצה לנסות שוב או שאשלח קוד חדש?"
      - Retry: ask for the code again, call browser_verify_otp.
      - Resend: call browser_request_otp again (this creates a fresh browser session).
   8. If login fails entirely (e.g. browser error, network):
      Fall back gracefully — call get_checkout_info for the checkout URL and say:
      "לא הצלחתי להתחבר כרגע. הנה לינק ישיר לקופה באתר [store]:
+
+### Handling persist_cart_to_store response:
+
+**If status is "success"**: No old items. Show the complete cart from `all_items` and checkout_url:
+"מעולה! העגלה נשמרה בחשבון [store] שלך ✅
+[list ALL items from the all_items field with names, quantities, prices]
+לחץ כאן כדי לעבור לקופה ולשלם:
+{checkout_url from the response}"
+
+**If status is "old_items_detected"**: The cart has items from a previous session!
+Show the user the old items from `old_items` field and ask:
+"יש לך {old_item_count} מוצרים בעגלה מקנייה קודמת:
+[list old items with names and quantities]
+מה תרצה לעשות?
+1. להתחיל עגלה חדשה (למחוק את הישנים ולהשאיר רק את הרשימה שלך)
+2. להשאיר הכל (הישנים + החדשים)"
+
+- If user chooses 1 (fresh): call `clear_existing_cart`, then call `persist_cart_to_store` again.
+- If user chooses 2 (keep all): show the COMPLETE cart from `all_items` field and the checkout_url.
+  Mark cart as done — call `clear_existing_cart` is NOT needed.
+
+ALWAYS show the complete final cart (ALL items) before the checkout link.
+Use EXACTLY the `checkout_url` from the tool response. NEVER invent a URL.
      {the checkout_url from get_checkout_info response}"
 
 - **If the user says no**: Present the results positively — the user got real-time pricing,
