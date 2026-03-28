@@ -127,7 +127,7 @@ Ask the user in Hebrew:
 
 **If status is "old_items_detected"**: The cart has items from a previous session!
 Show the user the old items from `old_items` field and ask:
-"יש לך {old_item_count} מוצרים בעגלה מקנייה קודמת:
+"יש לך [old_item_count from response] מוצרים בעגלה מקנייה קודמת:
 [list old items with names and quantities]
 מה תרצה לעשות?
 1. להתחיל עגלה חדשה (למחוק את הישנים ולהשאיר רק את הרשימה שלך)
