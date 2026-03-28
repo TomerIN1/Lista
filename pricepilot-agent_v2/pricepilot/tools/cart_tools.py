@@ -1,7 +1,8 @@
 """Cart management tools.
 
 These tools handle cart preview (price calculation), cart persistence
-(saving to user's store account), and checkout URL generation.
+(saving to user's store account), checkout URL generation, and cart
+read/clear operations for handling existing carts from previous sessions.
 
 Design note: The cart preview works without auth. Persistence requires
 an auth token obtained via the OTP login flow (see auth_tools.py).
@@ -13,11 +14,18 @@ executes a fetch() call *from within* the browser context, which is
 indistinguishable from the user adding items on the site. This ensures
 the cart is truly persisted — unlike the old httpx-based approach which
 only calculated prices.
+
+Cart read/clear: After OTP login, the browser session can also read the
+user's existing cart (from a previous shopping session) and clear it
+before adding new items. This prevents unexpected old items from appearing
+at checkout.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from google.adk.tools import ToolContext
@@ -31,6 +39,338 @@ from pricepilot.tools.auth_tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def read_existing_cart(
+    store_name: str,
+    store_id: str,
+    tool_context: ToolContext,
+) -> dict[str, Any]:
+    """Read the user's current cart from the store after login.
+
+    Uses the authenticated browser session to fetch the user's existing
+    cart contents. Call this right after OTP verification succeeds to
+    check if the user has leftover items from a previous shopping session.
+
+    Args:
+        store_name: Chain name (e.g. "Rami Levy").
+        store_id: Branch ID (e.g. "331").
+        tool_context: ADK ToolContext for state access.
+
+    Returns:
+        Dict with status, item count, and item details from the existing
+        cart, or error if no authenticated session is available.
+    """
+    adapter = get_adapter(store_name)
+    if adapter is None:
+        return {"status": "error", "error": f"Store '{store_name}' is not supported."}
+
+    session_id = _get_session_id(tool_context)
+    bs = get_authenticated_session(session_id)
+
+    if bs is None:
+        return {
+            "status": "error",
+            "message": "אין חיבור פעיל. צריך להתחבר קודם.",
+        }
+
+    page = bs.page
+
+    try:
+        # Verify the page is still alive
+        try:
+            _ = page.url
+        except Exception:
+            logger.error("Browser page is dead for session %s", session_id)
+            return {
+                "status": "error",
+                "message": "פג תוקף ההתחברות. צריך להתחבר מחדש.",
+            }
+
+        # Build a cart request with empty items to read the current cart
+        # state. The Rami Levy /api/v2/cart endpoint returns the persisted
+        # cart contents even when we send an empty items dict — the existing
+        # items are preserved and returned in the response.
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT00:00:00.000Z"
+        )
+
+        read_payload = {
+            "store": store_id,
+            "isClub": 0,
+            "supplyAt": tomorrow,
+            "items": {},
+            "meta": None,
+        }
+
+        logger.info(
+            "read_existing_cart: session=%s, store=%s",
+            session_id, store_id,
+        )
+
+        result = await page.evaluate(
+            """async (payload) => {
+                try {
+                    let token = null;
+                    try {
+                        const rlData = JSON.parse(localStorage.getItem('ramilevy'));
+                        if (rlData && rlData.authuser && rlData.authuser.user) {
+                            token = rlData.authuser.user.token;
+                        }
+                    } catch(e) {}
+
+                    const headers = {
+                        'Content-Type': 'application/json;charset=UTF-8',
+                        'locale': 'he',
+                        'Accept': 'application/json, text/plain, */*',
+                    };
+                    if (token) {
+                        headers['Authorization'] = 'Bearer ' + token;
+                        headers['ecomtoken'] = token;
+                    }
+
+                    const resp = await fetch('/api/v2/cart', {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload),
+                        credentials: 'include',
+                    });
+
+                    const data = await resp.json();
+                    return {
+                        ok: resp.ok,
+                        status: resp.status,
+                        data: data,
+                    };
+                } catch(e) {
+                    return {
+                        ok: false,
+                        status: 0,
+                        error: e.message || String(e),
+                    };
+                }
+            }""",
+            read_payload,
+        )
+
+        logger.info(
+            "read_existing_cart response: ok=%s, status=%s, session=%s",
+            result.get("ok"), result.get("status"), session_id,
+        )
+
+        if not result.get("ok"):
+            error_msg = result.get("error", "")
+            status_code = result.get("status", 0)
+            logger.error(
+                "read_existing_cart failed: status=%s, error=%s",
+                status_code, error_msg,
+            )
+            if status_code == 401:
+                return {
+                    "status": "error",
+                    "message": "פג תוקף ההתחברות. צריך להתחבר מחדש.",
+                }
+            return {
+                "status": "error",
+                "message": "לא הצלחתי לקרוא את העגלה הקיימת.",
+            }
+
+        data = result.get("data", {})
+        raw_items = data.get("items", [])
+
+        # Filter out delivery fee items and build a clean item list
+        existing_items = []
+        for item in raw_items:
+            is_delivery = item.get("is_delivery", False)
+            if is_delivery or "משלוח" in item.get("name", ""):
+                continue
+            existing_items.append({
+                "store_product_id": str(item.get("id", "")),
+                "name": item.get("name", ""),
+                "quantity": item.get("quantity", 1),
+                "price": item.get("price", 0),
+                "total_price": item.get("FormatedTotalPrice", 0),
+            })
+
+        item_count = len(existing_items)
+
+        # Save existing cart info to state for merge logic
+        tool_context.state["existing_cart_items"] = existing_items
+        tool_context.state["existing_cart_count"] = item_count
+
+        logger.info(
+            "read_existing_cart: found %d existing items, session=%s",
+            item_count, session_id,
+        )
+
+        return {
+            "status": "success",
+            "item_count": item_count,
+            "items": existing_items,
+        }
+
+    except Exception as exc:
+        logger.exception(
+            "read_existing_cart failed for session %s: %s", session_id, exc
+        )
+        return {
+            "status": "error",
+            "message": "שגיאה בקריאת העגלה הקיימת.",
+        }
+
+
+async def clear_existing_cart(
+    store_name: str,
+    store_id: str,
+    tool_context: ToolContext,
+) -> dict[str, Any]:
+    """Clear/empty the user's existing cart at the store.
+
+    Uses the authenticated browser session to send an empty cart to the
+    store API, effectively removing all items from a previous shopping
+    session. Call this before persist_cart_to_store when the user wants
+    to start fresh instead of merging with old items.
+
+    Args:
+        store_name: Chain name (e.g. "Rami Levy").
+        store_id: Branch ID (e.g. "331").
+        tool_context: ADK ToolContext for state access.
+
+    Returns:
+        Dict with status indicating whether the cart was cleared.
+    """
+    adapter = get_adapter(store_name)
+    if adapter is None:
+        return {"status": "error", "error": f"Store '{store_name}' is not supported."}
+
+    session_id = _get_session_id(tool_context)
+    bs = get_authenticated_session(session_id)
+
+    if bs is None:
+        return {
+            "status": "error",
+            "message": "אין חיבור פעיל. צריך להתחבר קודם.",
+        }
+
+    page = bs.page
+
+    try:
+        # Verify the page is still alive
+        try:
+            _ = page.url
+        except Exception:
+            logger.error("Browser page is dead for session %s", session_id)
+            return {
+                "status": "error",
+                "message": "פג תוקף ההתחברות. צריך להתחבר מחדש.",
+            }
+
+        # POST to /api/v2/cart with empty items dict to clear the cart.
+        # When an authenticated user sends items: {}, the API replaces
+        # the persisted cart with an empty one.
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT00:00:00.000Z"
+        )
+
+        clear_payload = {
+            "store": store_id,
+            "isClub": 0,
+            "supplyAt": tomorrow,
+            "items": {},
+            "meta": None,
+        }
+
+        logger.info(
+            "clear_existing_cart: session=%s, store=%s",
+            session_id, store_id,
+        )
+
+        result = await page.evaluate(
+            """async (payload) => {
+                try {
+                    let token = null;
+                    try {
+                        const rlData = JSON.parse(localStorage.getItem('ramilevy'));
+                        if (rlData && rlData.authuser && rlData.authuser.user) {
+                            token = rlData.authuser.user.token;
+                        }
+                    } catch(e) {}
+
+                    const headers = {
+                        'Content-Type': 'application/json;charset=UTF-8',
+                        'locale': 'he',
+                        'Accept': 'application/json, text/plain, */*',
+                    };
+                    if (token) {
+                        headers['Authorization'] = 'Bearer ' + token;
+                        headers['ecomtoken'] = token;
+                    }
+
+                    const resp = await fetch('/api/v2/cart', {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload),
+                        credentials: 'include',
+                    });
+
+                    const data = await resp.json();
+                    return {
+                        ok: resp.ok,
+                        status: resp.status,
+                        data: data,
+                    };
+                } catch(e) {
+                    return {
+                        ok: false,
+                        status: 0,
+                        error: e.message || String(e),
+                    };
+                }
+            }""",
+            clear_payload,
+        )
+
+        logger.info(
+            "clear_existing_cart response: ok=%s, status=%s, session=%s",
+            result.get("ok"), result.get("status"), session_id,
+        )
+
+        if not result.get("ok"):
+            error_msg = result.get("error", "")
+            status_code = result.get("status", 0)
+            logger.error(
+                "clear_existing_cart failed: status=%s, error=%s",
+                status_code, error_msg,
+            )
+            if status_code == 401:
+                return {
+                    "status": "error",
+                    "message": "פג תוקף ההתחברות. צריך להתחבר מחדש.",
+                }
+            return {
+                "status": "error",
+                "message": "לא הצלחתי לנקות את העגלה.",
+            }
+
+        # Clear the existing cart state
+        tool_context.state["existing_cart_items"] = []
+        tool_context.state["existing_cart_count"] = 0
+
+        logger.info("clear_existing_cart: cart cleared, session=%s", session_id)
+
+        return {
+            "status": "success",
+            "message": "העגלה נוקתה בהצלחה.",
+        }
+
+    except Exception as exc:
+        logger.exception(
+            "clear_existing_cart failed for session %s: %s", session_id, exc
+        )
+        return {
+            "status": "error",
+            "message": "שגיאה בניקוי העגלה.",
+        }
 
 
 async def calculate_cart_preview(

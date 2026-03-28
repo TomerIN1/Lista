@@ -16,6 +16,8 @@ from pricepilot.tools.auth_tools import (
     shutdown_browser,
 )
 from pricepilot.tools.cart_tools import (
+    read_existing_cart,
+    clear_existing_cart,
     calculate_cart_preview,
     persist_cart_to_store,
     get_checkout_info,
@@ -33,6 +35,8 @@ __all__ = [
     "browser_request_otp",
     "browser_verify_otp",
     "shutdown_browser",
+    "read_existing_cart",
+    "clear_existing_cart",
     "calculate_cart_preview",
     "persist_cart_to_store",
     "get_checkout_info",

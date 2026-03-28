@@ -28,6 +28,8 @@ from pricepilot.tools.product_tools import (
     modify_cart,
 )
 from pricepilot.tools.cart_tools import (
+    read_existing_cart,
+    clear_existing_cart,
     calculate_cart_preview,
     persist_cart_to_store,
     get_checkout_info,
@@ -91,11 +93,27 @@ cart preview so prices match their delivery address exactly.
 After the user confirms the cart preview:
 
 ### If auth_token IS available in session state:
-Call `persist_cart_to_store` to save the cart directly to the user's store account.
-The tool uses the authenticated browser session from login to save the cart.
-The tool returns a `checkout_url` field — use EXACTLY that URL, do NOT invent your own URL.
+Before persisting, ALWAYS check for existing cart items first:
+1. Call `read_existing_cart` to see if there are items from a previous session.
+2. If existing items are found (item_count > 0), tell the user in Hebrew:
+   "יש לך [item_count] מוצרים בעגלה מקנייה קודמת. מה תרצה לעשות?
+   1. להתחיל עגלה חדשה (למחוק את הישנים)
+   2. להוסיף את הרשימה החדשה על הקיימים"
+3. If user chooses option 1 (new cart): call `clear_existing_cart`, then `persist_cart_to_store`.
+4. If user chooses option 2 (merge): merge with deduplication —
+   for items that exist in BOTH old and new lists (same store_product_id), use the NEW
+   list's quantity (the new list takes priority). Then call `persist_cart_to_store`.
+   Show the COMPLETE merged cart (old + new items) before sending the checkout link.
+5. If no existing items (item_count == 0): proceed directly to `persist_cart_to_store`.
+
+After persist, the tool returns a `checkout_url` field — use EXACTLY that URL, do NOT invent your own URL.
+ALWAYS show the final complete cart summary (ALL items that will be in the cart, their quantities
+and prices, subtotal, delivery, total) BEFORE presenting the checkout link.
 Tell the user:
 "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
+
+[complete cart summary with all items]
+
 לחץ כאן כדי לעבור לקופה ולשלם:
 {the checkout_url from the tool response}"
 
@@ -111,11 +129,18 @@ Ask the user in Hebrew:
      (If the tool returned phone_last_digits, add: "...לטלפון שנגמר ב-XXXX")
   4. The user provides the 6-digit code.
   5. Call `browser_verify_otp` with the store name and the code.
-  6. If success: call `persist_cart_to_store` IMMEDIATELY to save the cart.
-     The browser session stays alive after login specifically for this step.
-     DO NOT wait or ask the user anything — call persist_cart_to_store right away.
+  6. If success: IMMEDIATELY call `read_existing_cart` to check for old items.
+     - If old items found: ask the user whether to start fresh or merge (see above).
+     - If user wants fresh: call `clear_existing_cart`, then `persist_cart_to_store`.
+     - If user wants merge: merge with dedup (new quantities win), then `persist_cart_to_store`.
+     - If no old items: call `persist_cart_to_store` right away.
+     The browser session stays alive after login specifically for these steps.
      The tool response contains `checkout_url` — use EXACTLY that URL. NEVER make up a URL.
+     ALWAYS show the complete final cart summary before the checkout link:
      "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
+
+     [complete cart summary]
+
      לחץ כאן כדי לעבור לקופה ולשלם:
      {the checkout_url from persist_cart_to_store response}"
   7. If the code is wrong: "הקוד לא תקין. רוצה לנסות שוב או שאשלח קוד חדש?"
@@ -147,6 +172,7 @@ token, JWT, API, reCAPTCHA, OTP, auth_token, recaptcha_required, console, F12,
 localStorage, JSON, browser_request_otp, browser_verify_otp, persist_cart_to_store,
 resolve_products, calculate_cart_preview, get_checkout_info, search_product_by_barcode,
 search_product_by_name, find_alternatives, modify_cart, list_supported_stores,
+read_existing_cart, clear_existing_cart,
 tool_context, session state, HTTP, endpoint, 401, 403, 422,
 Playwright, headless, browser session, BrowserContext.
 
@@ -211,6 +237,8 @@ When picking between product candidates:
 - auth_token: Auth credential (set by browser_verify_otp — browser session stays alive for persist)
 - login_email: User's email used for OTP login (set by browser_request_otp)
 - login_delivery_method: OTP delivery method (set by browser_request_otp)
+- existing_cart_items: Items from user's previous cart (set by read_existing_cart)
+- existing_cart_count: Number of items in user's previous cart (set by read_existing_cart)
 - cart_persisted: Whether cart has been saved (set by persist_cart_to_store)
 - checkout_url: URL for checkout page (set by persist_cart_to_store)
 """
@@ -235,6 +263,8 @@ pricepilot_agent = LlmAgent(
         search_product_by_name,
         find_alternatives,
         modify_cart,
+        read_existing_cart,
+        clear_existing_cart,
         calculate_cart_preview,
         persist_cart_to_store,
         get_checkout_info,
