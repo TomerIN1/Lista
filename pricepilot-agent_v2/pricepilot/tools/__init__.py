@@ -24,7 +24,10 @@ from pricepilot.tools.product_tools import (
     resolve_products,
     search_product_by_barcode,
     search_product_by_name,
+    find_alternatives,
+    modify_cart,
 )
+from pricepilot.tools.store_tools import list_supported_stores
 
 __all__ = [
     "browser_request_otp",
@@ -36,4 +39,7 @@ __all__ = [
     "resolve_products",
     "search_product_by_barcode",
     "search_product_by_name",
+    "find_alternatives",
+    "modify_cart",
+    "list_supported_stores",
 ]

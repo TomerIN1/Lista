@@ -24,6 +24,8 @@ from pricepilot.tools.product_tools import (
     resolve_products,
     search_product_by_barcode,
     search_product_by_name,
+    find_alternatives,
+    modify_cart,
 )
 from pricepilot.tools.cart_tools import (
     calculate_cart_preview,
@@ -34,6 +36,7 @@ from pricepilot.tools.auth_tools import (
     browser_request_otp,
     browser_verify_otp,
 )
+from pricepilot.tools.store_tools import list_supported_stores
 
 # ------------------------------------------------------------------
 # Agent system instruction
@@ -143,7 +146,8 @@ CRITICAL — NEVER SAY THESE WORDS TO THE USER:
 token, JWT, API, reCAPTCHA, OTP, auth_token, recaptcha_required, console, F12,
 localStorage, JSON, browser_request_otp, browser_verify_otp, persist_cart_to_store,
 resolve_products, calculate_cart_preview, get_checkout_info, search_product_by_barcode,
-search_product_by_name, tool_context, session state, HTTP, endpoint, 401, 403, 422,
+search_product_by_name, find_alternatives, modify_cart, list_supported_stores,
+tool_context, session state, HTTP, endpoint, 401, 403, 422,
 Playwright, headless, browser session, BrowserContext.
 
 Instead use natural Hebrew: "אימייל", "קוד אימות", "קוד SMS", "התחברות".
@@ -158,12 +162,36 @@ Do NOT explain why it failed technically. Do NOT retry more than once.
 - ALWAYS use Hebrew for user-facing messages. The user is Israeli.
 - Format prices as NIS (e.g., "14.90 ש\"ח").
 - Be concise. Don't explain technical details.
-- If items are out of stock, suggest alternatives using search_product_by_name.
+- If items are out of stock, suggest alternatives using `find_alternatives` with reason "out_of_stock".
+- If the user asks for a cheaper option, use `find_alternatives` with reason "cheaper" and the original price.
 - Never persist the cart without the user's explicit confirmation.
 - NEVER ask users to open developer tools, console, or extract anything.
 - If login fails, fall back to checkout URL. Do NOT block the flow.
 - When a tool returns an error, use the Hebrew "message" field. Never quote "error" field.
 - NEVER invent or guess URLs. ALWAYS use the exact checkout_url returned by tools (persist_cart_to_store or get_checkout_info). The correct URL is in the tool response — copy it exactly.
+
+## Finding Alternatives
+When an item is out of stock, too expensive, or the user wants a different brand:
+- Call `find_alternatives` with the relevant reason ("out_of_stock", "cheaper", or "preference").
+- For "cheaper", always provide the original_price so the tool filters correctly.
+- Present the alternatives to the user with names and prices in Hebrew.
+- If the user picks an alternative, use `modify_cart` to swap it in.
+
+## Modifying the Cart
+After showing the cart preview, the user may want to adjust items:
+- **Add an item**: Call `modify_cart` with action "add" and the store_product_id.
+  If you don't have the store_product_id, first use `search_product_by_name` or
+  `find_alternatives` to find it, then call `modify_cart`.
+- **Remove an item**: Call `modify_cart` with action "remove" and the store_product_id.
+- **Change quantity**: Call `modify_cart` with action "update_quantity", the store_product_id,
+  and the new quantity.
+The tool automatically recalculates the cart and returns an updated preview — show it to the user.
+
+## Supported Stores
+If the user asks which stores are supported, or tries to use an unsupported store:
+- Call `list_supported_stores` to get the current list.
+- Present the list with Hebrew names.
+- Indicate which stores are fully operational vs. coming soon.
 
 ## Disambiguation Guidelines
 When picking between product candidates:
@@ -205,11 +233,14 @@ pricepilot_agent = LlmAgent(
         resolve_products,
         search_product_by_barcode,
         search_product_by_name,
+        find_alternatives,
+        modify_cart,
         calculate_cart_preview,
         persist_cart_to_store,
         get_checkout_info,
         browser_request_otp,
         browser_verify_otp,
+        list_supported_stores,
     ],
 )
 
