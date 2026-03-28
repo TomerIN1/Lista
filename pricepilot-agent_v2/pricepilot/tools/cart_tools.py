@@ -5,7 +5,14 @@ These tools handle cart preview (price calculation), cart persistence
 
 Design note: The cart preview works without auth. Persistence requires
 an auth token obtained via the OTP login flow (see auth_tools.py).
-The agent handles the auth flow conversationally when persistence is needed.
+
+Cart persistence uses the authenticated browser session (Playwright) from
+the OTP login flow. After successful OTP verification, the browser session
+stays alive with full cookies and localStorage auth. The persist tool
+executes a fetch() call *from within* the browser context, which is
+indistinguishable from the user adding items on the site. This ensures
+the cart is truly persisted — unlike the old httpx-based approach which
+only calculated prices.
 """
 
 from __future__ import annotations
@@ -16,6 +23,12 @@ from typing import Any
 from google.adk.tools import ToolContext
 
 from pricepilot.stores import get_adapter
+from pricepilot.tools.auth_tools import (
+    browser_add_to_cart,
+    cleanup_browser_session,
+    get_authenticated_session,
+    _get_session_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,19 +126,22 @@ async def calculate_cart_preview(
 async def persist_cart_to_store(
     store_name: str,
     store_id: str,
-    auth_token: str,
     tool_context: ToolContext,
     is_club: bool = False,
 ) -> dict[str, Any]:
-    """Save the cart to the user's store account. Requires auth token.
+    """Save the cart to the user's store account using the browser session.
+
+    Uses the authenticated Playwright browser session from the OTP login
+    flow to add items to the cart. The browser session carries full auth
+    state (cookies + localStorage JWT), making the API call identical to
+    a real user interaction on the site.
 
     Reads cart_items_map from session state (set by calculate_cart_preview).
-    The auth_token comes from WebView login flow (extracted from localStorage).
+    Requires a prior successful browser_verify_otp call.
 
     Args:
         store_name: Chain name.
         store_id: Branch ID.
-        auth_token: JWT from WebView login.
         tool_context: ADK ToolContext for state access.
         is_club: Whether user is a club member.
 
@@ -143,62 +159,80 @@ async def persist_cart_to_store(
             "error": "No cart to persist. Run calculate_cart_preview first.",
         }
 
+    session_id = _get_session_id(tool_context)
+
     logger.info(
-        "persist_cart_to_store called: store=%s, store_id=%s, items=%s, token_len=%d",
-        store_name, store_id, items_map, len(auth_token) if auth_token else 0,
+        "persist_cart_to_store called: store=%s, store_id=%s, items=%s, session=%s",
+        store_name, store_id, items_map, session_id,
     )
 
-    # Verify token is valid
-    try:
-        token_valid = await adapter.verify_token(auth_token)
-        logger.info("Token verification result: %s", token_valid)
-    except NotImplementedError:
-        token_valid = True  # Stub adapters don't implement verification
-
-    if not token_valid:
-        logger.warning("Token invalid for %s", store_name)
+    # Check for an authenticated browser session
+    bs = get_authenticated_session(session_id)
+    if bs is None:
+        logger.warning(
+            "No authenticated browser session for session %s", session_id
+        )
+        # Fall back: provide checkout URL without persistence
+        checkout_url = adapter.get_checkout_url()
         return {
             "status": "error",
             "message": (
                 f"ההתחברות ל-{adapter.chain_name_he} פגה. "
-                "צריך להתחבר מחדש."
+                "צריך להתחבר מחדש כדי לשמור את העגלה."
             ),
+            "checkout_url": checkout_url,
         }
 
-    # Pass browser cookies if available (needed for cart persistence)
-    browser_cookies = tool_context.state.get("browser_cookies")
+    # Use the browser session to add items to cart
+    result = await browser_add_to_cart(
+        session_id=session_id,
+        items=items_map,
+        store_id=store_id,
+    )
 
-    try:
-        success = await adapter.persist_cart(
-            store_id, items_map, auth_token, is_club=is_club,
-            cookies=browser_cookies,
-        )
-        logger.info("persist_cart result: %s", success)
-    except NotImplementedError as exc:
-        return {"status": "error", "error": str(exc)}
-
-    if success:
+    if result.get("status") == "success":
         tool_context.state["cart_persisted"] = True
-        tool_context.state["auth_token"] = auth_token
         checkout_url = adapter.get_checkout_url()
         tool_context.state["checkout_url"] = checkout_url
-        logger.info("Cart persisted! checkout_url=%s", checkout_url)
+        logger.info("Cart persisted via browser! checkout_url=%s", checkout_url)
+
+        # Clean up the browser session — cart is saved, no longer needed
+        await cleanup_browser_session(session_id)
 
         return {
             "status": "success",
             "checkout_url": checkout_url,
             "message": (
-                f"The cart has been saved to your {adapter.chain_name_he} account. "
-                f"Open the checkout page to review and pay."
+                f"העגלה נשמרה בחשבון {adapter.chain_name_he} שלך. "
+                f"לחץ על הלינק כדי לעבור לקופה ולשלם."
             ),
         }
     else:
-        logger.error("persist_cart returned False for %s", store_name)
+        error_type = result.get("error", "")
+        user_message = result.get("message", "")
+        logger.error(
+            "Browser cart persist failed: error=%s, message=%s",
+            error_type, user_message,
+        )
+
+        # If auth expired, clean up and suggest re-login
+        if error_type in ("auth_expired", "session_expired", "page_dead", "no_browser_session"):
+            checkout_url = adapter.get_checkout_url()
+            return {
+                "status": "error",
+                "message": (
+                    f"ההתחברות ל-{adapter.chain_name_he} פגה. "
+                    "צריך להתחבר מחדש כדי לשמור את העגלה."
+                ),
+                "checkout_url": checkout_url,
+            }
+
         return {
             "status": "error",
             "message": (
-                f"לא הצלחתי לשמור את העגלה ב-{adapter.chain_name_he}. "
-                "ייתכן שההתחברות פגה. אפשר לנסות להתחבר מחדש."
+                user_message
+                or f"לא הצלחתי לשמור את העגלה ב-{adapter.chain_name_he}. "
+                "אפשר לנסות שוב."
             ),
         }
 

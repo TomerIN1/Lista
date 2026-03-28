@@ -89,16 +89,25 @@ DIGIT_INPUT_SELECTOR = (
 
 @dataclass
 class _BrowserSession:
-    """Holds Playwright objects for an in-progress login flow."""
+    """Holds Playwright objects for an in-progress login flow or cart ops.
+
+    After OTP verification, the session transitions from "login" phase to
+    "authenticated" phase. The browser context stays alive so cart operations
+    can use the authenticated session (cookies + localStorage JWT).
+    """
 
     context: Any  # playwright BrowserContext
     page: Any  # playwright Page
     email: str  # email used for this login attempt
     created_at: float = field(default_factory=time.monotonic)
+    authenticated: bool = False  # True after successful OTP verification
 
     @property
     def is_expired(self) -> bool:
-        return (time.monotonic() - self.created_at) > SESSION_TTL_S
+        # Authenticated sessions get a longer TTL (15 min) since they're
+        # used for cart operations after login.
+        ttl = SESSION_TTL_S * 3 if self.authenticated else SESSION_TTL_S
+        return (time.monotonic() - self.created_at) > ttl
 
 
 # Module-level state: session_id -> _BrowserSession
@@ -746,6 +755,14 @@ async def browser_verify_otp(
             token_data.get("userId"),
         )
 
+        # KEEP the browser session alive for cart operations.
+        # Mark it as authenticated so it gets extended TTL and can be
+        # used by browser_add_to_cart.
+        should_cleanup = False
+        bs.authenticated = True
+        # Refresh the creation time so the extended TTL starts from now
+        bs.created_at = time.monotonic()
+
         return {
             "status": "success",
             "message": f"התחברת בהצלחה ל-{store_he}! 🎉",
@@ -762,6 +779,211 @@ async def browser_verify_otp(
     finally:
         if should_cleanup:
             await _cleanup_session(session_id)
+
+
+# ------------------------------------------------------------------
+# Browser-based cart operations
+# ------------------------------------------------------------------
+
+
+def get_authenticated_session(session_id: str) -> _BrowserSession | None:
+    """Get an authenticated browser session if one exists and is alive.
+
+    Used by cart_tools to check whether browser-based cart persistence
+    is available.
+    """
+    bs = _active_sessions.get(session_id)
+    if bs is None:
+        return None
+    if bs.is_expired:
+        return None
+    if not bs.authenticated:
+        return None
+    return bs
+
+
+async def browser_add_to_cart(
+    session_id: str,
+    items: dict[str, int],
+    store_id: str,
+) -> dict[str, Any]:
+    """Add items to cart using the authenticated browser session.
+
+    This executes a fetch() call from within the browser page context,
+    which carries the full authentication state (cookies, localStorage
+    JWT, CSRF tokens). Unlike an external httpx call, this is
+    indistinguishable from the user clicking "add to cart" on the site.
+
+    The Rami Levy site uses POST /api/v2/cart with the items payload.
+    When called from an authenticated browser session, this endpoint
+    both calculates prices AND persists the cart to the user's account.
+
+    Args:
+        session_id: ADK session ID to look up the browser session.
+        items: {store_product_id: quantity} mapping.
+        store_id: Branch/store ID (e.g. "331").
+
+    Returns:
+        Dict with status and cart data or error message.
+    """
+    bs = _active_sessions.get(session_id)
+    if bs is None or not bs.authenticated:
+        return {
+            "status": "error",
+            "error": "no_browser_session",
+            "message": "אין חיבור פעיל. צריך להתחבר מחדש.",
+        }
+
+    if bs.is_expired:
+        await _cleanup_session(session_id)
+        return {
+            "status": "error",
+            "error": "session_expired",
+            "message": "פג תוקף ההתחברות. צריך להתחבר מחדש.",
+        }
+
+    page = bs.page
+
+    try:
+        # Verify the page is still alive
+        try:
+            _ = page.url
+        except Exception:
+            logger.error("Browser page is dead for session %s", session_id)
+            await _cleanup_session(session_id)
+            return {
+                "status": "error",
+                "error": "page_dead",
+                "message": "פג תוקף ההתחברות. צריך להתחבר מחדש.",
+            }
+
+        # Build the cart payload — same shape the Rami Levy site uses
+        # when adding items from their UI.
+        from datetime import datetime, timedelta, timezone
+
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT00:00:00.000Z"
+        )
+
+        cart_payload = {
+            "store": store_id,
+            "isClub": 0,
+            "supplyAt": tomorrow,
+            "items": {str(k): str(v) for k, v in items.items()},
+            "meta": None,
+        }
+
+        logger.info(
+            "browser_add_to_cart: session=%s, store=%s, item_count=%d",
+            session_id, store_id, len(items),
+        )
+
+        # Execute the cart API call from within the browser.
+        # This is the key difference: the fetch() runs in the browser
+        # context with all cookies and auth headers automatically attached.
+        # The site's JS framework (Nuxt/Vue) sets up request interceptors
+        # that add the Authorization and ecomtoken headers from localStorage.
+        result = await page.evaluate(
+            """async (payload) => {
+                try {
+                    // Read the auth token from localStorage (same as the site does)
+                    let token = null;
+                    try {
+                        const rlData = JSON.parse(localStorage.getItem('ramilevy'));
+                        if (rlData && rlData.authuser && rlData.authuser.user) {
+                            token = rlData.authuser.user.token;
+                        }
+                    } catch(e) {}
+
+                    const headers = {
+                        'Content-Type': 'application/json;charset=UTF-8',
+                        'locale': 'he',
+                        'Accept': 'application/json, text/plain, */*',
+                    };
+                    if (token) {
+                        headers['Authorization'] = 'Bearer ' + token;
+                        headers['ecomtoken'] = token;
+                    }
+
+                    const resp = await fetch('/api/v2/cart', {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload),
+                        credentials: 'include',
+                    });
+
+                    const data = await resp.json();
+                    return {
+                        ok: resp.ok,
+                        status: resp.status,
+                        data: data,
+                    };
+                } catch(e) {
+                    return {
+                        ok: false,
+                        status: 0,
+                        error: e.message || String(e),
+                    };
+                }
+            }""",
+            cart_payload,
+        )
+
+        logger.info(
+            "browser_add_to_cart response: ok=%s, status=%s, session=%s",
+            result.get("ok"), result.get("status"), session_id,
+        )
+
+        if not result.get("ok"):
+            error_msg = result.get("error", "")
+            status_code = result.get("status", 0)
+
+            if status_code == 401:
+                logger.warning("Browser cart call returned 401 — token expired")
+                await _cleanup_session(session_id)
+                return {
+                    "status": "error",
+                    "error": "auth_expired",
+                    "message": "פג תוקף ההתחברות. צריך להתחבר מחדש.",
+                }
+
+            logger.error(
+                "Browser cart call failed: status=%s, error=%s",
+                status_code, error_msg,
+            )
+            return {
+                "status": "error",
+                "error": "cart_api_error",
+                "message": "לא הצלחתי לשמור את העגלה. אפשר לנסות שוב.",
+            }
+
+        # Success — the cart is now persisted in the user's account
+        data = result.get("data", {})
+        cart_status = data.get("status")
+        logger.info(
+            "Browser cart persisted: data.status=%s, session=%s",
+            cart_status, session_id,
+        )
+
+        return {
+            "status": "success",
+            "cart_data": data,
+        }
+
+    except Exception as exc:
+        logger.exception(
+            "browser_add_to_cart failed for session %s: %s", session_id, exc
+        )
+        return {
+            "status": "error",
+            "error": "browser_error",
+            "message": "שגיאה בשמירת העגלה. אפשר לנסות שוב.",
+        }
+
+
+async def cleanup_browser_session(session_id: str) -> None:
+    """Public cleanup entry point for cart_tools to call after persistence."""
+    await _cleanup_session(session_id)
 
 
 # ------------------------------------------------------------------

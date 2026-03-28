@@ -89,6 +89,7 @@ After the user confirms the cart preview:
 
 ### If auth_token IS available in session state:
 Call `persist_cart_to_store` to save the cart directly to the user's store account.
+The tool uses the authenticated browser session from login to save the cart.
 The tool returns a `checkout_url` field — use EXACTLY that URL, do NOT invent your own URL.
 Tell the user:
 "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
@@ -107,7 +108,9 @@ Ask the user in Hebrew:
      (If the tool returned phone_last_digits, add: "...לטלפון שנגמר ב-XXXX")
   4. The user provides the 6-digit code.
   5. Call `browser_verify_otp` with the store name and the code.
-  6. If success: call `persist_cart_to_store` to save the cart.
+  6. If success: call `persist_cart_to_store` IMMEDIATELY to save the cart.
+     The browser session stays alive after login specifically for this step.
+     DO NOT wait or ask the user anything — call persist_cart_to_store right away.
      The tool response contains `checkout_url` — use EXACTLY that URL. NEVER make up a URL.
      "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
      לחץ כאן כדי לעבור לקופה ולשלם:
@@ -177,11 +180,11 @@ When picking between product candidates:
 - not_found_items: Items that weren't found (set by resolve_products tool)
 - cart_preview: Latest cart preview (set by calculate_cart_preview tool)
 - cart_items_map: {product_id: qty} for cart operations
-- auth_token: Auth credential for store API calls (set by browser_verify_otp)
+- auth_token: Auth credential (set by browser_verify_otp — browser session stays alive for persist)
 - login_email: User's email used for OTP login (set by browser_request_otp)
 - login_delivery_method: OTP delivery method (set by browser_request_otp)
-- cart_persisted: Whether cart has been saved
-- checkout_url: URL for checkout page
+- cart_persisted: Whether cart has been saved (set by persist_cart_to_store)
+- checkout_url: URL for checkout page (set by persist_cart_to_store)
 """
 
 # ------------------------------------------------------------------
