@@ -554,8 +554,13 @@ class RamiLevyAdapter(StoreAdapter):
             if isinstance(sale, dict) and sale.get("name"):
                 promotions.append(sale["name"])
 
-        total = data.get("price", 0)
+        # API "price" is the products-only subtotal (excludes delivery).
+        # Add delivery to get the grand total the user will actually pay.
+        products_subtotal = data.get("price", 0)
+        total = products_subtotal + delivery_fee
         club_price = data.get("priceClub")
+        if club_price is not None:
+            club_price = club_price + delivery_fee
         # Item count excludes delivery
         item_count = sum(1 for ci in cart_items if not ci.is_delivery_fee)
 
