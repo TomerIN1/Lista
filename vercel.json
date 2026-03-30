@@ -17,6 +17,10 @@
       "destination": "https://data.gov.il/:path*"
     },
     {
+      "source": "/pricepilot-api/:path*",
+      "destination": "https://pricepilot-v2-861310890379.me-west1.run.app/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

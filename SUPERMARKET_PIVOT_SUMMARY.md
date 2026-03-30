@@ -1,5 +1,6 @@
 # Lista Supermarket Pivot - Implementation Summary
 
+
 ## What Was Implemented
 
 ### Phase 1: API Integration Layer + Types
