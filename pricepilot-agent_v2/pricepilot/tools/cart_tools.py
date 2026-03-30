@@ -266,29 +266,65 @@ async def clear_existing_cart(
                 "message": "פג תוקף ההתחברות. צריך להתחבר מחדש.",
             }
 
-        # POST to /api/v2/cart with empty items dict to clear the cart.
-        # When an authenticated user sends items: {}, the API replaces
-        # the persisted cart with an empty one.
-        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime(
-            "%Y-%m-%dT00:00:00.000Z"
-        )
-
-        clear_payload = {
-            "store": store_id,
-            "isClub": 0,
-            "supplyAt": tomorrow,
-            "items": {},
-            "meta": None,
-        }
-
         logger.info(
             "clear_existing_cart: session=%s, store=%s",
             session_id, store_id,
         )
 
-        result = await page.evaluate(
-            """async (payload) => {
+        # Navigate to checkout page where cart items are displayed
+        await page.goto(
+            "https://www.rami-levy.co.il/he/dashboard/checkout",
+            wait_until="domcontentloaded",
+            timeout=30_000,
+        )
+
+        try:
+            await page.wait_for_load_state("networkidle", timeout=15_000)
+        except Exception:
+            await asyncio.sleep(3)
+
+        # Use the Vuex store to clear the cart, then remove items via
+        # the site's own delete mechanism. First try to find and call
+        # the store's removeFromCart action for each item.
+        clear_result = await page.evaluate("""
+            async () => {
                 try {
+                    // Approach 1: Use Vuex store action to remove all items
+                    if (window.$nuxt && window.$nuxt.$store) {
+                        const store = window.$nuxt.$store;
+                        const state = store.state;
+                        const cart = state.cart || state.ecomCart || {};
+                        const items = cart.items || cart.products || [];
+
+                        if (items.length === 0) {
+                            return { ok: true, method: 'vuex_empty', removed: 0 };
+                        }
+
+                        // Try to dispatch a clearCart action
+                        try {
+                            await store.dispatch('cart/clearCart');
+                            return { ok: true, method: 'vuex_clearCart', removed: items.length };
+                        } catch(e) {}
+
+                        // Try removeFromCart for each item
+                        let removed = 0;
+                        for (const item of [...items]) {
+                            try {
+                                await store.dispatch('cart/removeFromCart', item);
+                                removed++;
+                            } catch(e) {
+                                try {
+                                    await store.dispatch('cart/removeFromCart', { id: item.id });
+                                    removed++;
+                                } catch(e2) {}
+                            }
+                        }
+                        if (removed > 0) {
+                            return { ok: true, method: 'vuex_removeFromCart', removed: removed };
+                        }
+                    }
+
+                    // Approach 2: Use the API with DELETE or quantity=0
                     let token = null;
                     try {
                         const rlData = JSON.parse(localStorage.getItem('ramilevy'));
@@ -297,61 +333,86 @@ async def clear_existing_cart(
                         }
                     } catch(e) {}
 
-                    const headers = {
-                        'Content-Type': 'application/json;charset=UTF-8',
-                        'locale': 'he',
-                        'Accept': 'application/json, text/plain, */*',
-                    };
                     if (token) {
-                        headers['Authorization'] = 'Bearer ' + token;
-                        headers['ecomtoken'] = token;
+                        const headers = {
+                            'Content-Type': 'application/json;charset=UTF-8',
+                            'locale': 'he',
+                            'Accept': 'application/json, text/plain, */*',
+                            'Authorization': 'Bearer ' + token,
+                            'ecomtoken': token,
+                        };
+
+                        // Try DELETE /api/v2/cart
+                        try {
+                            const delResp = await fetch('/api/v2/cart', {
+                                method: 'DELETE',
+                                headers: headers,
+                                credentials: 'include',
+                            });
+                            if (delResp.ok) {
+                                return { ok: true, method: 'api_delete', removed: -1 };
+                            }
+                        } catch(e) {}
+
+                        // Try POST /api/v2/cart/clear
+                        try {
+                            const clearResp = await fetch('/api/v2/cart/clear', {
+                                method: 'POST',
+                                headers: headers,
+                                credentials: 'include',
+                            });
+                            if (clearResp.ok) {
+                                return { ok: true, method: 'api_cart_clear', removed: -1 };
+                            }
+                        } catch(e) {}
                     }
 
-                    const resp = await fetch('/api/v2/cart', {
-                        method: 'POST',
-                        headers: headers,
-                        body: JSON.stringify(payload),
-                        credentials: 'include',
-                    });
-
-                    const data = await resp.json();
-                    return {
-                        ok: resp.ok,
-                        status: resp.status,
-                        data: data,
-                    };
+                    return { ok: false, method: 'none', error: 'No clear method worked' };
                 } catch(e) {
-                    return {
-                        ok: false,
-                        status: 0,
-                        error: e.message || String(e),
-                    };
+                    return { ok: false, method: 'error', error: e.message || String(e) };
                 }
-            }""",
-            clear_payload,
-        )
+            }
+        """)
 
         logger.info(
-            "clear_existing_cart response: ok=%s, status=%s, session=%s",
-            result.get("ok"), result.get("status"), session_id,
+            "clear_existing_cart result: ok=%s, method=%s, removed=%s, session=%s",
+            clear_result.get("ok"), clear_result.get("method"),
+            clear_result.get("removed"), session_id,
         )
 
-        if not result.get("ok"):
-            error_msg = result.get("error", "")
-            status_code = result.get("status", 0)
-            logger.error(
-                "clear_existing_cart failed: status=%s, error=%s",
-                status_code, error_msg,
-            )
-            if status_code == 401:
+        if not clear_result.get("ok"):
+            # Fallback: click delete buttons on the page
+            logger.info("clear_existing_cart: API/Vuex failed, trying DOM buttons, session=%s", session_id)
+            max_attempts = 20
+            removed_count = 0
+            for _ in range(max_attempts):
+                # Look for delete/remove buttons
+                delete_btn = page.locator(
+                    'button[class*="delete"], button[class*="remove"], '
+                    '[class*="remove-item"], [class*="delete-item"], '
+                    '.btn-delete, .remove-btn, [data-action="remove"], '
+                    'button:has(svg[class*="trash"]), button:has(svg[class*="delete"]), '
+                    'button:has(i[class*="trash"]), button:has(i[class*="delete"])'
+                ).first
+                try:
+                    await delete_btn.wait_for(state="visible", timeout=3_000)
+                    await delete_btn.click()
+                    removed_count += 1
+                    await asyncio.sleep(1)
+                except Exception:
+                    break
+
+            if removed_count > 0:
+                logger.info(
+                    "clear_existing_cart: removed %d items via DOM, session=%s",
+                    removed_count, session_id,
+                )
+            else:
+                logger.error("clear_existing_cart: no delete method worked, session=%s", session_id)
                 return {
                     "status": "error",
-                    "message": "פג תוקף ההתחברות. צריך להתחבר מחדש.",
+                    "message": "לא הצלחתי לנקות את העגלה. נסה למחוק את המוצרים ידנית באתר רמי לוי.",
                 }
-            return {
-                "status": "error",
-                "message": "לא הצלחתי לנקות את העגלה.",
-            }
 
         # Clear the existing cart state
         tool_context.state["existing_cart_items"] = []
