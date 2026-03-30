@@ -21,6 +21,10 @@ from pricepilot.tools.cart_tools import (
     calculate_cart_preview,
     persist_cart_to_store,
     get_checkout_info,
+    browser_go_to_checkout,
+    browser_remove_cart_item,
+    browser_set_item_quantity,
+    browser_read_cart_items,
 )
 from pricepilot.tools.product_tools import (
     resolve_products,
@@ -40,6 +44,10 @@ __all__ = [
     "calculate_cart_preview",
     "persist_cart_to_store",
     "get_checkout_info",
+    "browser_go_to_checkout",
+    "browser_remove_cart_item",
+    "browser_set_item_quantity",
+    "browser_read_cart_items",
     "resolve_products",
     "search_product_by_barcode",
     "search_product_by_name",

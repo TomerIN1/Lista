@@ -33,6 +33,10 @@ from pricepilot.tools.cart_tools import (
     calculate_cart_preview,
     persist_cart_to_store,
     get_checkout_info,
+    browser_go_to_checkout,
+    browser_remove_cart_item,
+    browser_set_item_quantity,
+    browser_read_cart_items,
 )
 from pricepilot.tools.auth_tools import (
     browser_request_otp,
@@ -93,8 +97,7 @@ cart preview so prices match their delivery address exactly.
 After the user confirms the cart preview:
 
 ### If auth_token IS available in session state:
-Call `persist_cart_to_store` to save the cart directly to the user's store account.
-The tool automatically detects old items — check the response status:
+Proceed directly to the step-by-step cart sync flow below.
 
 ### If auth_token is NOT available (default):
 Ask the user in Hebrew:
@@ -108,38 +111,50 @@ Ask the user in Hebrew:
      (If the tool returned phone_last_digits, add: "...לטלפון שנגמר ב-XXXX")
   4. The user provides the 6-digit code.
   5. Call `browser_verify_otp` with the store name and the code.
-  6. If success: call `persist_cart_to_store` IMMEDIATELY.
-     The browser session stays alive after login specifically for this step.
+  6. If success: start the step-by-step cart sync flow IMMEDIATELY (see below).
+     The browser session stays alive after login specifically for this.
   7. If the code is wrong: "הקוד לא תקין. רוצה לנסות שוב או שאשלח קוד חדש?"
      - Retry: ask for the code again, call browser_verify_otp.
      - Resend: call browser_request_otp again (this creates a fresh browser session).
   8. If login fails entirely (e.g. browser error, network):
      Fall back gracefully — call get_checkout_info for the checkout URL and say:
-     "לא הצלחתי להתחבר כרגע. הנה לינק ישיר לקופה באתר [store]:
+     "לא הצלחתי להתחבר כרגע. הנה לינק ישיר לקופה באתר [store]:"
 
-### Handling persist_cart_to_store response:
+### Step-by-step cart sync flow (after login):
 
-**If status is "success"**: No old items. Show the complete cart from `all_items` and checkout_url:
-"מעולה! העגלה נשמרה בחשבון [store] שלך ✅
-[list ALL items from the all_items field with names, quantities, prices]
-לחץ כאן כדי לעבור לקופה ולשלם:
-{checkout_url from the response}"
+1. **See existing cart**: Call `browser_go_to_checkout` to navigate to the checkout
+   page and read existing cart items.
 
-**If status is "old_items_detected"**: The cart has items from a previous session!
-Show the user the old items from `old_items` field and ask:
-"יש לך [old_item_count from response] מוצרים בעגלה מקנייה קודמת:
-[list old items with names and quantities]
-מה תרצה לעשות?
-1. להתחיל עגלה חדשה (למחוק את הישנים ולהשאיר רק את הרשימה שלך)
-2. להשאיר הכל (הישנים + החדשים)"
+2. **Handle old items**: If the cart has items from a previous session:
+   - Tell the user what's in the cart (item names, quantities).
+   - Ask: "יש לך מוצרים מקנייה קודמת. מה תרצה לעשות? להתחיל מחדש או להשאיר הכל?"
+   - If user wants to start fresh: remove each old item one by one with
+     `browser_remove_cart_item`. Call it once per item.
+   - If user wants to keep them: proceed to step 3.
 
-- If user chooses 1 (fresh): call `clear_existing_cart`, then call `persist_cart_to_store` again.
-- If user chooses 2 (keep all): show the COMPLETE cart from `all_items` field and the checkout_url.
-  Mark cart as done — call `clear_existing_cart` is NOT needed.
+3. **Add new items**: Call `persist_cart_to_store` to add the lista items via API.
+   This adds items using the cart_items_map from calculate_cart_preview.
+
+4. **Adjust quantities**: If any item quantities need adjustment, call
+   `browser_set_item_quantity` for each item that needs a different quantity.
+   Call it once per item with the exact desired quantity.
+
+5. **Verify**: Call `browser_read_cart_items` to re-read the cart and confirm
+   everything looks correct.
+
+6. **Show final cart**: Present ALL items with names and quantities, then the
+   checkout URL:
+   "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
+   [list ALL items from the items field with names and quantities]
+   לחץ כאן כדי לעבור לקופה ולשלם:
+   {checkout_url}"
+
+### IMPORTANT: Each browser tool returns the current cart state after its action.
+Use this to verify each step succeeded before moving to the next. If a removal
+or quantity change fails, try again — you have granular control now.
 
 ALWAYS show the complete final cart (ALL items) before the checkout link.
-Use EXACTLY the `checkout_url` from the tool response. NEVER invent a URL.
-     {the checkout_url from get_checkout_info response}"
+Use EXACTLY the checkout_url from the tool response. NEVER invent a URL.
 
 - **If the user says no**: Present the results positively — the user got real-time pricing,
   promotions, and a complete price comparison. Then provide the checkout link:
@@ -162,7 +177,9 @@ token, JWT, API, reCAPTCHA, OTP, auth_token, recaptcha_required, console, F12,
 localStorage, JSON, browser_request_otp, browser_verify_otp, persist_cart_to_store,
 resolve_products, calculate_cart_preview, get_checkout_info, search_product_by_barcode,
 search_product_by_name, find_alternatives, modify_cart, list_supported_stores,
-read_existing_cart, clear_existing_cart,
+read_existing_cart, clear_existing_cart, persist_cart_to_store,
+browser_go_to_checkout, browser_remove_cart_item, browser_set_item_quantity,
+browser_read_cart_items,
 tool_context, session state, HTTP, endpoint, 401, 403, 422,
 Playwright, headless, browser session, BrowserContext.
 
@@ -184,7 +201,7 @@ Do NOT explain why it failed technically. Do NOT retry more than once.
 - NEVER ask users to open developer tools, console, or extract anything.
 - If login fails, fall back to checkout URL. Do NOT block the flow.
 - When a tool returns an error, use the Hebrew "message" field. Never quote "error" field.
-- NEVER invent or guess URLs. ALWAYS use the exact checkout_url returned by tools (persist_cart_to_store or get_checkout_info). The correct URL is in the tool response — copy it exactly.
+- NEVER invent or guess URLs. ALWAYS use the exact checkout_url returned by tools (persist_cart_to_store or get_checkout_info). The correct URL is in the tool response — copy it exactly. The checkout URL for Rami Levy is https://www.rami-levy.co.il/he/dashboard/checkout — NEVER use any other URL like /he/online/mycart or similar.
 
 ## Finding Alternatives
 When an item is out of stock, too expensive, or the user wants a different brand:
@@ -227,8 +244,8 @@ When picking between product candidates:
 - auth_token: Auth credential (set by browser_verify_otp — browser session stays alive for persist)
 - login_email: User's email used for OTP login (set by browser_request_otp)
 - login_delivery_method: OTP delivery method (set by browser_request_otp)
-- existing_cart_items: Items from user's previous cart (set by read_existing_cart)
-- existing_cart_count: Number of items in user's previous cart (set by read_existing_cart)
+- existing_cart_items: Items from user's previous cart (set by browser_go_to_checkout or read_existing_cart)
+- existing_cart_count: Number of items in user's previous cart (set by browser_go_to_checkout or read_existing_cart)
 - cart_persisted: Whether cart has been saved (set by persist_cart_to_store)
 - checkout_url: URL for checkout page (set by persist_cart_to_store)
 """
@@ -260,6 +277,10 @@ pricepilot_agent = LlmAgent(
         get_checkout_info,
         browser_request_otp,
         browser_verify_otp,
+        browser_go_to_checkout,
+        browser_remove_cart_item,
+        browser_set_item_quantity,
+        browser_read_cart_items,
         list_supported_stores,
     ],
 )
