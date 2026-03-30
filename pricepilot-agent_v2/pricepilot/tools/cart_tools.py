@@ -33,6 +33,7 @@ from google.adk.tools import ToolContext
 from pricepilot.stores import get_adapter
 from pricepilot.tools.auth_tools import (
     browser_add_to_cart,
+    browser_read_full_cart,
     cleanup_browser_session,
     get_authenticated_session,
     _get_session_id,
@@ -531,27 +532,27 @@ async def persist_cart_to_store(
     )
 
     if result.get("status") == "success":
-        cart_data = result.get("cart_data", {})
-        response_items = cart_data.get("items", [])
+        # After persisting our items, read the FULL cart from the checkout
+        # page to detect old items from previous sessions. The cart API
+        # only returns items we sent, so we need a separate read.
+        full_cart = await browser_read_full_cart(session_id)
+        full_items = full_cart.get("items", [])
 
-        # Detect old items: items in the API response that we did NOT send
         sent_ids = set(str(k) for k in items_map.keys())
         old_items = []
         all_items_summary = []
-        for item in response_items:
-            is_delivery = item.get("is_delivery", False)
-            if is_delivery or "משלוח" in item.get("name", ""):
-                continue
-            item_id = str(item.get("id", ""))
+
+        for item in full_items:
+            item_id = str(item.get("id", item.get("store_product_id", "")))
             item_info = {
                 "store_product_id": item_id,
                 "name": item.get("name", ""),
                 "quantity": item.get("quantity", 1),
                 "price": item.get("price", 0),
-                "total_price": item.get("FormatedTotalPrice", 0),
+                "total_price": item.get("total_price", 0),
             }
             all_items_summary.append(item_info)
-            if item_id not in sent_ids:
+            if item_id and item_id not in sent_ids:
                 old_items.append(item_info)
 
         if old_items:

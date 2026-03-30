@@ -981,6 +981,164 @@ async def browser_add_to_cart(
         }
 
 
+async def browser_read_full_cart(
+    session_id: str,
+) -> dict[str, Any]:
+    """Read the full persisted cart from the user's account via the browser.
+
+    After persisting items, the Rami Levy cart API only returns the items
+    we sent — not old items from previous sessions. This function navigates
+    to the checkout page and extracts ALL items in the cart by scraping
+    the Vuex/Nuxt store or the DOM.
+
+    Args:
+        session_id: ADK session ID to look up the browser session.
+
+    Returns:
+        Dict with status and full list of cart items.
+    """
+    bs = _active_sessions.get(session_id)
+    if bs is None or not bs.authenticated:
+        return {
+            "status": "error",
+            "error": "no_browser_session",
+            "items": [],
+        }
+
+    if bs.is_expired:
+        await _cleanup_session(session_id)
+        return {
+            "status": "error",
+            "error": "session_expired",
+            "items": [],
+        }
+
+    page = bs.page
+
+    try:
+        # Navigate to the checkout/cart page to load the full cart state
+        logger.info("browser_read_full_cart: navigating to checkout, session=%s", session_id)
+        await page.goto(
+            "https://www.rami-levy.co.il/he/dashboard/checkout",
+            wait_until="domcontentloaded",
+            timeout=30_000,
+        )
+
+        try:
+            await page.wait_for_load_state("networkidle", timeout=15_000)
+        except Exception:
+            await asyncio.sleep(3)
+
+        # Try to extract cart items from the Nuxt/Vue store
+        cart_items = await page.evaluate("""
+            () => {
+                try {
+                    // Try Vuex store first (Rami Levy uses Nuxt)
+                    if (window.$nuxt && window.$nuxt.$store) {
+                        const state = window.$nuxt.$store.state;
+                        // Look for cart in various state paths
+                        const cart = state.cart || state.ecomCart || {};
+                        const items = cart.items || cart.products || [];
+                        if (items.length > 0) {
+                            return items.map(item => ({
+                                id: String(item.id || ''),
+                                name: item.name || '',
+                                quantity: item.quantity || 1,
+                                price: item.price || 0,
+                                total_price: item.FormatedTotalPrice || item.total_price || 0,
+                                is_delivery: item.is_delivery || false,
+                            }));
+                        }
+                    }
+
+                    // Fallback: try localStorage cart data
+                    const rlData = JSON.parse(localStorage.getItem('ramilevy') || '{}');
+                    if (rlData.cart && rlData.cart.items) {
+                        return rlData.cart.items.map(item => ({
+                            id: String(item.id || ''),
+                            name: item.name || '',
+                            quantity: item.quantity || 1,
+                            price: item.price || 0,
+                            total_price: item.FormatedTotalPrice || item.total_price || 0,
+                            is_delivery: item.is_delivery || false,
+                        }));
+                    }
+
+                    return null;
+                } catch(e) {
+                    return null;
+                }
+            }
+        """)
+
+        if cart_items:
+            # Filter out delivery items
+            product_items = [
+                item for item in cart_items
+                if not item.get("is_delivery") and "משלוח" not in item.get("name", "")
+            ]
+            logger.info(
+                "browser_read_full_cart: found %d items from store state, session=%s",
+                len(product_items), session_id,
+            )
+            return {
+                "status": "success",
+                "items": product_items,
+                "item_count": len(product_items),
+            }
+
+        # Fallback: scrape cart items from the DOM
+        logger.info("browser_read_full_cart: Vuex/localStorage empty, scraping DOM, session=%s", session_id)
+        dom_items = await page.evaluate("""
+            () => {
+                const items = [];
+                // Look for cart item elements (common patterns on Rami Levy checkout)
+                const rows = document.querySelectorAll('.cart-item, .checkout-item, [class*="cart"] [class*="item"], tr[class*="product"]');
+                rows.forEach(row => {
+                    const nameEl = row.querySelector('[class*="name"], [class*="title"], .product-name');
+                    const qtyEl = row.querySelector('[class*="quantity"], [class*="qty"], input[type="number"]');
+                    const priceEl = row.querySelector('[class*="price"], [class*="total"]');
+                    if (nameEl) {
+                        items.push({
+                            name: nameEl.textContent.trim(),
+                            quantity: qtyEl ? parseInt(qtyEl.textContent || qtyEl.value || '1') : 1,
+                            total_price: priceEl ? parseFloat(priceEl.textContent.replace(/[^0-9.]/g, '') || '0') : 0,
+                        });
+                    }
+                });
+                return items.length > 0 ? items : null;
+            }
+        """)
+
+        if dom_items:
+            logger.info(
+                "browser_read_full_cart: found %d items from DOM, session=%s",
+                len(dom_items), session_id,
+            )
+            return {
+                "status": "success",
+                "items": dom_items,
+                "item_count": len(dom_items),
+            }
+
+        logger.warning("browser_read_full_cart: could not extract items, session=%s", session_id)
+        return {
+            "status": "error",
+            "error": "no_items_found",
+            "items": [],
+        }
+
+    except Exception as exc:
+        logger.exception(
+            "browser_read_full_cart failed for session %s: %s", session_id, exc
+        )
+        return {
+            "status": "error",
+            "error": "browser_error",
+            "items": [],
+        }
+
+
 async def cleanup_browser_session(session_id: str) -> None:
     """Public cleanup entry point for cart_tools to call after persistence."""
     await _cleanup_session(session_id)
