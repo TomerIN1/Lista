@@ -11,7 +11,7 @@ import { defaultCartUnit } from '../utils/priceFormat';
 // ─── Category icon helpers ──────────────────────────────────────────────────
 
 /** Resolve SVG icon path for a category (file names match Hebrew category names) */
-function getCategoryIconSrc(name: string): string {
+export function getCategoryIconSrc(name: string): string {
   const normalised = name.replace(/\s+/g, ' ');
   return `/category-icons/${encodeURIComponent(normalised)}.svg`;
 }
@@ -44,7 +44,7 @@ const CATEGORY_ORDER: string[] = [
   'אחר ולא מסווג',
 ];
 
-function sortCategories(cats: CategoryNode[]): CategoryNode[] {
+export function sortCategories(cats: CategoryNode[]): CategoryNode[] {
   const orderMap = new Map(CATEGORY_ORDER.map((name, i) => [name.replace(/\s+/g, ' '), i]));
   return [...cats].sort((a, b) => {
     const aN = a.name.replace(/\s+/g, ' ');
@@ -68,6 +68,11 @@ interface ProductCatalogAreaProps {
   city?: string;
   storeType?: string;
   selectedChains?: string[];
+  externalSearchQuery?: string;
+  externalCategory?: string | null;
+  externalSubcategory?: string | null;
+  externalSubSubcategory?: string | null;
+  onCategoryChange?: (cat: string | null) => void;
 }
 
 type View = 'categories' | 'browse' | 'search';
@@ -321,6 +326,11 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   city,
   storeType,
   selectedChains,
+  externalSearchQuery,
+  externalCategory,
+  externalSubcategory,
+  externalSubSubcategory,
+  onCategoryChange,
 }) => {
   const { t } = useLanguage();
 
@@ -343,7 +353,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   // Filters
   const [filterVegan, setFilterVegan] = useState(false);
   const [filterAllergenFree, setFilterAllergenFree] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<ProductSortOption>('default');
+  const [sortBy, setSortBy] = useState<ProductSortOption>('price_asc');
   const [filterOnSale, setFilterOnSale] = useState(false);
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
@@ -353,11 +363,15 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   const [detailImageUrl, setDetailImageUrl] = useState<string | null>(null);
   const [detailProduct, setDetailProduct] = useState<DbProductEnhanced | null>(null);
 
+  // Landing page product sections
+  const [featuredProducts, setFeaturedProducts] = useState<DbProductEnhanced[]>([]); // worth comparing
+  const [commonProducts, setCommonProducts] = useState<DbProductEnhanced[]>([]); // common staples
+
   const fetchId = useRef(0);
 
   const activeFilterCount = (filterVegan ? 1 : 0) + filterAllergenFree.length + (filterOnSale ? 1 : 0) + (priceMin ? 1 : 0) + (priceMax ? 1 : 0);
 
-  // ── Load categories on mount ─────────────────────────────────────────────
+  // ── Load categories + featured products on mount ─────────────────────────
   useEffect(() => {
     setIsLoadingCategories(true);
     getCategories()
@@ -366,7 +380,76 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
       })
       .catch(() => setCategories([]))
       .finally(() => setIsLoadingCategories(false));
+
+    // Load "worth comparing" products — popular items with biggest price gaps
+    // Search for well-known Israeli grocery staples, pick those with highest savings
+    const popularQueries = ['חלב', 'ביצים', 'לחם', 'גבינה צהובה', 'שמן זית', 'קוטג', 'חמאה', 'קורנפלקס', 'אורז', 'שוקולד', 'קפה', 'סוכר', 'מים מינרליים', 'טונה', 'קטשופ', 'חלב סויה'];
+    Promise.allSettled(
+      popularQueries.map(q => searchProducts(q, 5, 0, city, storeType).catch(() => null))
+    ).then((results) => {
+      const candidates: DbProductEnhanced[] = [];
+      for (const r of results) {
+        if (r.status !== 'fulfilled' || !r.value) continue;
+        const products = (r.value as any).products as DbProductEnhanced[];
+        if (!products?.length) continue;
+        // Pick the product with the biggest savings from each search
+        const withSavings = products
+          .filter(p => p.max_price && p.min_price && p.max_price > p.min_price && p.image_url)
+          .sort((a, b) => ((b.max_price || 0) - b.min_price) - ((a.max_price || 0) - a.min_price));
+        if (withSavings.length > 0) candidates.push(withSavings[0]);
+      }
+      // Sort all candidates by savings descending, take top 8
+      const sorted = candidates
+        .sort((a, b) => ((b.max_price || 0) - b.min_price) - ((a.max_price || 0) - a.min_price))
+        .slice(0, 8);
+      setFeaturedProducts(sorted);
+    }).catch(() => {});
+
+    // Load common staple products
+    const stapleQueries = ['לחם אחיד', 'חלב תנובה', 'ביצים', 'גבינה לבנה', 'שמנת חמוצה', 'במבה', 'קולה', 'מלפפונים'];
+    Promise.allSettled(
+      stapleQueries.map(q => searchProducts(q, 3, 0, city, storeType).catch(() => null))
+    ).then((results) => {
+      const items: DbProductEnhanced[] = [];
+      const seen = new Set<string>();
+      for (const r of results) {
+        if (r.status !== 'fulfilled' || !r.value) continue;
+        const products = (r.value as any).products as DbProductEnhanced[];
+        if (!products?.length) continue;
+        // Pick the first product with an image that we haven't seen
+        const pick = products.find(p => p.image_url && !seen.has(p.barcode));
+        if (pick) { items.push(pick); seen.add(pick.barcode); }
+      }
+      setCommonProducts(items.slice(0, 8));
+    }).catch(() => {});
   }, []);
+
+  // ── Sync external search query from header ─────────────────────────────
+  useEffect(() => {
+    if (externalSearchQuery !== undefined) {
+      setSearchQuery(externalSearchQuery);
+      if (externalSearchQuery.trim().length >= 2) {
+        setView('search');
+      } else if (externalSearchQuery === '' && view === 'search') {
+        setView(selectedCategory ? 'browse' : 'categories');
+      }
+    }
+  }, [externalSearchQuery]);
+
+  // ── Sync external category + subcategory + sub_subcategory from CategoryNavBar
+  useEffect(() => {
+    if (externalCategory !== undefined && externalCategory !== null) {
+      setSelectedCategory(externalCategory);
+      setSelectedSubcategory(externalSubcategory || null);
+      setSelectedSubSubcategory(externalSubSubcategory || null);
+      setView('browse');
+    } else if (externalCategory === null) {
+      setView('categories');
+      setSelectedCategory(null);
+      setSelectedSubcategory(null);
+      setSelectedSubSubcategory(null);
+    }
+  }, [externalCategory, externalSubcategory, externalSubSubcategory]);
 
   // ── Fetch products ────────────────────────────────────────────────────────
   const fetchProducts = useCallback(
@@ -468,6 +551,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
     setSelectedCategory(catName);
     setSelectedSubcategory(null);
     setSelectedSubSubcategory(null);
+    onCategoryChange?.(catName);
     setView('browse');
   };
 
@@ -735,24 +819,156 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
               {t('productBrowse.noProducts')}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {categories.map((cat) => (
-                <button
-                  key={cat.name}
-                  type="button"
-                  onClick={() => handleCategoryClick(cat.name)}
-                  className="bg-slate-50 rounded-xl p-3 flex flex-col items-center gap-1.5 border border-white hover:shadow-md hover:-translate-y-0.5 transition-all text-center"
-                >
-                  <img
-                    src={getCategoryIconSrc(cat.name)}
-                    alt=""
-                    className="w-full h-24 object-contain"
-                    loading="lazy"
-                  />
-                  <span className="text-[11px] font-semibold text-slate-700 leading-tight line-clamp-2">{cat.name}</span>
-                </button>
-              ))}
-            </div>
+            <>
+              {/* Promo banner */}
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 sm:p-5 text-white mb-4">
+                <p className="text-sm sm:text-base font-semibold">
+                  {t('productBrowse.promoBanner')}
+                </p>
+              </div>
+
+              {/* "Worth Comparing" — popular products with biggest price gaps */}
+              {featuredProducts.length > 0 && (
+                <div className="mb-5">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-2 px-0.5">
+                    {t('productBrowse.worthComparing')}
+                  </h3>
+                  <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+                    {featuredProducts.map((fp) => {
+                      const savings = (fp.max_price || 0) - fp.min_price;
+                      const pct = fp.max_price ? Math.round((savings / fp.max_price) * 100) : 0;
+                      return (
+                        <div key={fp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-all relative">
+                          {/* Savings badge */}
+                          {savings > 0 && (
+                            <div className="flex items-center justify-center gap-2 bg-rose-50 border-b border-rose-100 px-2 py-1.5">
+                              <span className="text-rose-600 text-[11px] font-bold">{t('productBrowse.saveUpTo')} ₪{savings.toFixed(2)}</span>
+                              <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">-{pct}%</span>
+                            </div>
+                          )}
+                          {/* Card body — fixed height */}
+                          <div className="flex-1 flex flex-col p-2.5">
+                            <div className="h-24 flex items-center justify-center mb-2">
+                              {fp.image_url ? (
+                                <img src={fp.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
+                              ) : (
+                                <div className="w-12 h-12 text-slate-200 flex items-center justify-center">
+                                  <Search className="w-8 h-8" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs font-semibold text-slate-800 leading-snug line-clamp-2 text-center min-h-[2.5rem]">{fp.name}</div>
+                            {fp.manufacturer && (
+                              <div className="text-[10px] text-slate-400 text-center truncate mt-0.5">{fp.manufacturer}</div>
+                            )}
+                            <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                              <span className="text-sm font-bold text-emerald-600">₪{fp.min_price.toFixed(2)}</span>
+                              {fp.max_price && fp.max_price > fp.min_price && (
+                                <span className="text-[11px] text-slate-400 line-through">₪{fp.max_price.toFixed(2)}</span>
+                              )}
+                            </div>
+                          </div>
+                          {/* Add button */}
+                          <div className="px-2.5 pb-2.5">
+                            {selectedProducts.some((p) => p.barcode === fp.barcode) ? (
+                              <button
+                                onClick={() => onRemoveProduct(fp.barcode)}
+                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500"
+                              >
+                                ✓ {t('productBrowse.added')}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  onSelectProduct({
+                                    ...fp,
+                                    amount: 1,
+                                    unit: defaultCartUnit(fp.unit_of_measure, fp.is_weighted),
+                                  });
+                                }}
+                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                              >
+                                + {t('productBrowse.addToList')}
+                              </button>
+                            )}
+                          </div>
+                          {/* Click overlay for detail */}
+                          <div
+                            className="absolute inset-0 cursor-pointer"
+                            style={{ bottom: '40px' }}
+                            onClick={() => {
+                              setDetailBarcode(fp.barcode);
+                              setDetailImageUrl(fp.image_url);
+                              setDetailProduct(fp);
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Common Products — everyday staples */}
+              {commonProducts.length > 0 && (
+                <div className="mb-5">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-2 px-0.5">
+                    {t('productBrowse.commonProducts')}
+                  </h3>
+                  <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+                    {commonProducts.map((cp) => (
+                      <div key={cp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-all relative">
+                        <div className="flex-1 flex flex-col p-2.5">
+                          <div className="h-24 flex items-center justify-center mb-2">
+                            {cp.image_url ? (
+                              <img src={cp.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
+                            ) : (
+                              <div className="w-12 h-12 text-slate-200 flex items-center justify-center">
+                                <Search className="w-8 h-8" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs font-semibold text-slate-800 leading-snug line-clamp-2 text-center min-h-[2.5rem]">{cp.name}</div>
+                          {cp.manufacturer && (
+                            <div className="text-[10px] text-slate-400 text-center truncate mt-0.5">{cp.manufacturer}</div>
+                          )}
+                          <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                            <span className="text-sm font-bold text-emerald-600">₪{cp.min_price.toFixed(2)}</span>
+                            {cp.max_price && cp.max_price > cp.min_price && (
+                              <span className="text-[11px] text-slate-400 line-through">₪{cp.max_price.toFixed(2)}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="px-2.5 pb-2.5">
+                          {selectedProducts.some((p) => p.barcode === cp.barcode) ? (
+                            <button
+                              onClick={() => onRemoveProduct(cp.barcode)}
+                              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500"
+                            >
+                              ✓ {t('productBrowse.added')}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                onSelectProduct({ ...cp, amount: 1, unit: defaultCartUnit(cp.unit_of_measure, cp.is_weighted) });
+                              }}
+                              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                            >
+                              + {t('productBrowse.addToList')}
+                            </button>
+                          )}
+                        </div>
+                        <div
+                          className="absolute inset-0 cursor-pointer"
+                          style={{ bottom: '40px' }}
+                          onClick={() => { setDetailBarcode(cp.barcode); setDetailImageUrl(cp.image_url); setDetailProduct(cp); }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )
         )}
 
@@ -782,7 +998,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                   )}
                 </div>
               )}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 xl:gap-4">
                 {displayProducts.map((product) => (
                   <ProductCard
                     key={product.barcode}

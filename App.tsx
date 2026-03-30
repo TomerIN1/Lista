@@ -12,10 +12,10 @@ import ShareModal from './components/ShareModal';
 import Footer from './components/Footer';
 import InfoModal from './components/InfoModal';
 import PriceAgentChat from './components/PriceAgentChat';
-import AppModeToggle from './components/AppModeToggle';
 import ShoppingInputArea from './components/ShoppingInputArea';
 import ShoppingPriceStep from './components/ShoppingPriceStep';
 import ShoppingSetupStep from './components/ShoppingSetupStep';
+import CategoryNavBar from './components/CategoryNavBar';
 import { LEGAL_TEXT, LegalDocType } from './constants/legalText';
 import { useLanguage } from './contexts/LanguageContext';
 import { groupsToShoppingItems } from './types';
@@ -67,6 +67,14 @@ const App: React.FC = () => {
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
   const [deliveryCheck, setDeliveryCheck] = useState<DeliveryCheckResult | null>(null);
+
+  // Supermarket UI state
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [headerSearchQuery, setHeaderSearchQuery] = useState('');
+  const [isCartExpandedGlobal, setIsCartExpandedGlobal] = useState(false);
+  const [selectedNavCategory, setSelectedNavCategory] = useState<string | null>(null);
+  const [selectedNavSubcategory, setSelectedNavSubcategory] = useState<string | null>(null);
+  const [selectedNavSubSubcategory, setSelectedNavSubSubcategory] = useState<string | null>(null);
 
   // Ref to guard against circular auto-save from sync effect
   const shoppingProductsRef = useRef<ShoppingProduct[]>([]);
@@ -574,17 +582,28 @@ const App: React.FC = () => {
     }
 
     setAppMode(mode);
-    // Reset shopping state when switching to organize
+
     if (mode === 'organize') {
-      setShoppingStep('setup');
+      // Reset transient shopping UI state, but preserve city/location/mode
       setShoppingProducts([]);
       shoppingProductsRef.current = [];
       setPriceComparison(null);
-      setSelectedShoppingMode(null);
       setStoreRecommendation(null);
-      setShoppingCity('');
-      setShoppingLocation(null);
-      setDeliveryCheck(null);
+    }
+
+    if (mode === 'shopping') {
+      // Restore to build_list if city+mode are saved, otherwise show setup
+      if (shoppingCity && selectedShoppingMode) {
+        setShoppingStep('build_list');
+        // Fire delivery check if not already loaded
+        if (!deliveryCheck) {
+          checkDelivery(shoppingCity, shoppingLocation?.streetName)
+            .then((result) => setDeliveryCheck(result))
+            .catch((err) => console.error('Delivery check failed:', err));
+        }
+      } else {
+        setShoppingStep('setup');
+      }
     }
   };
 
@@ -642,7 +661,7 @@ const App: React.FC = () => {
     }
   }, [appMode, selectedShoppingMode]);
 
-  // Persist shopping city & location to localStorage
+  // Persist shopping city, location & mode to localStorage
   useEffect(() => {
     if (shoppingCity) {
       localStorage.setItem('lista_shopping_city', shoppingCity);
@@ -657,13 +676,30 @@ const App: React.FC = () => {
     }
   }, [shoppingLocation]);
 
-  // Initialize shopping city & location from localStorage
+  useEffect(() => {
+    if (selectedShoppingMode) {
+      localStorage.setItem('lista_shopping_mode', selectedShoppingMode);
+    }
+  }, [selectedShoppingMode]);
+
+  // Initialize shopping city, location & mode from localStorage; auto-skip setup if saved
   useEffect(() => {
     const savedCity = localStorage.getItem('lista_shopping_city');
     if (savedCity) setShoppingCity(savedCity);
     const savedLocation = localStorage.getItem('lista_shopping_location');
     if (savedLocation) {
       try { setShoppingLocation(JSON.parse(savedLocation)); } catch {}
+    }
+    const savedMode = localStorage.getItem('lista_shopping_mode') as ShoppingMode | null;
+    if (savedMode) setSelectedShoppingMode(savedMode);
+
+    // Auto-skip setup and fire delivery check if we have saved city + mode
+    if (savedCity && savedMode) {
+      setShoppingStep('build_list');
+      const loc = savedLocation ? JSON.parse(savedLocation) : null;
+      checkDelivery(savedCity, loc?.streetName)
+        .then((result) => setDeliveryCheck(result))
+        .catch((err) => console.error('Delivery check failed:', err));
     }
   }, []);
 
@@ -816,21 +852,36 @@ const App: React.FC = () => {
         onLoadRecipe={handleLoadRecipe}
         onCreateRecipe={handleCreateRecipe}
         onCreateShoppingList={handleCreateShoppingList}
+        alwaysOverlay={appMode === 'shopping'}
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative scroll-smooth">
-        <div className="lg:hidden absolute top-6 start-4 z-30">
-          <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 text-slate-600">
-            <Menu className="w-5 h-5" />
-          </button>
-        </div>
+        {appMode !== 'shopping' && (
+          <div className="lg:hidden absolute top-6 start-4 z-30">
+            <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 text-slate-600">
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
+        )}
 
-        <div className="max-w-5xl w-full mx-auto px-4 py-8 sm:px-6 sm:py-16 flex flex-col min-h-full">
+        <div className={`w-full mx-auto flex flex-col min-h-full ${
+          appMode === 'shopping' ? 'max-w-7xl px-3 sm:px-4 py-0' : 'max-w-5xl px-4 py-8 sm:px-6 sm:py-16'
+        }`}>
           <Header
             user={user}
             onLogin={handleLogin}
             onLogout={handleLogout}
             sidebarOpen={sidebarOpen}
+            appMode={appMode}
+            onModeSwitch={handleAppModeSwitch}
+            shoppingCity={shoppingCity}
+            cartItemCount={shoppingProducts.length}
+            onLocationClick={() => setShowLocationModal(true)}
+            onCartClick={() => setIsCartExpandedGlobal(prev => !prev)}
+            searchQuery={headerSearchQuery}
+            onSearchChange={setHeaderSearchQuery}
+            disabled={status === 'loading' || isAdding || isShoppingComparing}
+            onMenuClick={() => setSidebarOpen(true)}
           />
 
           <div className="flex-1">
@@ -866,13 +917,6 @@ const App: React.FC = () => {
                       <button onClick={handleLogin} className="underline font-semibold hover:text-amber-900">{t('header.login')}</button>
                    </div>
                 )}
-
-                {/* App Mode Toggle */}
-                <AppModeToggle
-                  appMode={appMode}
-                  onSwitch={handleAppModeSwitch}
-                  disabled={status === 'loading' || isAdding || isShoppingComparing}
-                />
 
                 {/* ==================== ORGANIZE MODE ==================== */}
                 {appMode === 'organize' && (
@@ -940,6 +984,19 @@ const App: React.FC = () => {
                 {/* ==================== SHOPPING MODE ==================== */}
                 {appMode === 'shopping' && (
                   <>
+                    {/* Category Navigation Bar (always visible in shopping when not in setup) */}
+                    {shoppingStep !== 'setup' && (
+                      <CategoryNavBar
+                        activeCategory={selectedNavCategory}
+                        onSelect={(cat, sub, subsub) => {
+                          setSelectedNavCategory(cat);
+                          setSelectedNavSubcategory(sub || null);
+                          setSelectedNavSubSubcategory(subsub || null);
+                          setHeaderSearchQuery('');
+                        }}
+                      />
+                    )}
+
                     {/* Step 0: Setup (city + mode) */}
                     {shoppingStep === 'setup' && (
                       <ShoppingSetupStep
@@ -968,6 +1025,11 @@ const App: React.FC = () => {
                         storeType={selectedShoppingMode || undefined}
                         deliveryCheck={deliveryCheck}
                         shoppingMode={selectedShoppingMode}
+                        externalSearchQuery={headerSearchQuery}
+                        externalCategory={selectedNavCategory}
+                        externalSubcategory={selectedNavSubcategory}
+                        externalSubSubcategory={selectedNavSubSubcategory}
+                        onCategoryChange={(cat) => { setSelectedNavCategory(cat); setSelectedNavSubcategory(null); setSelectedNavSubSubcategory(null); }}
                         onBack={() => {
                           setShoppingStep('setup');
                         }}
@@ -1038,6 +1100,26 @@ const App: React.FC = () => {
       />
 
       <LegalModal />
+
+      {/* Location Change Modal */}
+      {showLocationModal && (
+        <ShoppingSetupStep
+          variant="modal"
+          onClose={() => setShowLocationModal(false)}
+          selectedCity={shoppingCity}
+          selectedMode={selectedShoppingMode}
+          onCityChange={setShoppingCity}
+          onLocationChange={setShoppingLocation}
+          onSelectMode={setSelectedShoppingMode}
+          onProceed={() => {
+            handleSetupProceed();
+            setShowLocationModal(false);
+          }}
+          cities={availableCities}
+          isLoadingCities={isLoadingCities}
+          selectedLocation={shoppingLocation}
+        />
+      )}
 
       {/* Price Agent Chat Panel */}
       <PriceAgentChat

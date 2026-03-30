@@ -15,6 +15,8 @@ interface ShoppingSetupStepProps {
   cities: string[];
   isLoadingCities: boolean;
   selectedLocation?: UserLocation | null;
+  variant?: 'full' | 'modal';
+  onClose?: () => void;
 }
 
 const ShoppingSetupStep: React.FC<ShoppingSetupStepProps> = ({
@@ -27,6 +29,8 @@ const ShoppingSetupStep: React.FC<ShoppingSetupStepProps> = ({
   cities,
   isLoadingCities,
   selectedLocation,
+  variant = 'full',
+  onClose,
 }) => {
   const { t, isRTL } = useLanguage();
   const {
@@ -133,13 +137,23 @@ const ShoppingSetupStep: React.FC<ShoppingSetupStepProps> = ({
   };
 
   const canProceed = (selectedAddress || (isFallbackMode && selectedCity)) && selectedMode;
+  const isModal = variant === 'modal';
 
-  return (
-    <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-visible transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-500">
+  const card = (
+    <div className={`bg-white overflow-visible transition-shadow ${
+      isModal
+        ? 'rounded-2xl shadow-2xl w-full max-w-md mx-4'
+        : 'rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500'
+    }`}>
       {/* Header */}
-      <div className="flex items-center justify-center gap-2 px-6 py-4 border-b border-slate-100 bg-emerald-50/30 rounded-t-3xl">
+      <div className={`flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-emerald-50/30 ${isModal ? 'rounded-t-2xl' : 'rounded-t-3xl'}`}>
         <MapPin className="w-5 h-5 text-emerald-600" />
-        <span className="text-sm font-semibold text-emerald-800">{t('appMode.setupTitle')}</span>
+        <span className="text-sm font-semibold text-emerald-800 flex-1">{t('appMode.setupTitle')}</span>
+        {isModal && onClose && (
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="p-6 space-y-6">
@@ -299,6 +313,18 @@ const ShoppingSetupStep: React.FC<ShoppingSetupStepProps> = ({
       </div>
     </div>
   );
+
+  if (isModal) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+        <div onClick={(e) => e.stopPropagation()}>
+          {card}
+        </div>
+      </div>
+    );
+  }
+
+  return card;
 };
 
 export default ShoppingSetupStep;

@@ -225,7 +225,14 @@ export const TRANSLATIONS = {
       minPrice: "Min",
       maxPrice: "Max",
       sortingLoaded: "Sorting loaded products",
-      allStores: "All Stores"
+      allStores: "All Stores",
+      promoBanner: "Compare prices across all supermarkets — find the cheapest basket",
+      browseCategories: "Categories",
+      popularProducts: "Popular Products",
+      worthComparing: "Worth Comparing — Biggest Price Gaps",
+      saveUpTo: "Save",
+      commonProducts: "Everyday Essentials",
+      searchProducts: "Search products..."
     },
     smartList: {
       pasteList: "AI Assistant",
@@ -478,7 +485,14 @@ export const TRANSLATIONS = {
       minPrice: "מינימום",
       maxPrice: "מקסימום",
       sortingLoaded: "ממיין מוצרים שנטענו",
-      allStores: "כל החנויות"
+      allStores: "כל החנויות",
+      promoBanner: "השוו מחירים בכל הסופרים — מצאו את סל הקניות הזול ביותר",
+      browseCategories: "קטגוריות",
+      popularProducts: "מוצרים פופולריים",
+      worthComparing: "שווה להשוות — הפרשי מחירים גדולים",
+      saveUpTo: "חסכו",
+      commonProducts: "מוצרים יומיומיים",
+      searchProducts: "חפש מוצרים..."
     },
     smartList: {
       pasteList: "עוזר AI",

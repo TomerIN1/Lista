@@ -24,6 +24,11 @@ interface ShoppingInputAreaProps {
   deliveryCheck?: DeliveryCheckResult | null;
   shoppingMode?: string | null;
   onBack?: () => void;
+  externalSearchQuery?: string;
+  externalCategory?: string | null;
+  externalSubcategory?: string | null;
+  externalSubSubcategory?: string | null;
+  onCategoryChange?: (cat: string | null) => void;
 }
 
 const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
@@ -38,6 +43,11 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   deliveryCheck,
   shoppingMode,
   onBack,
+  externalSearchQuery,
+  externalCategory,
+  externalSubcategory,
+  externalSubSubcategory,
+  onCategoryChange,
 }) => {
   const { t, isRTL, tUnit } = useLanguage();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -111,59 +121,142 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
 
   const hasContent = products.length > 0;
 
+  // Estimated total price
+  const estimatedTotal = useMemo(() => {
+    return products.reduce((sum, p) => {
+      if (!p.min_price) return sum;
+      const wt = computeWeightedTotal(p.min_price, p.amount, p.unit, p.unit_of_measure, p.is_weighted);
+      return sum + (wt ?? p.min_price * p.amount);
+    }, 0);
+  }, [products]);
+
   return (
-    <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-visible transition-shadow focus-within:shadow-[0_8px_40px_rgb(99,102,241,0.12)] focus-within:border-emerald-100 flex flex-col">
-      {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex items-center px-4 py-4 border-b border-slate-100 bg-emerald-50/30 rounded-t-3xl">
-        {onBack ? (
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors flex-shrink-0"
-          >
-            {isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            <span className="hidden sm:inline">{t('appMode.backToSetup')}</span>
-          </button>
-        ) : (
-          <div className="w-0" />
-        )}
-        <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
-          <ShoppingCart className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-          {isEditingTitle ? (
-            <div className="flex items-center gap-1.5">
-              <input
-                ref={titleInputRef}
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onBlur={commitTitle}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitTitle();
-                  if (e.key === 'Escape') { setEditTitle(title || ''); setIsEditingTitle(false); }
-                }}
-                className="text-sm font-semibold text-emerald-800 bg-white border border-emerald-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-emerald-300 w-48"
-              />
-              <button onClick={commitTitle} className="p-1 text-emerald-600 hover:text-emerald-800">
-                <Check className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => onTitleChange && setIsEditingTitle(true)}
-              className="flex items-center gap-1.5 group"
-              title={onTitleChange ? (isRTL ? 'שנה שם' : 'Rename') : undefined}
-            >
-              <span className="text-sm font-semibold text-emerald-800">{title || t('appMode.buildList')}</span>
-              {onTitleChange && (
-                <Pencil className="w-3 h-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-              )}
+    <div className="flex gap-4" style={{ direction: 'ltr' }}>
+      {/* ── Left-side Cart Sidebar (desktop) / Bottom bar (mobile) ── */}
+      {/* Desktop cart sidebar — always on the left via direction:ltr on parent */}
+      <div className="hidden lg:flex flex-col w-72 xl:w-80 2xl:w-96 flex-shrink-0 sticky top-[52px] h-[calc(100vh-52px)] bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm" style={{ direction: isRTL ? 'rtl' : 'ltr' }}>
+        {/* Cart header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/60">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4 text-emerald-600" />
+            <span className="text-sm font-semibold text-slate-700">
+              {hasContent
+                ? `${products.length} ${t('productBrowse.cartItems')}`
+                : (isRTL ? 'העגלה ריקה' : 'Cart is empty')
+              }
+            </span>
+          </div>
+          {hasContent && (
+            <button onClick={handleClear} disabled={isLoading} className="text-xs text-slate-400 hover:text-red-500 transition-colors">
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-        {onBack ? <div className="w-[68px] sm:w-[120px] flex-shrink-0" /> : <div className="w-0" />}
+
+        {/* Cart items */}
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+          {!hasContent && (
+            <div className="flex flex-col items-center justify-center h-32 text-center px-4">
+              <ShoppingCart className="w-8 h-8 text-slate-200 mb-2" />
+              <p className="text-xs text-slate-400">{isRTL ? 'התחל לקנות!' : 'Start shopping!'}</p>
+            </div>
+          )}
+          {products.map((product) => (
+            <div key={product.barcode} className="flex items-start gap-2 px-3 py-2.5 hover:bg-slate-50/50 transition-colors">
+              {/* Product thumbnail */}
+              <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-100 flex-shrink-0 overflow-hidden">
+                {product.image_url ? (
+                  <img src={product.image_url} alt="" className="w-full h-full object-contain" loading="lazy" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-300">
+                    <ShoppingCart className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-slate-800 leading-snug line-clamp-2">{product.name}</div>
+                {product.manufacturer && (
+                  <div className="text-[10px] text-slate-400 mt-0.5">{product.manufacturer}</div>
+                )}
+                {product.min_price > 0 && (
+                  <div className="text-xs font-bold text-emerald-600 mt-0.5">
+                    {formatPrice(product.min_price, product.max_price, product.unit_of_measure, product.is_weighted)}
+                  </div>
+                )}
+                {product.min_price > 0 && isWeightedProduct(product.unit_of_measure, product.is_weighted) && (() => {
+                  const est = computeWeightedTotal(product.min_price, product.amount, product.unit, product.unit_of_measure, product.is_weighted);
+                  return est != null ? (
+                    <div className="text-[10px] text-amber-600 mt-0.5">≈ ₪{est.toFixed(2)}</div>
+                  ) : null;
+                })()}
+              </div>
+              {/* Qty controls */}
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <input
+                  type="number"
+                  min={product.unit === 'pcs' ? 1 : 0.5}
+                  max="100"
+                  step={product.unit === 'pcs' ? 1 : 0.5}
+                  value={product.amount}
+                  onChange={(e) => {
+                    const raw = parseFloat(e.target.value);
+                    if (isNaN(raw) || raw <= 0) return;
+                    const val = product.unit === 'pcs' ? Math.round(raw) : Math.round(raw * 2) / 2;
+                    handleUpdateProduct(product.barcode, { amount: val });
+                  }}
+                  className="w-10 h-6 text-[11px] font-semibold text-center border border-slate-200 rounded outline-none bg-white text-slate-600"
+                />
+              </div>
+              <button onClick={() => handleRemoveProduct(product.barcode)} className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors flex-shrink-0">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Weighted disclaimer */}
+        {products.some(p => isWeightedProduct(p.unit_of_measure, p.is_weighted)) && (
+          <div className="px-3 py-1.5 bg-amber-50/60 border-t border-amber-100">
+            <p className="text-[10px] text-amber-600">
+              {isRTL ? '⚖️ מוצרים במשקל — מחיר סופי עשוי להשתנות' : '⚖️ Weighted — price may vary'}
+            </p>
+          </div>
+        )}
+
+        {/* Cart footer with total + compare */}
+        <div className="border-t border-slate-200 bg-emerald-50/50 px-4 py-3">
+          {estimatedTotal > 0 && (
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-slate-500">{isRTL ? 'סה״כ משוער' : 'Est. total'}</span>
+              <span className="text-sm font-bold text-slate-800">₪{estimatedTotal.toFixed(2)}</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={onCompare}
+            disabled={!hasContent || isLoading}
+            className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-full font-semibold text-sm text-white shadow-md transition-all ${
+              !hasContent || isLoading
+                ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
+                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
+            }`}
+          >
+            {isLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>{t('input.processing')}</span>
+              </>
+            ) : (
+              <span>{t('appMode.proceedToCompare')}</span>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* ── Available stores banner ─────────────────────── */}
+      {/* ── Main content area ── */}
+      <div className="flex-1 min-w-0 pb-20 lg:pb-4" style={{ direction: isRTL ? 'rtl' : 'ltr' }}>
+
+      {/* ── Available stores banner ─────────────────── */}
       {deliveryCheck && (() => {
         const isOnline = shoppingMode === 'online';
         const availableChains = deliveryCheck.chains.filter(c =>
@@ -181,18 +274,17 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         };
         const hasFilter = selectedChains.length > 0;
         return (
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-100 overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-2 px-2 py-2 mb-2 bg-white rounded-xl border border-slate-100 overflow-x-auto no-scrollbar">
             <div className="flex items-center gap-1 text-xs text-slate-500 flex-shrink-0">
               <Store className="w-3.5 h-3.5" />
               <span>{t('productBrowse.availableStores')}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              {/* "All" pill — shown when a filter is active so user can clear */}
               {hasFilter && (
                 <button
                   type="button"
                   onClick={() => setSelectedChains([])}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[11px] font-medium whitespace-nowrap hover:bg-slate-200 transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-medium whitespace-nowrap hover:bg-slate-200 transition-colors"
                 >
                   {t('productBrowse.allStores')}
                 </button>
@@ -204,7 +296,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
                     type="button"
                     key={c.chain}
                     onClick={() => toggleChain(c.chain)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                       hasFilter && !isSelected
                         ? 'bg-slate-50 text-slate-400 border border-slate-200'
                         : isSelected
@@ -262,120 +354,20 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
             city={city}
             storeType={storeType}
             selectedChains={effectiveChains}
+            externalSearchQuery={externalSearchQuery}
+            externalCategory={externalCategory}
+            externalSubcategory={externalSubcategory}
+            externalSubSubcategory={externalSubSubcategory}
+            onCategoryChange={onCategoryChange}
           />
         </>
       )}
 
-      {/* ── Collapsible cart bar ────────────────────────── */}
-      <div className="border-t border-slate-100 rounded-b-3xl overflow-hidden">
-        {/* Expanded cart list */}
-        {isCartExpanded && hasContent && (
-          <div className="divide-y divide-slate-50 max-h-96 overflow-y-auto">
-            {products.map((product) => (
-              <div
-                key={product.barcode}
-                className="flex items-start gap-3 px-4 py-3 bg-white hover:bg-slate-50/50 transition-colors"
-              >
-                <div className="flex-1 min-w-0 pt-0.5">
-                  <div className="text-sm font-semibold text-slate-800 leading-snug">{product.name}</div>
-                  {/* Manufacturer */}
-                  {product.manufacturer && (
-                    <div className="text-xs text-slate-500 mt-0.5">{product.manufacturer}</div>
-                  )}
-                  {/* Category breadcrumb */}
-                  {product.category && (
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      {[product.category, product.subcategory, product.sub_subcategory]
-                        .filter(Boolean).join(' › ')}
-                    </div>
-                  )}
-                  {/* Barcode */}
-                  <div className="text-[11px] text-slate-400 font-mono mt-0.5">{product.barcode}</div>
-                  {product.min_price > 0 && (
-                    <div className="text-xs font-bold text-emerald-600 mt-1">
-                      {formatPrice(product.min_price, product.max_price, product.unit_of_measure, product.is_weighted)}
-                    </div>
-                  )}
-                  {/* Estimated total for weighted products */}
-                  {product.min_price > 0 && isWeightedProduct(product.unit_of_measure, product.is_weighted) && (() => {
-                    const est = computeWeightedTotal(product.min_price, product.amount, product.unit, product.unit_of_measure, product.is_weighted);
-                    return est != null ? (
-                      <div className="text-[11px] text-amber-600 mt-0.5">
-                        {isRTL ? `≈ ₪${est.toFixed(2)} משוער` : `≈ ₪${est.toFixed(2)} est.`}
-                      </div>
-                    ) : null;
-                  })()}
-                </div>
-                {/* Amount & Unit Controls */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <input
-                    type="number"
-                    min={product.unit === 'pcs' ? 1 : 0.5}
-                    max="100"
-                    step={product.unit === 'pcs' ? 1 : 0.5}
-                    value={product.amount}
-                    onChange={(e) => {
-                      const raw = parseFloat(e.target.value);
-                      if (isNaN(raw) || raw <= 0) return;
-                      const val = product.unit === 'pcs' ? Math.round(raw) : Math.round(raw * 2) / 2;
-                      handleUpdateProduct(product.barcode, { amount: val });
-                    }}
-                    className="w-14 h-7 text-xs font-semibold text-center border border-slate-200 focus:border-indigo-400 rounded-md outline-none bg-white text-slate-600"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <select
-                    value={product.unit}
-                    onChange={(e) => {
-                      const newUnit = e.target.value as Unit;
-                      const snappedAmount = newUnit === 'pcs' ? Math.max(1, Math.round(product.amount)) : product.amount;
-                      handleUpdateProduct(product.barcode, { unit: newUnit, amount: snappedAmount });
-                    }}
-                    className="h-7 ps-1.5 pe-5 text-[11px] font-bold uppercase tracking-wider bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-md border border-slate-200 focus:border-indigo-400 outline-none appearance-none cursor-pointer text-end w-14"
-                  >
-                    {UNITS.map(u => (
-                      <option key={u} value={u}>{tUnit(u)}</option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveProduct(product.barcode)}
-                  className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+      </div>{/* end main content area */}
 
-            {/* Weighted items disclaimer */}
-            {products.some(p => isWeightedProduct(p.unit_of_measure, p.is_weighted)) && (
-              <div className="px-4 py-2 bg-amber-50/60 border-t border-amber-100">
-                <p className="text-[11px] text-amber-600">
-                  {isRTL
-                    ? '⚖️ מוצרים הנמכרים במשקל — המחיר הסופי עשוי להשתנות בהתאם לשקילה בפועל'
-                    : '⚖️ Weighted items — final price may vary based on actual weight'}
-                </p>
-              </div>
-            )}
-
-            {/* Clear button inside expanded cart */}
-            <div className="px-4 py-2 bg-slate-50/70 flex justify-end">
-              <button
-                type="button"
-                onClick={handleClear}
-                disabled={isLoading}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-500 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {t('productBrowse.clearAll')}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Cart bar */}
-        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50/60">
-          {/* Toggle / count */}
+      {/* ── Mobile-only bottom cart bar ────────────────────────── */}
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgb(0,0,0,0.08)]">
+        <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50/60">
           <button
             type="button"
             onClick={() => hasContent && setIsCartExpanded((v) => !v)}
@@ -387,40 +379,26 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
             {hasContent ? (
               <>
                 <span>{products.length} {t('productBrowse.cartItems')}</span>
-                {isCartExpanded
-                  ? <ChevronDown className="w-4 h-4" />
-                  : <ChevronUp className="w-4 h-4" />
-                }
+                {estimatedTotal > 0 && (
+                  <span className="text-xs text-slate-500 font-normal">· ~₪{estimatedTotal.toFixed(0)}</span>
+                )}
+                {isCartExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
               </>
             ) : (
-              <span>{t('productBrowse.cartEmpty')}</span>
+              <span className="text-xs">{isRTL ? 'העגלה ריקה' : 'Cart is empty'}</span>
             )}
           </button>
-
-          {/* Compare button */}
           <button
             type="button"
             onClick={onCompare}
             disabled={!hasContent || isLoading}
-            className={`
-              flex items-center gap-1.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-semibold text-sm text-white shadow-md transition-all duration-300
-              ${!hasContent || isLoading
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full font-semibold text-sm text-white shadow-md transition-all ${
+              !hasContent || isLoading
                 ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
-                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 hover:shadow-emerald-300 hover:-translate-y-0.5 active:translate-y-0'
-              }
-            `}
+                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
+            }`}
           >
-            {isLoading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>{t('input.processing')}</span>
-              </>
-            ) : (
-              <>
-                <span>{t('appMode.proceedToCompare')}</span>
-                <ArrowIcon className="w-4 h-4 opacity-70" />
-              </>
-            )}
+            <span>{t('appMode.proceedToCompare')}</span>
           </button>
         </div>
       </div>

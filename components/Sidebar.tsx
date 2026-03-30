@@ -20,6 +20,7 @@ interface SidebarProps {
   onLoadRecipe: (recipe: SavedRecipe) => void;
   onCreateRecipe: () => void;
   onCreateShoppingList: () => void;
+  alwaysOverlay?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -34,7 +35,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLogin,
   onLoadRecipe,
   onCreateRecipe,
-  onCreateShoppingList
+  onCreateShoppingList,
+  alwaysOverlay = false,
 }) => {
   const { t, isRTL } = useLanguage();
   const [savedRecipes, setSavedRecipes] = useState<SavedRecipe[]>([]);
@@ -118,15 +120,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <div 
-        className={`fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      <div
+        className={`fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 ${alwaysOverlay ? '' : 'lg:hidden'} transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={handleOverlayClick}
       />
 
-      <aside 
+      <aside
         className={`
-          fixed lg:static inset-y-0 start-0 z-50 w-72 bg-white border-e border-slate-200 transform transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : (isRTL ? 'translate-x-full lg:translate-x-0' : '-translate-x-full lg:translate-x-0')}
+          fixed ${alwaysOverlay ? '' : 'lg:static'} inset-y-0 start-0 z-50 w-72 bg-white border-e border-slate-200 transform transition-transform duration-300 ease-in-out
+          ${isOpen ? 'translate-x-0' : (isRTL ? 'translate-x-full' : '-translate-x-full') + (alwaysOverlay ? '' : ' lg:translate-x-0')}
         `}
       >
         <div className="flex flex-col h-full">

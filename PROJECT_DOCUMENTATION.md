@@ -94,14 +94,28 @@ The application supports both authenticated users (via Google Sign-In) and guest
 - **Copy with Recipe Context**: Copied lists include original recipe breakdown
 - **Works Offline**: Recipe mode fully functional in guest mode
 
-### 🛒 Shopping Mode — Supermarket-Style Product Catalog
-- **3-Level Category Navigation**: Browse products by category › subcategory › sub_subcategory with horizontal chip navigation. Categories display custom SVG illustration icons (served from `/public/category-icons/`) and are sorted in grocery-first order (produce, dairy, meat → lifestyle, pets, garden → other)
-- **Product Grid**: 2-col (mobile) / 3-col (desktop) card grid with product image, name, manufacturer + package size (e.g., "טירת צבי | 400 גרם"), price, and unit price (e.g., "₪9.23 ל-100 גרם")
+### 🛒 Shopping Mode — Supermarket-Style Store Experience
+The shopping mode is designed to look and feel like a real online supermarket (inspired by Rami Levy, Shufersal, Instacart). When the user enters shopping mode, they immediately see products, categories, and deals — no setup wall.
+
+#### Store-Style Layout
+- **Supermarket Header** (sticky): Search bar, location badge (📍 city name), cart counter (🛒 N), mode toggle (ארגון/קניות), sidebar menu button (☰). Replaces the standard header when in shopping mode.
+- **Horizontal Category Navigation Bar with Mega-Menu**: Scrollable strip of category buttons with SVG icons below the header. Click a category to browse products; "All" button resets to the landing view. Categories sorted in grocery-first order. **Hover** over a category to see a dropdown mega-menu showing all subcategories as bold headers, each with their sub-subcategories listed underneath. Click any level (category, subcategory, or sub-subcategory) to jump directly to those products.
+- **Persistent Address**: City, location, and shopping mode are persisted to localStorage (`lista_shopping_city`, `lista_shopping_location`, `lista_shopping_mode`). Returning users skip the setup form and land directly on the store. First-time users see a full-page setup form; returning users can change their address via a compact modal (triggered from the location badge).
+- **Sidebar as Overlay**: In shopping mode, the sidebar (My Lists, Shopping Lists, Saved Recipes) is always an overlay panel, not a permanent column — maximizing store space. Accessed via the ☰ button in the header.
+
+#### Product Catalog
+- **Landing Page** (no category selected): Three content sections replace the old category grid:
+  1. **Promo Banner** — "Compare prices across all supermarkets" gradient banner
+  2. **"Worth Comparing"** (שווה להשוות) — 8 popular grocery products with the biggest price gaps between supermarkets. Each card shows product image, name, price range, savings amount (₪) and percentage (%). Products sourced by searching common Israeli staples (חלב, ביצים, לחם, גבינה, etc.) and picking those with the highest `max_price - min_price`.
+  3. **"Everyday Essentials"** (מוצרים יומיומיים) — 8 common staple products (לחם אחיד, חלב תנובה, ביצים, גבינה לבנה, etc.) with consistent card sizing.
+- **Category Selection**: Clicking a category (from nav bar or mega-menu) hides the landing banners and shows products. Clicking "All" returns to the landing page.
+- **3-Level Category Navigation**: Browse products by category › subcategory › sub_subcategory with horizontal chip navigation. Categories display custom SVG illustration icons (served from `/public/category-icons/`). All three levels are navigable from the mega-menu dropdown.
+- **Product Grid**: 2-col (mobile) / 3-col (tablet) / 4-col (desktop) card grid with product image, name, manufacturer + package size, price, and unit price
 - **Promo Badges**: `-X%` rose pill on cards and in the detail modal when `min_price < max_price`; shows savings amount ("חיסכון ₪X")
 - **Filter Panel**: Vegan-only toggle + allergen-free multi-select (גלוטן, חלב, ביצים, etc.) + on-sale toggle + price range (min/max ₪) inputs, with active chip summary row
-- **Sort Dropdown**: 5 sort options (default, price low→high, price high→low, name א→ת, name ת→א). Browse view sorts client-side on loaded products; search view passes `sort_by=min_price` to the API for price sorts, name sorts are client-side.
+- **Sort Dropdown**: 5 sort options (default: price low→high, price high→low, name א→ת, name ת→א). Browse view sorts client-side on loaded products; search view passes `sort_by=min_price` to the API for price sorts, name sorts are client-side.
 - **Chain Filter**: Toggleable supermarket pills in the Available Stores banner. Selecting one or more chains passes `chain=` to the browse/search API, filtering to products with prices at those chains with recalculated min/max prices. "All Stores" reset pill clears the filter.
-- **Search**: Debounced (300ms) full-text product search with result count; clears back to category view
+- **Search**: Available in both the header search bar and the catalog's inline search. Debounced (300ms) full-text product search with result count; clears back to category view.
 - **Product Detail Modal** (opens on card click):
   - Fixed-height image with product name/manufacturer overlaid on gradient
   - Labeled info table: Barcode, Manufacturer, Package Size (`unit_qty`), Category, Subcategory, Sub-subcategory (merged from browse + detail API responses)
@@ -112,8 +126,19 @@ The application supports both authenticated users (via Google Sign-In) and guest
   - Per-store promo detection via `effective_price < price`; shows "במבצע: [description]" with Tag icon
   - `+₪X.XX` price difference vs cheapest shown on every non-cheapest row
   - Sticky "הוסף" / "נוסף" button pinned to modal bottom
-- **Collapsible Cart Footer**: Collapsed bar shows item count + Compare button; expanded shows full list with qty/unit controls, product metadata (barcode, manufacturer, category breadcrumb), and price
-- **Available Stores Banner**: Interactive chip row between header and catalog showing which supermarket chains serve the user's selected city. Chips are toggleable — click to filter products to selected chains (API-side via `chain=` param). Online mode shows delivery fee (₪XX) or "איסוף" (collect) badge per chain; physical mode shows all chain names. Uses `checkDelivery()` API data.
+
+#### Cart
+- **Desktop — Left Sidebar Cart**: Fixed sidebar (w-72 / xl:w-80 / 2xl:w-96) pinned to the **left side** of the screen (uses `direction: ltr` on the flex container to force left positioning regardless of RTL). Shows cart items with product thumbnail (40x40), name, manufacturer, price, qty control, remove button. Footer shows estimated total (₪XX.XX) and "Compare Prices" button.
+- **Mobile — Bottom Bar**: Fixed bottom bar with item count, estimated total, and Compare Prices button (`lg:hidden`).
+- **Product Thumbnails**: Each cart item shows a small product image with ShoppingCart icon fallback.
+- **Estimated Total**: Sum of `min_price * amount` for all products (with weighted product estimation via `computeWeightedTotal()`).
+- **Weighted Items Disclaimer**: Amber banner shown when any weighted product is in cart.
+
+#### Available Stores Banner
+- Interactive chip row above the catalog showing which supermarket chains serve the user's selected city
+- Chips are toggleable — click to filter products to selected chains (API-side via `chain=` param)
+- Online mode shows delivery fee (₪XX) or "איסוף" (collect) badge per chain; physical mode shows all chain names
+- Uses `checkDelivery()` API data
 - **Load More**: Paginated product loading (24 per page) with Load More button
 
 ### 🤖 Product Discovery Assistant (AI Chat)
@@ -227,8 +252,9 @@ Lista/
 │   ├── ShareModal.tsx               # Share dialog
 │   ├── OrganizeListBreakdownModal.tsx  # Modal for viewing organize list categories & items
 │   ├── Sidebar.tsx                  # Navigation sidebar
-│   ├── ShoppingInputArea.tsx        # Shopping mode list builder with collapsible cart footer
+│   ├── ShoppingInputArea.tsx        # Shopping mode: catalog + left-side cart sidebar (desktop) / bottom bar (mobile)
 │   ├── ProductCatalogArea.tsx       # Supermarket-style browse/search with category nav & filters
+│   ├── CategoryNavBar.tsx           # Horizontal scrollable category bar with SVG icons (sticky below header)
 │   ├── ProductCard.tsx              # Product grid card with promo badge, unit_qty, unit pricing display
 │   ├── ProductDetailModal.tsx       # Rich product detail: info table, package size, unit pricing, sorted price table, per-store promos
 │   ├── BasketStrategyPicker.tsx    # Two-card strategy picker: single-store vs multi-store split
@@ -334,6 +360,11 @@ The root component that orchestrates the entire application.
 - status: OrganizeStatus                // Loading state
 - sidebarOpen: boolean                  // Mobile sidebar state
 - isShareModalOpen: boolean             // Share modal state
+- appMode: AppMode                      // 'organize' | 'shopping'
+- shoppingStep: ShoppingFlowStep        // 'setup' | 'build_list' | 'comparing' | 'results' | 'ready'
+- showLocationModal: boolean            // Location change modal visibility
+- headerSearchQuery: string             // Search query from the supermarket header
+- selectedNavCategory: string | null    // Active category in the horizontal nav bar
 ```
 
 **Key Functions**:
@@ -342,6 +373,50 @@ The root component that orchestrates the entire application.
 - `handleShare()` - Share list via email
 - `handleDeleteList()` - Remove list
 - `generateIconsForGroups()` - Async DALL-E icon generation
+- `handleAppModeSwitch()` - Switch between organize/shopping; preserves shopping state (city/location/mode) across switches
+- `handleSetupProceed()` - Fires delivery check and transitions to build_list step
+
+---
+
+### Header.tsx
+**Location**: `components/Header.tsx`
+
+Dual-mode header that changes layout based on `appMode`.
+
+**Organize Mode** (standard layout):
+- Logo + compact mode toggle (ארגון/קניות)
+- Language toggle, accessibility menu, auth button
+- Subtitle text with highlighted keyword
+
+**Shopping Mode** (supermarket-style sticky bar):
+- Sticky header (`sticky top-0 z-20 bg-white/95 backdrop-blur-sm`)
+- Layout: `[☰ Menu] [Mode Toggle] [Logo] [Search Bar] [📍 Location] [🛒 Cart] [Auth]`
+- **Search bar**: Controlled input synced to `headerSearchQuery` in App.tsx, forwarded to `ProductCatalogArea`
+- **Location badge**: Shows current city name, clickable to open location change modal
+- **Cart badge**: Shows item count, clickable (emerald when items present, slate when empty)
+- **Menu button**: Always visible, opens sidebar overlay (for My Lists access)
+- **Mobile location bar**: Full-width strip below main row showing city + "Change" link (visible on small screens only)
+
+---
+
+### CategoryNavBar.tsx
+**Location**: `components/CategoryNavBar.tsx`
+
+Horizontal scrollable category navigation strip with hover mega-menu, rendered below the header in shopping mode.
+
+- Fetches categories via `getCategories()` from `priceDbService.ts`
+- Sorts using `sortCategories()` from `ProductCatalogArea.tsx`
+- Each button: SVG icon (w-14/w-16) + category name, vertical layout
+- Active category: emerald-600 bg with white text and inverted icon
+- Hovered category: emerald-50 bg with emerald text
+- "All" button with 🏪 emoji resets to landing view
+- **Mega-Menu Dropdown**: On hover, shows a full-width dropdown with:
+  - Category icon + name header + "View all" link
+  - Grid of subcategories (bold headers) with their sub-subcategories listed underneath
+  - Click any subcategory or sub-subcategory to navigate directly to those products
+  - 200ms hover timeout prevents flicker when moving between items
+- Synced with `ProductCatalogArea` via `externalCategory`, `externalSubcategory`, and `externalSubSubcategory` props through App.tsx
+- `onSelect(category, subcategory?, subSubcategory?)` callback supports all three navigation levels
 
 ---
 
@@ -432,7 +507,7 @@ Individual list item with full editing capabilities.
 ### Sidebar.tsx
 **Location**: `components/Sidebar.tsx`
 
-Navigation panel for managing multiple lists.
+Navigation panel for managing multiple lists. Acts as the user's "personal area" for lists, recipes, and shopping lists.
 
 **Features**:
 - List of all user lists (sorted by update time)
@@ -442,6 +517,7 @@ Navigation panel for managing multiple lists.
 - Login prompt for guests
 - Responsive drawer on mobile
 - Close on outside click (mobile)
+- **`alwaysOverlay` prop**: When `true` (shopping mode), the sidebar is always a slide-out overlay — even on desktop — to maximize store space. Accessed via the ☰ button in the header.
 - **Consistent View + Use buttons** across all three sections:
   - **My Lists (Organize)**: View opens `OrganizeListBreakdownModal` (categories & items), Use navigates to the list
   - **Shopping Lists**: View opens `ShoppingListBreakdownModal` (products), Use navigates to the list
@@ -553,21 +629,32 @@ Small colored badge component showing recipe labels on items.
 The supermarket-style browse/search experience embedded inside `ShoppingInputArea`.
 
 **Views**:
-- `categories` — 3-column emoji grid of top-level categories (filters out numeric-only DB artefacts)
+- `categories` — Landing page with promo banner + "Worth Comparing" (biggest price gaps) + "Everyday Essentials" (common staples). No category grid — categories are in the nav bar mega-menu.
 - `browse` — product grid for a selected category/subcategory/sub_subcategory
 - `search` — product grid for a free-text query (debounced 300ms, min 2 chars)
 
 **Navigation**:
-- Category tile click → `browse` view; subcategory/sub_subcategory chips refine results
+- External navigation via `externalCategory`, `externalSubcategory`, `externalSubSubcategory`, and `externalSearchQuery` props (from header search bar and CategoryNavBar mega-menu)
+- Subcategory/sub_subcategory chips refine results within browse view
 - Breadcrumb buttons navigate back up the hierarchy
-- Clearing search returns to `categories` or `browse` depending on state
+- Clearing search or clicking "All" returns to `categories` (landing page)
+
+**Landing Page Sections** (categories view):
+- **"Worth Comparing"** (שווה להשוות): Searches 16 popular Israeli grocery terms (חלב, ביצים, לחם, etc.), picks products with images and highest `max_price - min_price`, displays top 8 in uniform 180px cards with savings badge (₪ amount + -X% pill)
+- **"Everyday Essentials"** (מוצרים יומיומיים): Searches 8 staple terms (לחם אחיד, חלב תנובה, ביצים, etc.), displays first result with image from each in matching 180px cards
 
 **Filters** (via `FilterPanel` dropdown):
 - 🌿 Vegan-only toggle (`is_vegan=true`)
 - Allergen-free multi-select (8 allergens: גלוטן, חלב, ביצים, אגוזים, בוטנים, סויה, דגים, שומשום)
 - Active filters shown as dismissible chips with allergen disclaimer
 
+**Sort**: Default sort is price low→high (`price_asc`). 5 options: price low→high, price high→low, default, name א→ת, name ת→א.
+
 **Pagination**: 24 products/page; Load More appends next page.
+
+**Exported Utilities** (used by `CategoryNavBar`):
+- `getCategoryIconSrc(name)` — resolves SVG icon path for a category
+- `sortCategories(cats)` — sorts categories in grocery-first order
 
 **Props**:
 ```typescript
@@ -579,6 +666,12 @@ The supermarket-style browse/search experience embedded inside `ShoppingInputAre
   disabled?: boolean;
   city?: string;
   storeType?: string;
+  selectedChains?: string[];
+  externalSearchQuery?: string;       // from header search bar
+  externalCategory?: string | null;    // from CategoryNavBar
+  externalSubcategory?: string | null; // from CategoryNavBar mega-menu
+  externalSubSubcategory?: string | null; // from CategoryNavBar mega-menu
+  onCategoryChange?: (cat: string | null) => void; // notify parent of internal category changes
 }
 ```
 
@@ -640,22 +733,37 @@ Full product details rendered as a portal modal.
 ### ShoppingInputArea.tsx
 **Location**: `components/ShoppingInputArea.tsx`
 
-Shopping mode list builder. Hosts `ProductCatalogArea` (browse/search), an **AI Assistant** toggle (Product Discovery Assistant from `agents_and_ai/product-discovery-assistant/`), and a collapsible cart footer. The "AI Assistant" pill button above the catalog swaps `ProductCatalogArea` for `SmartListPanel` — a conversational chat that helps users find products via natural language.
+Shopping mode main content area with a **two-column layout on desktop**: left-side cart sidebar + main catalog area. Hosts `ProductCatalogArea` (browse/search), an **AI Assistant** toggle, and the available stores banner.
 
-**Available Stores Banner** (between header and catalog):
+**Layout**:
+- **Desktop** (`lg+`): `flex` row — `[Cart Sidebar (w-72/xl:w-80/2xl:w-96)] [Main Content (flex-1)]`
+- **Mobile** (`<lg`): Single column with fixed bottom cart bar
+
+**Available Stores Banner** (above catalog in main content):
 - Renders when `deliveryCheck` prop is non-null (i.e., delivery API has responded)
 - Online mode: shows chains where `delivers || click_and_collect`; chips include delivery fee or "איסוף" badge
 - Physical mode: shows all chains (all represent stores in the city area)
 - Empty state: "לא נמצאו חנויות באזור שלך" message
 - Uses `SUPERMARKET_NAME_MAP` from `priceDbService` for Hebrew chain names
 
-**Cart footer**:
-- **Collapsed**: `🛒 N מוצרים` + Compare Prices button
-- **Expanded** (max-h-96, scrollable): per-product rows showing name, manufacturer, category breadcrumb (category › subcategory › sub_subcategory), barcode, price, qty/unit controls, remove button
-- **Estimated total for weighted items**: when a product `isWeightedProduct()`, shows "≈ ₪X.XX משוער" computed via `computeWeightedTotal()` based on cart amount/unit
-- **Weighted items disclaimer**: amber banner "מוצרים הנמכרים במשקל — המחיר הסופי עשוי להשתנות בהתאם לשקילה בפועל" shown when any weighted product is in cart
-- Clear All button inside expanded panel
-- Toggle via ChevronUp/Down
+**Desktop Cart Sidebar** (left side, sticky):
+- Fixed sidebar with full viewport height, sticky below header
+- Header: item count + clear all button
+- Scrollable item list with product thumbnail (40x40), name, manufacturer, price, qty control, remove button
+- Footer: estimated total (₪XX.XX) + "Compare Prices" button
+- Empty state: cart icon + "Start shopping!" message
+- Weighted items disclaimer when applicable
+
+**Mobile Cart Bar** (fixed bottom):
+- Compact bar with item count, estimated total (~₪XX), and Compare Prices button
+- `lg:hidden` — only shown on small screens
+
+**Estimated Total**: `sum(product.min_price * product.amount)` for all products, using `computeWeightedTotal()` for weighted items.
+
+**External Props** (from header/nav bar via App.tsx):
+- `externalSearchQuery` — synced from the header search bar
+- `externalCategory` — synced from the CategoryNavBar
+- `onCategoryChange` — callback to sync category selection back to nav bar
 
 ---
 
