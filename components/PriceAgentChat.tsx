@@ -117,32 +117,6 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
       return;
     }
 
-    // Handle cart_apply: copy cart script to clipboard, open rami-levy, show instructions
-    if (action.startsWith('cart_apply:')) {
-      const checkoutUrl = action.replace('cart_apply:', '');
-      const meta = session ? getSessionMeta(session.id) : undefined;
-      if (meta?.cartScript) {
-        try {
-          await navigator.clipboard.writeText(meta.cartScript);
-        } catch { /* clipboard may fail silently */ }
-        // Open rami-levy market page
-        window.open('https://www.rami-levy.co.il/he/online/market', '_blank');
-        // Add instruction message to chat
-        const instructionMsg: ChatMessageType = {
-          id: `instr-${Date.now()}`,
-          type: 'bot',
-          text: language === 'he'
-            ? '🛒 העגלה שלך מוכנה!\n\n1. באתר רמי לוי שנפתח, לחץ F12 (כלי מפתחים)\n2. עבור ללשונית Console\n3. הדבק (Ctrl+V) ולחץ Enter\n4. העגלה תתעדכן אוטומטית ✅'
-            : '🛒 Your cart is ready!\n\n1. On the Rami Levy site, press F12 (DevTools)\n2. Go to Console tab\n3. Paste (Ctrl+V) and press Enter\n4. Cart will update automatically ✅',
-          timestamp: Date.now(),
-        };
-        setMessages(prev => [...prev, instructionMsg]);
-      } else {
-        window.open(checkoutUrl, '_blank');
-      }
-      return;
-    }
-
     // Handle checkout URL action
     if (action.startsWith('checkout:')) {
       const url = action.replace('checkout:', '');

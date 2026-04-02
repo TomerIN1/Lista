@@ -90,7 +90,6 @@ interface PricePilotSessionMeta {
   checkoutUrl?: string;
   cartPersisted?: boolean;
   phase?: string;
-  cartScript?: string;
 }
 const sessionMeta = new Map<string, PricePilotSessionMeta>();
 
@@ -121,7 +120,6 @@ interface BuildCartApiResponse {
   session_id: string;
   user_id: string;
   messages: PricePilotMessage[];
-  cart_script?: string | null;
 }
 
 interface MessageApiResponse {
@@ -129,7 +127,6 @@ interface MessageApiResponse {
   phase?: string;
   cart_persisted: boolean;
   checkout_url?: string;
-  cart_script?: string | null;
 }
 
 /** Keywords that indicate the agent is asking the user to connect their account - disabled since auth is now in-chat OTP */
@@ -284,7 +281,6 @@ export async function startAgentSession(
     sessionMeta.set(session.id, {
       pricepilotUserId: apiResponse.user_id,
       storeName,
-      cartScript: apiResponse.cart_script || undefined,
     });
 
     // Convert API messages to ChatMessage format
@@ -338,25 +334,20 @@ export async function handleButtonAction(
     meta.phase = apiResponse.phase ?? meta.phase;
     meta.cartPersisted = apiResponse.cart_persisted;
     meta.checkoutUrl = apiResponse.checkout_url ?? meta.checkoutUrl;
-    if (apiResponse.cart_script) meta.cartScript = apiResponse.cart_script;
 
     const botMessages = mapApiMessages(apiResponse.messages, meta.storeName);
 
     // If checkout URL available and not already added by mapApiMessages, add button
-    // Use cart_apply action if we have a cart_script, otherwise regular checkout
     if (apiResponse.checkout_url && botMessages.length > 0) {
       const lastMsg = botMessages[botMessages.length - 1];
-      const hasCheckout = lastMsg.buttons?.some(b => b.action.startsWith('checkout:') || b.action.startsWith('cart_apply:'));
+      const hasCheckout = lastMsg.buttons?.some(b => b.action.startsWith('checkout:'));
       if (!hasCheckout) {
-        const action = meta.cartScript
-          ? `cart_apply:${apiResponse.checkout_url}`
-          : `checkout:${apiResponse.checkout_url}`;
         lastMsg.buttons = [
           ...(lastMsg.buttons || []),
           {
             id: 'checkout',
             label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
-            action,
+            action: `checkout:${apiResponse.checkout_url}`,
             variant: 'primary',
           },
         ];
@@ -427,25 +418,20 @@ export async function processUserMessage(
     meta.phase = apiResponse.phase ?? meta.phase;
     meta.cartPersisted = apiResponse.cart_persisted;
     meta.checkoutUrl = apiResponse.checkout_url ?? meta.checkoutUrl;
-    if (apiResponse.cart_script) meta.cartScript = apiResponse.cart_script;
 
     const botMessages = mapApiMessages(apiResponse.messages, meta.storeName);
 
     // If checkout URL available and not already added by mapApiMessages, add button
-    // Use cart_apply action if we have a cart_script, otherwise regular checkout
     if (apiResponse.checkout_url && botMessages.length > 0) {
       const lastMsg = botMessages[botMessages.length - 1];
-      const hasCheckout = lastMsg.buttons?.some(b => b.action.startsWith('checkout:') || b.action.startsWith('cart_apply:'));
+      const hasCheckout = lastMsg.buttons?.some(b => b.action.startsWith('checkout:'));
       if (!hasCheckout) {
-        const btnAction = meta.cartScript
-          ? `cart_apply:${apiResponse.checkout_url}`
-          : `checkout:${apiResponse.checkout_url}`;
         lastMsg.buttons = [
           ...(lastMsg.buttons || []),
           {
             id: 'checkout',
             label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
-            action: btnAction,
+            action: `checkout:${apiResponse.checkout_url}`,
             variant: 'primary',
           },
         ];
