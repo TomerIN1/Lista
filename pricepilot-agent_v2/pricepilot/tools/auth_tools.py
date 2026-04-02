@@ -430,6 +430,25 @@ async def browser_request_otp(
             )
             await email_input.press("Enter")
 
+        # --- Handle SMS method selection if it appears ---
+        try:
+            sms_btn = page.locator('text="הודעת SMS"').first
+            if await sms_btn.is_visible(timeout=3_000):
+                logger.info("SMS method selection screen for session %s", session_id)
+                await sms_btn.click()
+                await _asyncio.sleep(1)
+                for sel in ['button:has-text("שלח קוד אימות")', 'button:has-text("שלח קוד")', 'button:has-text("שלח")']:
+                    try:
+                        btn = page.locator(sel).first
+                        if await btn.is_visible(timeout=2_000):
+                            await btn.click()
+                            break
+                    except Exception:
+                        pass
+                await _asyncio.sleep(3)
+        except Exception:
+            pass  # No SMS selection screen — continue normally
+
         # --- Wait for OTP input to appear (= OTP was sent) ---
         otp_input = page.locator(OTP_INPUT_SELECTOR).first
 
@@ -631,6 +650,8 @@ async def browser_verify_otp(
 
         # --- Submit ---
         verify_btn = page.locator(
+            'button:has-text("אמת קוד"), '
+            'button:has-text("אמת"), '
             'button[type="submit"], '
             'button:has-text("אימות"), '
             'button:has-text("אישור"), '
@@ -878,45 +899,42 @@ async def browser_add_to_cart(
             session_id, store_id, len(items),
         )
 
-        # Execute the cart API call from within the browser.
-        # This is the key difference: the fetch() runs in the browser
-        # context with all cookies and auth headers automatically attached.
-        # The site's JS framework (Nuxt/Vue) sets up request interceptors
-        # that add the Authorization and ecomtoken headers from localStorage.
+        # Use $nuxt.$api.cart.addLineToCart() — the same Vue API that
+        # deleteCart() uses. This is an account-level operation that persists
+        # across browser sessions, unlike raw fetch('/api/v2/cart') which
+        # only affects the current session's cart.
+        # We call addLineToCart once per item since it takes a single item.
         result = await page.evaluate(
-            """async (payload) => {
+            """async (items) => {
                 try {
-                    // Read the auth token from localStorage (same as the site does)
-                    let token = null;
-                    try {
-                        const rlData = JSON.parse(localStorage.getItem('ramilevy'));
-                        if (rlData && rlData.authuser && rlData.authuser.user) {
-                            token = rlData.authuser.user.token;
-                        }
-                    } catch(e) {}
-
-                    const headers = {
-                        'Content-Type': 'application/json;charset=UTF-8',
-                        'locale': 'he',
-                        'Accept': 'application/json, text/plain, */*',
-                    };
-                    if (token) {
-                        headers['Authorization'] = 'Bearer ' + token;
-                        headers['ecomtoken'] = token;
+                    if (!window.$nuxt || !window.$nuxt.$api || !window.$nuxt.$api.cart ||
+                        typeof window.$nuxt.$api.cart.addLineToCart !== 'function') {
+                        return {
+                            ok: false,
+                            status: 0,
+                            error: 'addLineToCart not available',
+                        };
                     }
 
-                    const resp = await fetch('/api/v2/cart', {
-                        method: 'POST',
-                        headers: headers,
-                        body: JSON.stringify(payload),
-                        credentials: 'include',
-                    });
+                    const results = [];
+                    for (const [productId, quantity] of Object.entries(items)) {
+                        try {
+                            const r = await window.$nuxt.$api.cart.addLineToCart({
+                                id: parseInt(productId),
+                                quantity: parseInt(quantity),
+                                isClub: 0,
+                            });
+                            results.push({ productId, ok: true, result: r });
+                        } catch(e) {
+                            results.push({ productId, ok: false, error: e.message });
+                        }
+                    }
 
-                    const data = await resp.json();
+                    const allOk = results.every(r => r.ok);
                     return {
-                        ok: resp.ok,
-                        status: resp.status,
-                        data: data,
+                        ok: allOk,
+                        status: allOk ? 200 : 500,
+                        data: { status: allOk ? 200 : 500, items: results },
                     };
                 } catch(e) {
                     return {
@@ -926,7 +944,7 @@ async def browser_add_to_cart(
                     };
                 }
             }""",
-            cart_payload,
+            {str(k): int(v) for k, v in items.items()},
         )
 
         logger.info(

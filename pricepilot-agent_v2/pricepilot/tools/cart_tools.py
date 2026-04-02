@@ -1775,3 +1775,77 @@ async def browser_read_cart_items(
             "items": [],
             "item_count": 0,
         }
+
+
+async def generate_cart_script(
+    store_name: str,
+    store_id: str,
+    clear_existing: bool,
+    tool_context: ToolContext,
+) -> dict[str, Any]:
+    """Generate a JavaScript snippet for the Lista frontend to execute in the user's browser.
+
+    Due to session isolation, the headless browser cannot modify the user's real cart.
+    This tool generates JS commands that must be executed in the user's browser context
+    on rami-levy.co.il to actually clear/add items.
+
+    Args:
+        store_name: Chain name.
+        store_id: Branch ID.
+        clear_existing: Whether to clear old items first.
+
+    Returns:
+        Dict with JavaScript snippet and summary.
+    """
+    items_map = tool_context.state.get("cart_items_map", {})
+    resolved = tool_context.state.get("resolved_items", [])
+
+    if not items_map:
+        return {
+            "status": "error",
+            "message": "אין מוצרים להוספה. הפעל calculate_cart_preview קודם.",
+        }
+
+    # Build items dict string for JS
+    items_js = ", ".join(f"'{pid}': {qty}" for pid, qty in items_map.items())
+
+    # Build the combined script
+    parts = []
+    if clear_existing:
+        parts.append("await window.$nuxt.$api.cart.deleteCart();")
+
+    parts.append(
+        f"const t = JSON.parse(localStorage.getItem('ramilevy')).authuser.user.token;\n"
+        f"const d = new Date(Date.now()+86400000).toISOString().split('T')[0]+'T00:00:00.000Z';\n"
+        f"await fetch('/api/v2/cart', {{\n"
+        f"  method: 'POST',\n"
+        f"  headers: {{'Content-Type':'application/json;charset=UTF-8','locale':'he','Authorization':'Bearer '+t,'ecomtoken':t}},\n"
+        f"  body: JSON.stringify({{store:'{store_id}',isClub:0,supplyAt:d,items:{{{items_js}}},meta:null}}),\n"
+        f"  credentials: 'include'\n"
+        f"}});\n"
+        f"location.reload();"
+    )
+
+    combined = "(async () => {\n" + "\n".join(parts) + "\n})();"
+
+    # Build summary
+    item_lines = []
+    for item in resolved:
+        name = item.get("store_product_name") or item.get("lista_name", "?")
+        qty = item.get("quantity", 1)
+        item_lines.append(f"\u2022 {name} ({qty} \u05d9\u05d7')")
+
+    summary = "\u05d4\u05db\u05e0\u05ea\u05d9 \u05d0\u05ea \u05d4\u05e2\u05d2\u05dc\u05d4 \u05e9\u05dc\u05da:\n" + "\n".join(item_lines)
+    if clear_existing:
+        summary += "\n\n(\u05d4\u05de\u05d5\u05e6\u05e8\u05d9\u05dd \u05d4\u05d9\u05e9\u05e0\u05d9\u05dd \u05d9\u05d9\u05de\u05d7\u05e7\u05d5)"
+
+    tool_context.state["cart_script"] = combined
+    tool_context.state["cart_script_ready"] = True
+
+    return {
+        "status": "ready",
+        "script": combined,
+        "summary": summary,
+        "checkout_url": "https://www.rami-levy.co.il/he/dashboard/checkout",
+        "message": summary + "\n\n\u05d4\u05e1\u05e7\u05e8\u05d9\u05e4\u05d8 \u05de\u05d5\u05db\u05df \u05dc\u05d4\u05e4\u05e2\u05dc\u05d4 \u05d1\u05d3\u05e4\u05d3\u05e4\u05df \u05e9\u05dc\u05da.",
+    }

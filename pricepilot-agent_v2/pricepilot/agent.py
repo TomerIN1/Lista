@@ -37,6 +37,7 @@ from pricepilot.tools.cart_tools import (
     browser_remove_cart_item,
     browser_set_item_quantity,
     browser_read_cart_items,
+    generate_cart_script,
 )
 from pricepilot.tools.auth_tools import (
     browser_request_otp,
@@ -124,13 +125,19 @@ Ask the user in Hebrew:
 
 1. **See existing cart**: Call `browser_go_to_checkout` to navigate to the checkout
    page and read existing cart items.
+   IMPORTANT: The initial cart read may return 0 items due to API limitations.
+   Do NOT tell the user "אין לך מוצרים מקנייה קודמת" based on this result.
+   Instead say "אני בודק ומעדכן את העגלה שלך..." and proceed directly to step 3.
+   Only report the real cart contents AFTER `persist_cart_to_store` returns.
 
-2. **Handle old items**: If the cart has items from a previous session:
-   - Tell the user what's in the cart (item names, quantities).
+2. **Handle old items**: After `persist_cart_to_store` returns, check if the response
+   shows items that were NOT in your lista items list (these are old items).
+   If there are old items from a previous session:
+   - Tell the user what old items are in the cart (item names, quantities).
    - Ask: "יש לך מוצרים מקנייה קודמת. מה תרצה לעשות? להתחיל מחדש או להשאיר הכל?"
    - If user wants to start fresh: remove each old item one by one with
      `browser_remove_cart_item`. Call it once per item.
-   - If user wants to keep them: proceed to step 3.
+   - If user wants to keep them: proceed to step 4.
 
 3. **Add new items**: Call `persist_cart_to_store` to add the lista items via API.
    This adds items using the cart_items_map from calculate_cart_preview.
@@ -147,7 +154,7 @@ Ask the user in Hebrew:
    "מעולה! העגלה נשמרה בחשבון [store] שלך ✅
    [list ALL items from the items field with names and quantities]
    לחץ כאן כדי לעבור לקופה ולשלם:
-   {checkout_url}"
+   [checkout_url from tool response]"
 
 ### IMPORTANT: Each browser tool returns the current cart state after its action.
 Use this to verify each step succeeded before moving to the next. If a removal
@@ -155,6 +162,15 @@ or quantity change fails, try again — you have granular control now.
 
 ALWAYS show the complete final cart (ALL items) before the checkout link.
 Use EXACTLY the checkout_url from the tool response. NEVER invent a URL.
+
+## Cart Script Generation (MANDATORY — SILENT to user)
+ALWAYS call `generate_cart_script` after the user confirms the cart, REGARDLESS of whether
+browser persist succeeded or failed. Call it with clear_existing=True if the user wants
+to start fresh, or clear_existing=False if keeping old items.
+This is MANDATORY — never skip this step. The Lista frontend uses the script to ensure
+the cart is properly synced in the user's browser.
+Do NOT tell the user about this — the frontend handles it silently. NEVER mention scripts,
+technical limitations, or browser updates. Just show the cart summary and checkout link.
 
 - **If the user says no**: Present the results positively — the user got real-time pricing,
   promotions, and a complete price comparison. Then provide the checkout link:
@@ -179,7 +195,7 @@ resolve_products, calculate_cart_preview, get_checkout_info, search_product_by_b
 search_product_by_name, find_alternatives, modify_cart, list_supported_stores,
 read_existing_cart, clear_existing_cart, persist_cart_to_store,
 browser_go_to_checkout, browser_remove_cart_item, browser_set_item_quantity,
-browser_read_cart_items,
+browser_read_cart_items, generate_cart_script, cart_script,
 tool_context, session state, HTTP, endpoint, 401, 403, 422,
 Playwright, headless, browser session, BrowserContext.
 
@@ -248,6 +264,8 @@ When picking between product candidates:
 - existing_cart_count: Number of items in user's previous cart (set by browser_go_to_checkout or read_existing_cart)
 - cart_persisted: Whether cart has been saved (set by persist_cart_to_store)
 - checkout_url: URL for checkout page (set by persist_cart_to_store)
+- cart_script: JavaScript snippet for the Lista frontend to execute (set by generate_cart_script)
+- cart_script_ready: Whether the cart script has been generated (set by generate_cart_script)
 """
 
 # ------------------------------------------------------------------
@@ -281,6 +299,7 @@ pricepilot_agent = LlmAgent(
         browser_remove_cart_item,
         browser_set_item_quantity,
         browser_read_cart_items,
+        generate_cart_script,
         list_supported_stores,
     ],
 )

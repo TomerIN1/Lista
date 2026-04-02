@@ -25,6 +25,7 @@ from pricepilot.tools.cart_tools import (
     browser_remove_cart_item,
     browser_set_item_quantity,
     browser_read_cart_items,
+    generate_cart_script,
 )
 from pricepilot.tools.product_tools import (
     resolve_products,

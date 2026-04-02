@@ -90,6 +90,7 @@ class BuildCartResponse(BaseModel):
     session_id: str
     user_id: str
     messages: list[dict[str, Any]]
+    cart_script: str | None = None
 
 
 class MessageRequest(BaseModel):
@@ -107,6 +108,7 @@ class MessageResponse(BaseModel):
     phase: str | None = None
     cart_persisted: bool = False
     checkout_url: str | None = None
+    cart_script: str | None = None
 
 
 # ------------------------------------------------------------------
@@ -216,10 +218,17 @@ async def build_cart(request: CartBuildRequest):
 
     messages = await _run_agent(session_id, user_id, initial_message)
 
+    # Check session state for cart script
+    updated = await session_service.get_session(
+        app_name=APP_NAME, user_id=user_id, session_id=session_id,
+    )
+    cart_script = updated.state.get("cart_script") if updated else None
+
     return BuildCartResponse(
         session_id=session_id,
         user_id=user_id,
         messages=messages,
+        cart_script=cart_script,
     )
 
 
@@ -270,6 +279,7 @@ async def send_message(request: MessageRequest):
         phase=state.get("phase"),
         cart_persisted=state.get("cart_persisted", False),
         checkout_url=state.get("checkout_url"),
+        cart_script=state.get("cart_script"),
     )
 
 

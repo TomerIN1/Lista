@@ -3616,3 +3616,28 @@ reCAPTCHA sitekey `6LcbrMcqAAAAAG3zZqwyELvzuJlNHdW9Leq71AHy` is bound to rami-le
 **Version**: 5.3.0
 **Status**: Production Ready
 
+---
+
+## PricePilot v3: Deterministic Rami Levy Agent (March 2026)
+
+Built from scratch based on `supermarket_agent_architecture.md`, replacing the v2 approach with a deterministic agent that controls a real headless browser session.
+
+**Stack**: Google ADK with `gemini-2.5-flash`, Playwright headless browser, httpx for cart API calls.
+
+**Key tools**: OTP authentication flow (login modal via `$nuxt` Vue events, SMS code entry, JWT extraction), product search (POST /api/catalog), read_cart (Vuex state), add_items_to_cart, clear_cart. Remove item is work-in-progress (API returns 200 but doesn't persist).
+
+**Breakthrough**: Cart operations done via `page.evaluate` in the headless browser only affect the browser's session — not the user's real account. The solution: extract the JWT token and all cookies from the headless browser, then make cart API calls via httpx outside the browser. Add and clear operations are proven to persist to the user's real Rami Levy account.
+
+**Observer module**: Every tool call is logged with inputs, outputs, timing, and screenshots saved to `logs_and_pictures/sessions/{timestamp}/`.
+
+**Status**: Authentication, search, read cart, add items, and clear cart all working. Remove item not persisting yet. Local testing only via `adk web`. Cloud Run deployment and Lista frontend integration pending.
+
+**Location**: `pricepilot_agent_v3/`
+**Full details**: `pricepilot_agent_v3/rami_levi_agent_log.md`
+
+---
+
+**Last Updated**: March 31, 2026
+**Version**: 5.3.0
+**Status**: Production Ready
+
