@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>PricePilot - Popup Test</title>
+    <style>
+        body { font-family: Arial; max-width: 600px; margin: 40px auto; padding: 20px; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; }
+        .step { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .result { background: #e8f5e9; padding: 10px; margin: 5px 0; border-radius: 4px; white-space: pre-wrap; font-family: monospace; font-size: 12px; }
+        .error { background: #ffebee; }
+        h2 { color: #1976d2; }
+    </style>
+</head>
+<body>
+    <h1>🛒 PricePilot Popup Test</h1>
+    <p>Testing if we can control a rami-levy popup from a different origin.</p>
+
+    <div class="step">
+        <h2>Step 1: Open Rami Levy</h2>
+        <button onclick="openPopup()">Open Rami Levy Popup</button>
+        <div id="step1-result" class="result" style="display:none"></div>
+    </div>
+
+    <div class="step">
+        <h2>Step 2: Try Cross-Origin Access</h2>
+        <button onclick="tryCrossOrigin()">Try Read Popup URL</button>
+        <button onclick="tryPostMessage()">Try postMessage</button>
+        <div id="step2-result" class="result" style="display:none"></div>
+    </div>
+
+    <div class="step">
+        <h2>Step 3: Try Execute JS in Popup</h2>
+        <button onclick="tryEval()">Try eval in popup</button>
+        <button onclick="tryInjectScript()">Try inject script tag</button>
+        <div id="step3-result" class="result" style="display:none"></div>
+    </div>
+
+    <div class="step">
+        <h2>Step 4: Alternative — User Pastes Bookmarklet</h2>
+        <p>If cross-origin fails, the user drags this to their bookmark bar, then clicks it on rami-levy:</p>
+        <a href="javascript:void((async()=>{const t=JSON.parse(localStorage.getItem('ramilevy')).authuser.user.token;const r=await fetch('/api/v2/cart',{method:'POST',headers:{'Content-Type':'application/json;charset=UTF-8','locale':'he','Authorization':'Bearer '+t,'ecomtoken':t},body:JSON.stringify({store:'179',isClub:0,supplyAt:new Date(Date.now()+86400000).toISOString().split('T')[0]+'T00:00:00.000Z',items:{'305741':0},meta:null}),credentials:'include'});const d=await r.json();alert('Status: '+d.status+', Items: '+d.quantity);location.reload()})())"
+           style="padding:10px 20px; background:#1976d2; color:white; text-decoration:none; border-radius:4px; display:inline-block;">
+            🗑️ Remove פודינג (drag to bookmarks)
+        </a>
+        <div id="step4-result" class="result" style="display:none"></div>
+    </div>
+
+    <script>
+        let popup = null;
+
+        function log(stepId, msg, isError) {
+            const el = document.getElementById(stepId);
+            el.style.display = 'block';
+            el.className = 'result' + (isError ? ' error' : '');
+            el.textContent += msg + '\n';
+        }
+
+        function openPopup() {
+            popup = window.open('https://www.rami-levy.co.il/he/online/market', 'ramilevy', 'width=800,height=600');
+            log('step1-result', popup ? '✅ Popup opened' : '❌ Popup blocked');
+        }
+
+        function tryCrossOrigin() {
+            if (!popup) { log('step2-result', '❌ No popup open', true); return; }
+            try {
+                const url = popup.location.href;
+                log('step2-result', '✅ Can read URL: ' + url);
+            } catch(e) {
+                log('step2-result', '❌ Cross-origin blocked: ' + e.message, true);
+            }
+        }
+
+        function tryPostMessage() {
+            if (!popup) { log('step2-result', '❌ No popup open', true); return; }
+            try {
+                popup.postMessage({type: 'pricepilot', action: 'ping'}, 'https://www.rami-levy.co.il');
+                log('step2-result', '📤 postMessage sent (rami-levy won\'t respond — no listener)');
+            } catch(e) {
+                log('step2-result', '❌ postMessage failed: ' + e.message, true);
+            }
+        }
+
+        function tryEval() {
+            if (!popup) { log('step3-result', '❌ No popup open', true); return; }
+            try {
+                popup.eval('alert("hello from parent")');
+                log('step3-result', '✅ eval worked!');
+            } catch(e) {
+                log('step3-result', '❌ eval blocked: ' + e.message, true);
+            }
+        }
+
+        function tryInjectScript() {
+            if (!popup) { log('step3-result', '❌ No popup open', true); return; }
+            try {
+                const script = popup.document.createElement('script');
+                script.textContent = 'alert("injected!")';
+                popup.document.body.appendChild(script);
+                log('step3-result', '✅ Script injected!');
+            } catch(e) {
+                log('step3-result', '❌ Script injection blocked: ' + e.message, true);
+            }
+        }
+    </script>
+</body>
+</html>

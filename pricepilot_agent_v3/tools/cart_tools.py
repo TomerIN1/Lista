@@ -309,9 +309,10 @@ async def clear_cart(tool_context: ToolContext) -> dict:
 
 
 async def remove_cart_item(product_id: str, tool_context: ToolContext) -> dict:
-    """Remove a single item from the cart by setting its quantity to 0.
+    """Remove a single item from the cart using negative quantity.
 
-    Uses httpx with token + cookies (same approach as add_items_to_cart).
+    Uses the same httpx approach as add_items_to_cart but with negative quantity.
+    Key: must re-extract fresh cookies right before the call (session ownership).
     After removing, call read_cart to verify.
 
     Args:
@@ -323,8 +324,9 @@ async def remove_cart_item(product_id: str, tool_context: ToolContext) -> dict:
     if not product_id:
         return {"status": "error", "message": "product_id is required."}
 
+    pid = str(product_id)
     session_id = tool_context.state.get("session_id", "default")
-    observer.log_tool_start(session_id, "remove_cart_item", {"product_id": product_id})
+    observer.log_tool_start(session_id, "remove_cart_item", {"product_id": pid})
     page, error = await _get_authenticated_page(session_id)
     if error:
         observer.log_error(session_id, "remove_cart_item", error.get("message", "auth error"))
@@ -335,10 +337,23 @@ async def remove_cart_item(product_id: str, tool_context: ToolContext) -> dict:
         import httpx as _httpx
         from datetime import datetime, timedelta, timezone as _tz
 
-        pid = str(product_id)
+        # Read current quantity from Vuex so we can negate it
+        item_amount = await page.evaluate("""(pid) => {
+            try {
+                const cart = window.$nuxt.$store.state.cart;
+                if (cart && cart.items) {
+                    const item = cart.items.find(i => String(i.id) === pid);
+                    return item ? (item.amount || 1) : 1;
+                }
+                return 1;
+            } catch(e) { return 1; }
+        }""", pid)
+
+        neg_qty = -float(item_amount)
+        normalized = {pid: neg_qty}
         store = await _get_store_id(page)
 
-        # Same approach as add_items_to_cart: navigate, extract token+cookies, httpx
+        # Navigate to market page to get FRESH cookies (critical for session ownership)
         await page.goto("https://www.rami-levy.co.il/he/online/market", wait_until="domcontentloaded", timeout=30000)
         try:
             await page.wait_for_load_state("networkidle", timeout=15000)
@@ -346,7 +361,7 @@ async def remove_cart_item(product_id: str, tool_context: ToolContext) -> dict:
             await asyncio.sleep(3)
         await asyncio.sleep(2)
 
-        # Extract token
+        # Re-extract token FRESH (not stale from earlier)
         token = await page.evaluate("""() => {
             try { return JSON.parse(localStorage.getItem('ramilevy')).authuser.user.token; }
             catch(e) { return null; }
@@ -354,7 +369,7 @@ async def remove_cart_item(product_id: str, tool_context: ToolContext) -> dict:
         if not token:
             return {"status": "error", "message": "No auth token. Login required."}
 
-        # Extract cookies
+        # Re-extract cookies FRESH (critical: cookies change after navigation)
         manager = await BrowserManager.get_instance()
         bs = await manager.get_session(session_id)
         browser_cookies = await bs.context.cookies() if bs else []
@@ -372,49 +387,24 @@ async def remove_cart_item(product_id: str, tool_context: ToolContext) -> dict:
             "Cookie": cookie_str,
         }
 
-        # Read current cart from Vuex — we need ALL items to rebuild without the removed one
-        current_items = await page.evaluate("""() => {
-            try {
-                const cart = window.$nuxt.$store.state.cart;
-                if (cart && cart.items) return cart.items
-                    .map(i => ({id: String(i.id), amount: i.amount || 1, is_delivery: !!i.is_delivery}));
-                return [];
-            } catch(e) { return []; }
-        }""")
-
-        # Build new cart: ALL items EXCEPT the one to remove
-        # Quantities as strings with 2 decimal places (like the real website sends)
-        new_items = {}
-        for item in current_items:
-            if item["id"] == pid:
-                continue  # Skip the item to remove
-            amount = item["amount"]
-            new_items[item["id"]] = f"{float(amount):.2f}"
-
-        logger.info("Removing item %s — sending cart with %d remaining items", pid, len(new_items))
+        logger.info("Removing %s via negative qty=%s, store=%s, cookies=%d",
+                     pid, neg_qty, store, len(browser_cookies))
 
         async with _httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
             resp = await client.post(
                 "https://www.rami-levy.co.il/api/v2/cart",
                 headers=headers,
                 json={"store": str(store), "isClub": 0, "supplyAt": tomorrow,
-                      "items": new_items, "meta": None},
+                      "items": normalized, "meta": None},
             )
-
-        data = resp.json()
-        cart_items = [
-            {"id": i.get("id"), "name": i.get("name", ""), "qty": i.get("quantity", 1)}
-            for i in data.get("items", [])
-            if not i.get("is_delivery") and "משלוח" not in i.get("name", "")
-        ]
 
         await observer.capture_screenshot(session_id, page, "after_remove_item")
 
         ret = {
             "status": "success",
             "removed_id": pid,
-            "remaining_items": len(cart_items),
-            "message": f"Item removed. Cart now has {len(cart_items)} items. Call read_cart to verify.",
+            "neg_qty_sent": neg_qty,
+            "message": f"Item {pid} removed (qty {neg_qty}). Call read_cart to verify.",
         }
 
         observer.log_tool_end(session_id, "remove_cart_item", ret)
