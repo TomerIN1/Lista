@@ -179,6 +179,48 @@ pricepilot_agent_v3/
     └── test_server.py
 ```
 
+## Session Handoff Investigation (April 3, 2026)
+
+### The Core Realization
+ALL cart tools (add, remove, clear, read) work correctly within the agent's Playwright session. The screenshot confirms `deleteCart()` empties the cart to ₪0.00. The problem is that the user's browser has a DIFFERENT session — they can't see the agent's changes.
+
+### Approaches Researched
+
+#### 1. Browserbase (Remote Browser Service) — BLOCKED
+- Tested with free tier account
+- Creates a cloud browser that agent and user share via Live View iframe
+- Agent connects via `chromium.connect_over_cdp(session.connect_url)`
+- User gets a Live View URL to watch/control the same browser
+- **Result**: Cloudflare blocked the Browserbase browser IP — "Sorry, you have been blocked"
+- Rami Levy uses Cloudflare protection that detects cloud data center IPs
+- Could potentially work with Browserbase's residential proxy add-on (extra cost)
+
+#### 2. ChatGPT Operator Model (Inspiration)
+- ChatGPT Operator uses a virtual browser that pauses for user authentication
+- User takes control → enters password/OTP → returns control to agent
+- Session cookies persist after user login
+- This is exactly what Browserbase enables, but Cloudflare blocks it for Rami Levy
+
+#### 3. DIY Cookie Export/Import — NOT VIABLE
+- Playwright `storageState()` exports cookies + localStorage to JSON
+- But cross-origin restrictions prevent injecting cookies for rami-levy.co.il from Lista's domain
+- Would need a redirect through rami-levy.co.il which we can't create
+
+#### 4. Cross-Origin Popup — BLOCKED
+- Tested with test_popup.html
+- `window.eval()`, `postMessage`, script injection — ALL blocked by browser security
+- Cannot control a rami-levy.co.il popup from a different origin
+
+### Viable Options for Next Session
+
+1. **deleteCart() + re-add** — Both proven within agent's session. Clear all → re-add everything except removed item via httpx. Pragmatic, works now.
+2. **Browserbase with residential proxies** — May bypass Cloudflare. Extra cost ($$$).
+3. **Native app with WebView** — Full control over the browser, no cross-origin restrictions. Requires native iOS/Android app.
+4. **Browser extension** — Runs on rami-levy.co.il with full session access. Users must install it.
+
+### Priority Recommendation
+Ship with **deleteCart() + re-add** for now (both proven). Explore Browserbase residential proxies or native app for a premium experience later.
+
 ---
 
 **Created**: April 2, 2026
