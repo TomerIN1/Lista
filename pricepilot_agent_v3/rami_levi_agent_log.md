@@ -301,6 +301,25 @@ When user clicks minus/plus on the website, the browser sends ALL current items 
 | Redirect flow / cookie sharing | ❌ Impossible due to cross-origin cookie scoping |
 | Cloudflare Turnstile embedding | ❌ Cannot issue cf_clearance for another domain |
 | Reverse proxy | ❌ Legal risk, extreme maintenance burden |
+| CDP via browser-use (fresh profile) | ❌ fetch() in CDP page returns 200 but does not persist — same false positive as headless |
+| CDP via browser-use (real profile) | ❌ Chrome requires --user-data-dir for CDP, cannot use default profile — forced separate session |
+
+### CDP / browser-use Investigation (April 4, 2026)
+
+Tested [browser-use](https://github.com/browser-use/browser-use) CDP approach — connecting to user's Chrome via `--remote-debugging-port=9222` and running `fetch()` inside the page.
+
+**Test 1: Fresh profile (`--user-data-dir=/tmp/chrome-cdp-test`)**
+- CDP connected successfully, found Rami Levy tab, read cart (5 items)
+- Tried negative qty approach → API returned item with qty -0.5, did not remove
+- Tried SET mode (all items minus target) → API returned 200, showed 4 items, but after reload all 5 items returned
+- Same "false positive" behavior as headless browser — session cache updates but account state doesn't
+
+**Test 2: Real Chrome profile (no --user-data-dir)**
+- Chrome refuses CDP without `--user-data-dir`: "DevTools remote debugging requires a non-default data directory"
+- This is a Chrome security restriction — cannot be bypassed
+- Means CDP always forces a separate profile/session
+
+**Conclusion**: CDP does not solve the cart ownership problem. The issue is not about cf_clearance specifically — it's that any non-original session (whether headless Playwright, CDP with fresh profile, or httpx) cannot perform SET/MODIFY/DELETE operations on the cart. Only the session that "owns" the cart can modify it. CDP cannot attach to the owning session because Chrome requires a separate data directory.
 
 ### Current Working Architecture (MVP)
 
@@ -321,9 +340,10 @@ When user clicks minus/plus on the website, the browser sends ALL current items 
 6. Agent explains that remove/delete is not yet available for Rami Levy
 
 **Future options for full cart control:**
-1. Browserbase paid plan with IL residential proxies
-2. Native app with WebView
-3. Official API partnership with Rami Levy
+1. **Browser extension** — runs inside user's real browser session with full cookie/session access. Best remaining option for full cart control.
+2. Browserbase paid plan with IL residential proxies
+3. Native app with WebView
+4. Official API partnership with Rami Levy
 
 ---
 
