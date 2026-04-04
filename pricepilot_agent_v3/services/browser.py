@@ -8,12 +8,17 @@ Each user session gets its own browser context with isolated cookies/storage.
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from playwright.async_api import BrowserContext, Page, async_playwright
 
 from config import settings
+
+# Persist browser state across sessions so Rami Levy sees the same "device"
+STORAGE_STATE_PATH = Path(__file__).parent.parent / "storage_state.json"
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +85,17 @@ class BrowserManager:
             # Expired — close and recreate
             await self._close_session(session_id)
 
+        # Reuse saved storage state if available — preserves device identity
+        storage_kwarg = {}
+        if STORAGE_STATE_PATH.exists():
+            storage_kwarg["storage_state"] = str(STORAGE_STATE_PATH)
+            logger.info("Reusing saved storage state from %s", STORAGE_STATE_PATH)
+
         context = await self._browser.new_context(
             viewport={"width": 1280, "height": 800},
             locale="he-IL",
             timezone_id="Asia/Jerusalem",
+            **storage_kwarg,
         )
         page = await context.new_page()
         page.set_default_timeout(settings.playwright_timeout_ms)
@@ -101,6 +113,13 @@ class BrowserManager:
             bs.refresh_ttl()
             return bs
         return None
+
+    async def save_storage_state(self, session_id: str) -> None:
+        """Persist cookies + localStorage so the next session reuses the same device identity."""
+        bs = self._sessions.get(session_id)
+        if bs:
+            await bs.context.storage_state(path=str(STORAGE_STATE_PATH))
+            logger.info("Saved storage state to %s", STORAGE_STATE_PATH)
 
     async def close_session(self, session_id: str) -> None:
         """Close and remove a browser session."""

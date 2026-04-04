@@ -317,6 +317,9 @@ async def submit_otp(otp_code: str, tool_context: ToolContext) -> dict:
             tool_context.state["user_email"] = bs.user_email
             tool_context.state["auth_token"] = token
 
+            # Persist storage state so next session reuses same device identity
+            await manager.save_storage_state(session_id)
+
             result = {
                 "status": "success",
                 "message": "Login successful. User is authenticated.",

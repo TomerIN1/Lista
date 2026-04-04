@@ -221,7 +221,111 @@ ALL cart tools (add, remove, clear, read) work correctly within the agent's Play
 ### Priority Recommendation
 Ship with **deleteCart() + re-add** for now (both proven). Explore Browserbase residential proxies or native app for a premium experience later.
 
+## Deep Investigation: Cross-Device Cart Operations (April 4, 2026)
+
+### Storage State Persistence
+- Implemented `storage_state.json` in `BrowserManager` — persists cookies + localStorage across agent restarts
+- **Result**: No more "כניסה ממכשיר חדש" (new device) emails from Rami Levy ✅
+- Agent reuses same device identity across sessions
+- But does NOT solve cart ownership — agent's session is still a separate device
+
+### Cross-Device Cart Operations — Definitive Results
+
+| Operation | From Agent (httpx/Playwright) | From User's Browser Console |
+|-----------|-------------------------------|---------------------------|
+| ADD items (POST /api/v2/cart, positive qty) | ✅ Persists cross-device | ✅ Works |
+| REMOVE item (POST /api/v2/cart, negative qty only) | ❌ Does not persist | ✅ Works |
+| REMOVE item (full cart + negative qty) | ❌ Does not persist | ✅ Works |
+| Full-state replacement (POST all items minus removed) | ❌ Does not persist | ❌ Does not persist |
+| DELETE all (deleteCart() via $nuxt) | ❌ Does not persist | ✅ Works |
+| DELETE all (DELETE www-api.rami-levy.co.il/api/v2/site/cart/delete) | ❌ Returns 200 but does not persist | ✅ Works |
+
+### Root Cause: HttpOnly Cookies
+- **cf_clearance** (Cloudflare, HttpOnly) is the device/session identity cookie
+- JavaScript (`document.cookie`) cannot read HttpOnly cookies
+- The user's browser automatically sends cf_clearance with every request
+- httpx requests from agent do NOT have cf_clearance → treated as separate session
+- **Proven**: httpx with user's full cookies (including cf_clearance manually extracted from DevTools) successfully removes items ✅
+- **Proven**: httpx with just JWT token (no cookies) can only ADD, not remove/delete ❌
+
+### API Endpoints Discovered
+
+| Endpoint | Method | Domain | Purpose | Cross-device? |
+|----------|--------|--------|---------|--------------|
+| `/api/v2/cart` | POST | www.rami-levy.co.il | Add/modify cart items | ADD only |
+| `/api/catalog` | POST | www.rami-levy.co.il | Product search | N/A |
+| `/api/v2/site/cart/delete` | DELETE | www-api.rami-levy.co.il | Clear entire cart | ❌ |
+
+### Cart API Payload Format (from Network tab capture)
+When user clicks minus/plus on the website, the browser sends ALL current items with updated quantities:
+```json
+{
+  "store": "179",
+  "isClub": 0,
+  "supplyAt": "2026-04-05T00:00:00.000Z",
+  "items": {"6": "1.50", "19": "1.50", "164854": "1.00", "349596": "1.00"},
+  "meta": null
+}
+```
+- Items is `{product_id: quantity}` — both as **strings**
+- Includes delivery item (164854)
+- Quantities as strings with 2 decimal places ("1.00", "1.50")
+
+### Rami Levy Mobile App
+- App is a **WebView wrapper** loading `https://www.rami-levy.co.il/he?isApp=1`
+- Uses the same web API — no separate mobile API exists
+- SSL certificate pinning blocks mitmproxy interception
+- `?isApp=1` parameter does not change API behavior
+
+### rami-levy-mcp (github.com/shilomagen/rami-levy-mcp) Analysis
+- Uses same POST /api/v2/cart endpoint
+- Requires user to manually extract full cookie string from DevTools (including HttpOnly)
+- Cart API is described as "full-state replacement" but testing shows this does NOT work for cross-device remove
+- Only ADD works cross-device regardless of payload format
+
+### Approaches Tested & Ruled Out
+
+| Approach | Result |
+|----------|--------|
+| Storage state persistence | ✅ Eliminates new device emails, ❌ doesn't fix cart ownership |
+| Browserbase (free plan, no proxy) | ❌ Cloudflare blocks data center IPs |
+| Browserbase (paid plan, IL residential proxy) | Untested ($50/mo required) |
+| mitmproxy + Android app traffic capture | ❌ App is WebView with SSL pinning, no separate API |
+| Full-state replacement payload | ❌ Does not persist cross-device |
+| Full cart + negative qty payload | ❌ Does not persist cross-device from httpx |
+| www-api.rami-levy.co.il DELETE endpoint | ❌ Returns 200 but does not persist cross-device |
+| Browser extension | Ruled out — bad UX, doesn't work on mobile |
+| WebView in native app | Ruled out — overkill for single supermarket |
+| Bookmarklet | Ruled out — doesn't work on mobile |
+| Service Worker / Web Worker | ❌ Cannot read HttpOnly cookies by design |
+| Redirect flow / cookie sharing | ❌ Impossible due to cross-origin cookie scoping |
+| Cloudflare Turnstile embedding | ❌ Cannot issue cf_clearance for another domain |
+| Reverse proxy | ❌ Legal risk, extreme maintenance burden |
+
+### Current Working Architecture (MVP)
+
+**Agent capabilities:**
+- ✅ OTP login + storage state persistence (no repeated "new device" emails)
+- ✅ Product search (POST /api/catalog)
+- ✅ Read cart (via Vuex $nuxt.$store.state.cart.items)
+- ✅ ADD items to cart (httpx POST /api/v2/cart — persists cross-device)
+- ❌ Remove individual items (cannot persist cross-device)
+- ❌ Clear cart (cannot persist cross-device)
+
+**Recommended user flow:**
+1. User asks agent to build a shopping cart
+2. Agent searches products, compares prices
+3. Agent asks user to clear their existing cart on rami-levy.co.il ("click רוקן סל")
+4. Agent adds all desired items via httpx (persists to user's account)
+5. User opens rami-levy.co.il → sees the cart ready → checkout
+6. Agent explains that remove/delete is not yet available for Rami Levy
+
+**Future options for full cart control:**
+1. Browserbase paid plan with IL residential proxies
+2. Native app with WebView
+3. Official API partnership with Rami Levy
+
 ---
 
 **Created**: April 2, 2026
-**Last updated**: April 3, 2026
+**Last updated**: April 4, 2026
