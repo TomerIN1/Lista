@@ -96,3 +96,28 @@ pricepilot_extension/
     ├── icon48.png
     └── icon128.png
 ```
+
+## UX Updates (April 5, 2026)
+
+### Welcome Screen
+- Shows extension status: green (installed), red with install link (not installed), spinner (checking)
+- Start button is **blocked** if extension is not installed — cannot proceed without it
+- Rami Levy info shows "agent opens it automatically, no need to leave Lista"
+
+### Cart Display
+- Agent uses plain text format (no box-drawing characters — they broke in chat)
+- Each item shows: name, quantity, unit price, line total
+- Bottom shows: subtotal, delivery fee, grand total
+
+### Search Results
+- Each product shows: name, regular price, club/promo price, availability (in stock / out of stock)
+
+### User Flow
+- Agent opens Rami Levy tab automatically at session start via extension
+- User stays in Lista the entire time
+- At checkout, agent provides clickable link to Rami Levy checkout page
+
+### read_cart Enrichment
+- Now includes: promo_price, line_total, in_stock per item
+- Captures delivery_price from the delivery line item
+- Returns subtotal, delivery_price, total_with_delivery totals

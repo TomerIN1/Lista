@@ -235,6 +235,33 @@ Removed categories:
 - tool-level experimental `test_*` scripts
 - test HTML and screenshot artifacts
 
+## Browser-Bridge Migration (April 5, 2026)
+
+Replaced all Playwright-based tool execution with a Chrome extension bridge architecture.
+
+### What changed
+
+- **tools/browser_bridge.py** — new server-side coordination module (request/resolve with asyncio.Event)
+- **tools/cart_tools.py** — rewritten: calls `request_browser_action()` instead of Playwright
+- **tools/auth_tools.py** — rewritten: calls `request_browser_action()` instead of Playwright
+- **tools/handoff_tools.py** — rewritten: calls `request_browser_action()` instead of Playwright
+- **server.py** — merged SSE generator (ADK + bridge queues), new `/api/tool-response` endpoint
+- **config.py** — removed Playwright settings, added `browser_bridge_timeout`
+- **Dockerfile** — removed Playwright system deps
+- **pyproject.toml** — removed `playwright` dependency
+- **services/browser.py** — no longer used (kept for reference)
+
+### Why
+
+The headless Playwright browser was a separate device — Rami Levy's server rejected remove/update/clear because the HttpOnly `cf_clearance` cookie was tied to the originating device. The Chrome extension runs in the user's real browser, where `fetch()` includes all cookies automatically.
+
+### Agent instruction updates (April 5, 2026)
+
+- Cart display uses plain text format (no box-drawing characters)
+- Search results show price, club/promo price, and availability
+- Agent opens Rami Levy tab automatically at startup, tells user to stay in Lista
+- Checkout provides a clickable link — user clicks from Lista, no need to leave
+
 ## Current File-Level Map
 
 ```text
@@ -243,20 +270,19 @@ pricepilot_agent_v4/
 ├── config.py
 ├── server.py
 ├── services/
-│   ├── browser.py
-│   ├── observer.py
+│   ├── browser.py              (legacy, unused — kept for reference)
+│   ├── observer.py             (legacy, unused — kept for reference)
 │   └── __init__.py
 ├── tools/
 │   ├── __init__.py
-│   ├── auth_tools.py
-│   ├── cart_tools.py
-│   ├── handoff_tools.py
-│   ├── search_tools.py
-│   └── vuex_inspect.py
+│   ├── auth_tools.py           (browser-bridge)
+│   ├── browser_bridge.py       (request/resolve coordination)
+│   ├── cart_tools.py            (browser-bridge)
+│   ├── handoff_tools.py         (browser-bridge)
+│   └── search_tools.py          (cloud httpx, unchanged)
 ├── supermarket_agent_architecture.md
 ├── google_adk_builder_prompt.txt
 ├── rami_levi_agent_log.md
-├── storage_state.json
 ├── session_info.json
 ├── Dockerfile
 ├── pyproject.toml
@@ -266,8 +292,10 @@ pricepilot_agent_v4/
 ## Most Important Current Rules
 
 1. Use `initialize_shopping_session` as the preferred first tool.
-2. `open_rami_levy_browser` must land on `/he/online/market`.
+2. Agent opens Rami Levy tab automatically — user stays in Lista.
 3. OTP flow is `start_login` -> `submit_otp`.
 4. Always call `read_cart` after cart mutations.
-5. Checkout handoff means: continue in the already-open browser window.
-6. Frontend owns the welcome text; the agent owns the startup/bootstrap logic after the first real action.
+5. Show cart with plain text format: name, quantity, unit price, line total, subtotal, delivery, grand total.
+6. Search results must show price, club price, availability.
+7. Checkout provides clickable link — user clicks from Lista chat.
+8. Frontend owns the welcome text; the agent owns the startup/bootstrap logic after the first real action.

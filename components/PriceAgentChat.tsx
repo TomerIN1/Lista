@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Send, Bot, Loader2, ShoppingBag } from 'lucide-react';
+import { X, Send, Bot, Loader2, ShoppingBag, ExternalLink, Puzzle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import {
   AgentSession,
@@ -12,6 +12,7 @@ import {
   processUserMessage,
   getSession,
 } from '../services/agentService';
+import { detectExtension } from '../services/extensionBridge';
 import ChatMessage from './ChatMessage';
 
 interface PriceAgentChatProps {
@@ -70,15 +71,24 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [toolStatus, setToolStatus] = useState<string>('');
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [extensionInstalled, setExtensionInstalled] = useState<boolean | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize session when opened
+  // Check extension status when opened
   useEffect(() => {
-    if (isOpen && !session) {
-      initializeSession();
+    if (isOpen) {
+      detectExtension(1500).then(setExtensionInstalled);
     }
   }, [isOpen]);
+
+  // When user dismisses welcome → start session
+  useEffect(() => {
+    if (isOpen && !showWelcome && !session) {
+      initializeSession();
+    }
+  }, [isOpen, showWelcome]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -206,11 +216,12 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
   };
 
   const handleClose = () => {
-    // Reset state when closing
     setSession(null);
     setMessages([]);
     setInputText('');
     setToolStatus('');
+    setShowWelcome(true);
+    setExtensionInstalled(null);
     onClose();
   };
 
@@ -270,72 +281,185 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
           </div>
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              message={message}
-              onButtonClick={handleButtonClick}
-            />
-          ))}
+        {/* Welcome Screen */}
+        {showWelcome ? (
+          <div className="flex-1 overflow-y-auto p-5">
+            <div className="space-y-4">
+              {/* Welcome header */}
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-3">
+                  <Bot className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">
+                  {language === 'he' ? 'ברוכים הבאים ל-PricePilot' : 'Welcome to PricePilot'}
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  {language === 'he'
+                    ? 'הסוכן האוטומטי שבונה לך עגלת קניות ברמי לוי'
+                    : 'Your automated shopping cart builder for Rami Levy'}
+                </p>
+              </div>
 
-          {/* Tool activity indicator */}
-          {isLoading && toolStatus && (
-            <div className="flex items-center gap-2 text-indigo-600">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">{toolStatus}</span>
+              {/* What PricePilot does */}
+              <div className="bg-indigo-50 rounded-xl p-4 space-y-2">
+                <p className="text-sm font-semibold text-indigo-800">
+                  {language === 'he' ? 'מה PricePilot עושה?' : 'What does PricePilot do?'}
+                </p>
+                <ul className="text-sm text-indigo-700 space-y-1.5" dir={isRTL ? 'rtl' : 'ltr'}>
+                  <li>{language === 'he' ? '- מחפש מוצרים לפי רשימת הקניות שלך' : '- Searches products from your shopping list'}</li>
+                  <li>{language === 'he' ? '- מוסיף, מסיר ומעדכן פריטים בעגלה שלך' : '- Adds, removes, and updates items in your cart'}</li>
+                  <li>{language === 'he' ? '- מכין את העגלה לתשלום — אתה רק משלם' : '- Prepares your cart for checkout — you just pay'}</li>
+                </ul>
+              </div>
+
+              {/* Rami Levy info */}
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg font-bold text-green-700">RL</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-800">
+                    {language === 'he' ? 'רמי לוי אונליין' : 'Rami Levy Online'}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {language === 'he'
+                      ? 'הסוכן יפתח את רמי לוי אוטומטית — אין צורך לצאת מ-Lista'
+                      : 'The agent opens Rami Levy automatically — no need to leave Lista'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Extension status */}
+              {extensionInstalled === true && (
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-green-200 bg-green-50">
+                  <Puzzle className="w-5 h-5 flex-shrink-0 text-green-600" />
+                  <p className="text-sm text-green-700">
+                    {language === 'he' ? 'התוסף מותקן ומוכן' : 'Extension installed and ready'}
+                  </p>
+                </div>
+              )}
+
+              {extensionInstalled === false && (
+                <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Puzzle className="w-5 h-5 flex-shrink-0 text-red-500 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-red-800">
+                        {language === 'he' ? 'חובה להתקין את תוסף PricePilot' : 'PricePilot extension is required'}
+                      </p>
+                      <p className="text-xs text-red-600 mt-1">
+                        {language === 'he'
+                          ? 'בלי התוסף, PricePilot לא יכול לגשת לחשבון רמי לוי שלך ולבנות את העגלה. התוסף עובד ברקע ומאפשר לסוכן לחפש מוצרים, להוסיף ולהסיר פריטים מהעגלה שלך.'
+                          : 'Without the extension, PricePilot cannot access your Rami Levy account or build your cart. The extension works in the background and lets the agent search products, add and remove items from your cart.'}
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href="https://chrome.google.com/webstore"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
+                  >
+                    <Puzzle className="w-4 h-4" />
+                    {language === 'he' ? 'התקן את התוסף' : 'Install Extension'}
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+
+              {extensionInstalled === null && (
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <Loader2 className="w-5 h-5 flex-shrink-0 text-slate-400 animate-spin" />
+                  <p className="text-sm text-slate-500">
+                    {language === 'he' ? 'בודק תוסף...' : 'Checking extension...'}
+                  </p>
+                </div>
+              )}
+
+              {/* Start button — disabled if extension not installed */}
+              <button
+                onClick={() => setShowWelcome(false)}
+                disabled={extensionInstalled !== true}
+                className={`w-full py-3 rounded-xl font-medium text-sm transition-all ${
+                  extensionInstalled === true
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-[0.98]'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                {language === 'he' ? 'התחל לבנות עגלה' : 'Start Building Cart'}
+              </button>
             </div>
-          )}
-
-          {/* Generic loading indicator */}
-          {isLoading && !toolStatus && (
-            <div className="flex items-center gap-2 text-slate-500">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">
-                {language === 'he' ? 'מעבד...' : 'Processing...'}
-              </span>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="p-4 border-t border-slate-200 bg-white">
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                language === 'he'
-                  ? 'הקלד הודעה...'
-                  : 'Type a message...'
-              }
-              className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-              disabled={isLoading}
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={!inputText.trim() || isLoading}
-              className={`p-3 rounded-xl transition-all ${
-                inputText.trim() && !isLoading
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
-                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              }`}
-            >
-              <Send className="w-5 h-5" />
-            </button>
           </div>
-          <p className="text-[10px] text-slate-400 mt-2 text-center">
-            {language === 'he'
-              ? 'PricePilot - מחירים טובים יותר בכל מקום'
-              : 'PricePilot - Better prices everywhere'}
-          </p>
-        </div>
+        ) : (
+          <>
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((message) => (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  onButtonClick={handleButtonClick}
+                />
+              ))}
+
+              {/* Tool activity indicator */}
+              {isLoading && toolStatus && (
+                <div className="flex items-center gap-2 text-indigo-600">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">{toolStatus}</span>
+                </div>
+              )}
+
+              {/* Generic loading indicator */}
+              {isLoading && !toolStatus && (
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">
+                    {language === 'he' ? 'מעבד...' : 'Processing...'}
+                  </span>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Area */}
+            <div className="p-4 border-t border-slate-200 bg-white">
+              <div className="flex gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={
+                    language === 'he'
+                      ? 'הקלד הודעה...'
+                      : 'Type a message...'
+                  }
+                  className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                  disabled={isLoading}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!inputText.trim() || isLoading}
+                  className={`p-3 rounded-xl transition-all ${
+                    inputText.trim() && !isLoading
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                      : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 text-center">
+                {language === 'he'
+                  ? 'PricePilot - מחירים טובים יותר בכל מקום'
+                  : 'PricePilot - Better prices everywhere'}
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

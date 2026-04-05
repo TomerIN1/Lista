@@ -147,12 +147,29 @@ async function handleReadCart(tabId) {
       if (window.$nuxt && window.$nuxt.$store && window.$nuxt.$store.state.cart) {
         const cart = window.$nuxt.$store.state.cart;
         if (cart.items && Array.isArray(cart.items)) {
+          let subtotal = 0;
+          let deliveryPrice = 0;
+
           const items = cart.items
-            .filter(i => !i.is_delivery && i.name !== 'מחיר משלוח')
+            .filter(i => {
+              // Capture delivery price but exclude from items list
+              if (i.is_delivery || i.name === 'מחיר משלוח') {
+                deliveryPrice = (i.price && i.price.finalPrice) || i.sumPrice || i.price?.price || 0;
+                return false;
+              }
+              return true;
+            })
             .map(i => {
               const isWeighted = !!(i.prop && (i.prop.sw_shakil || i.prop.by_kilo));
               const amount = i.amount || 1;
               const multiplication = i.multiplication || 1;
+              const unitPrice = i.price && i.price.price ? i.price.price : (typeof i.price === 'number' ? i.price : 0);
+              const lineTotal = i.price && i.price.finalPrice ? i.price.finalPrice : (i.sumPrice || 0);
+              const promoPrice = i.price && i.price.club_price ? i.price.club_price : null;
+              const inStock = i.in_stock !== undefined ? i.in_stock : true;
+
+              subtotal += lineTotal;
+
               return {
                 id: i.id,
                 name: i.name || '',
@@ -161,14 +178,27 @@ async function handleReadCart(tabId) {
                 multiplication: multiplication,
                 is_weighted: isWeighted,
                 quantity_display: isWeighted ? amount + ' ק"ג' : amount + ' יחידות',
-                price: i.price && i.price.price ? i.price.price : (typeof i.price === 'number' ? i.price : 0),
-                total_price: i.price && i.price.finalPrice ? i.price.finalPrice : (i.sumPrice || 0),
+                unit_price: unitPrice,
+                promo_price: promoPrice,
+                line_total: lineTotal,
+                in_stock: inStock,
               };
             });
-          return { status: 'success', items, item_count: items.length, message: 'Cart has ' + items.length + ' item(s).' };
+
+          return {
+            status: 'success',
+            items,
+            item_count: items.length,
+            subtotal: subtotal,
+            delivery_price: deliveryPrice,
+            total_with_delivery: subtotal + deliveryPrice,
+            message: items.length > 0
+              ? 'Cart has ' + items.length + ' item(s). Subtotal: ₪' + subtotal.toFixed(2)
+              : 'Cart is empty.',
+          };
         }
       }
-      return { status: 'success', items: [], item_count: 0, message: 'Cart is empty.' };
+      return { status: 'success', items: [], item_count: 0, subtotal: 0, delivery_price: 0, total_with_delivery: 0, message: 'Cart is empty.' };
     } catch (e) {
       return { status: 'error', message: 'Failed to read cart: ' + e.message };
     }

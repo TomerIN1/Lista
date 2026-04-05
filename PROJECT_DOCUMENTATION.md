@@ -3725,9 +3725,19 @@ The extension architecture is designed for multiple supermarkets:
 - **Store adapter layer** (one per store): store-specific tool implementations in `background.js`
 - Adding a new supermarket = adding new tool handlers + manifest URL patterns
 
+### UX Flow (April 5, 2026)
+
+1. **Welcome screen** in Lista shows PricePilot intro, extension status (blocks start if not installed), and Rami Levy info
+2. User clicks "Start Building Cart" → agent calls `initialize_shopping_session` → extension opens Rami Levy tab automatically
+3. Agent tells user: "I opened Rami Levy — stay here, I'll handle everything"
+4. Agent shows current cart with full details (name, qty, unit price, line total, subtotal, delivery, grand total)
+5. Agent searches products showing price, club/promo price, and availability
+6. Agent adds/removes items and verifies with `read_cart` after each mutation
+7. At checkout, agent provides clickable link to Rami Levy checkout — user clicks from Lista chat
+
 ### Status
 
-End-to-end connection working. Cart reading confirmed. Add/remove/auth flows need further testing.
+End-to-end working: cart reading, adding items, search with prices. Welcome screen with extension detection. Plain text cart formatting. Auth and remove flows need further testing.
 
 **Location**: `pricepilot_agent_v4/`, `pricepilot_extension/`
 **Full details**: `pricepilot_extension/pricepilot_extension_log.md`
@@ -3735,6 +3745,6 @@ End-to-end connection working. Cart reading confirmed. Add/remove/auth flows nee
 ---
 
 **Last Updated**: April 5, 2026
-**Version**: 5.4.0
+**Version**: 5.4.1
 **Status**: Production Ready
 

@@ -68,20 +68,24 @@ async def search_products(query: str, store_id: int = 0, max_results: int = 5) -
         prop = item.get("prop", {})
         is_weighted = bool(prop.get("sw_shakil") or prop.get("by_kilo"))
         multiplication = item.get("multiplication", 1)
+        regular_price = item.get("price1") or item.get("price2") or item.get("price", 0)
+        club_price = item.get("club_price") or item.get("price2") or None
+        # If club_price equals regular_price, no promo
+        if club_price and club_price >= regular_price:
+            club_price = None
+
         product = {
             "product_id": item.get("id", ""),
             "barcode": str(item.get("barcode", "")),
             "name": item.get("name", ""),
-            "price": item.get("price1") or item.get("price2") or item.get("price", 0),
+            "price": regular_price,
+            "club_price": club_price,  # None if no promo, lower price if club member
+            "has_promo": club_price is not None and club_price < regular_price,
             "in_stock": item.get("in_stock", True),
             "is_weighted": is_weighted,
             "multiplication": multiplication,
             "unit_info": f"{'per kg, step=' + str(multiplication) + 'kg' if is_weighted else 'per unit'}",
         }
-        if "store_price" in item:
-            product["store_price"] = item["store_price"]
-        if "club_price" in item:
-            product["club_price"] = item["club_price"]
         products.append(product)
 
     if not products:
