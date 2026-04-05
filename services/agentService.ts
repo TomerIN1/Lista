@@ -7,7 +7,12 @@ import {
   Language,
   StoreCategory,
 } from '../types';
-import { looksLikeJwt } from './storeAuthService';
+import {
+  detectExtension,
+  isExtensionInstalled,
+  sendToExtension,
+  onExtensionResponse,
+} from './extensionBridge';
 
 // ============================================
 // Configuration
@@ -77,19 +82,25 @@ function createUserMessage(text: string): ChatMessage {
   };
 }
 
+function createSystemMessage(text: string): ChatMessage {
+  return {
+    id: generateId(),
+    type: 'system' as ChatMessage['type'],
+    text,
+    timestamp: Date.now(),
+  };
+}
+
 // ============================================
 // Session Management
 // ============================================
 
 const sessions = new Map<string, AgentSession>();
 
-/** Extra PricePilot v2 state per session */
+/** PricePilot v4 metadata per session */
 interface PricePilotSessionMeta {
   pricepilotUserId: string;
   storeName?: string;
-  checkoutUrl?: string;
-  cartPersisted?: boolean;
-  phase?: string;
 }
 const sessionMeta = new Map<string, PricePilotSessionMeta>();
 
@@ -107,123 +118,179 @@ function updateSession(session: AgentSession): void {
 }
 
 // ============================================
-// PricePilot v2 API Communication
+// PricePilot v4 API Communication (SSE)
 // ============================================
 
-interface PricePilotMessage {
-  role: string;   // "model" | "user"
-  text: string;
-  author: string;
+/** SSE event from the v4 /api/chat endpoint */
+interface ChatSSEEvent {
+  type: 'text' | 'tool_call' | 'tool_result' | 'state_update' | 'done' | 'error' | 'browser_action_request';
+  agent?: string;
+  text?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  delta?: Record<string, unknown>;
+  message?: string;
+  turn_complete?: boolean;
+  request_id?: string;
 }
 
-interface BuildCartApiResponse {
-  session_id: string;
-  user_id: string;
-  messages: PricePilotMessage[];
-}
-
-interface MessageApiResponse {
-  messages: PricePilotMessage[];
-  phase?: string;
-  cart_persisted: boolean;
-  checkout_url?: string;
-}
-
-/** Keywords that indicate the agent is asking the user to connect their account - disabled since auth is now in-chat OTP */
-const LOGIN_HINT_PATTERNS: string[] = [];
-
-/** Keywords that indicate a checkout URL is present */
-const CHECKOUT_HINT_PATTERNS = ['לקופה', 'checkout', 'להזמין', 'לשלם'];
-
-/**
- * Convert PricePilot v2 API messages to ChatMessage format.
- * Automatically adds login/checkout buttons based on message content.
- */
-function mapApiMessages(apiMessages: PricePilotMessage[], storeName?: string): ChatMessage[] {
-  return apiMessages
-    .filter((msg) => msg.role === 'model')
-    .map((msg) => {
-      const buttons: ChatButton[] = [];
-      const textLower = msg.text.toLowerCase();
-
-      // Detect if agent is asking about account connection → add login button
-      const mentionsLogin = LOGIN_HINT_PATTERNS.some((p) => textLower.includes(p));
-      const mentionsCheckout = CHECKOUT_HINT_PATTERNS.some((p) => textLower.includes(p));
-
-      if (mentionsLogin && storeName) {
-        buttons.push({
-          id: 'login-store',
-          label: `התחבר ל-${storeName}`,
-          action: `login:${storeName}`,
-          variant: 'primary',
-        });
-      }
-
-      // Detect checkout URLs in text and add a checkout button
-      const urlMatch = msg.text.match(/https?:\/\/[^\s]+/);
-      if (urlMatch && mentionsCheckout) {
-        buttons.push({
-          id: 'checkout',
-          label: 'עבור לקופה',
-          action: `checkout:${urlMatch[0]}`,
-          variant: 'primary',
-        });
-      }
-
-      return {
-        id: generateId(),
-        type: 'bot' as const,
-        text: msg.text,
-        timestamp: Date.now(),
-        buttons: buttons.length > 0 ? buttons : undefined,
-      };
-    });
-}
-
-async function apiBuildCart(
-  storeName: string,
+/** Create a new v4 agent session */
+async function apiCreateSession(
+  userId: string,
   storeId: string,
-  items: AgentShoppingItem[],
-  userCity?: string,
-  authToken?: string,
-): Promise<BuildCartApiResponse> {
-  const res = await fetch(`${PRICEPILOT_API_URL}/api/build-cart`, {
+): Promise<{ session_id: string; user_id: string }> {
+  const res = await fetch(`${PRICEPILOT_API_URL}/api/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      store_name: storeName,
-      store_id: storeId,
-      items: items.map((item) => ({
-        name: item.name,
-        barcode: item.barcode || '',
-        quantity: item.quantity,
-      })),
-      user_city: userCity,
-      auth_token: authToken,
-    }),
+    body: JSON.stringify({ user_id: userId, store_id: parseInt(storeId, 10) || 331 }),
   });
   if (!res.ok) throw new Error(`PricePilot API error: ${res.status}`);
   return res.json();
 }
 
-async function apiSendMessage(
+/**
+ * Send a chat message to v4 and consume the SSE stream.
+ * Calls onBotMessage for each text response from the agent.
+ * Calls onToolActivity for tool call/result events (optional, for status display).
+ *
+ * When the server emits a `browser_action_request` event, this function
+ * forwards it to the Chrome extension and POSTs the result back to the
+ * server's /api/tool-response endpoint to unblock the agent.
+ */
+async function apiStreamChat(
   sessionId: string,
   userId: string,
   message: string,
-  authToken?: string,
-): Promise<MessageApiResponse> {
-  const res = await fetch(`${PRICEPILOT_API_URL}/api/message`, {
+  onBotMessage: (msg: ChatMessage) => void,
+  onToolActivity?: (toolName: string, type: 'call' | 'result') => void,
+): Promise<void> {
+  const res = await fetch(`${PRICEPILOT_API_URL}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      session_id: sessionId,
-      user_id: userId,
-      message,
-      auth_token: authToken,
-    }),
+    body: JSON.stringify({ session_id: sessionId, user_id: userId, message }),
   });
   if (!res.ok) throw new Error(`PricePilot API error: ${res.status}`);
-  return res.json();
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  // Set up extension response listener for this stream
+  const cleanupExtension = onExtensionResponse(async (requestId, result) => {
+    try {
+      await fetch(`${PRICEPILOT_API_URL}/api/tool-response/${sessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestId, result }),
+      });
+    } catch (err) {
+      console.error('Failed to post tool response:', err);
+    }
+  });
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) continue;
+
+        let event: ChatSSEEvent;
+        try {
+          event = JSON.parse(jsonStr);
+        } catch {
+          continue;
+        }
+
+        switch (event.type) {
+          case 'text':
+            if (event.text) {
+              onBotMessage(createBotMessage(event.text));
+            }
+            break;
+          case 'tool_call':
+            if (event.tool && onToolActivity) {
+              onToolActivity(event.tool, 'call');
+            }
+            break;
+          case 'tool_result':
+            if (event.tool && onToolActivity) {
+              onToolActivity(event.tool, 'result');
+            }
+            break;
+          case 'browser_action_request':
+            // Forward to Chrome extension
+            if (event.request_id && event.tool) {
+              // Detect extension (async ping/pong, cached after first success)
+              const extensionReady = await detectExtension();
+              if (extensionReady) {
+                sendToExtension(event.request_id, event.tool, event.args || {});
+              } else {
+                // Extension not installed — post error immediately to unblock the tool
+                try {
+                  await fetch(`${PRICEPILOT_API_URL}/api/tool-response/${sessionId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      request_id: event.request_id,
+                      result: {
+                        status: 'error',
+                        message: 'PricePilot extension is not installed. Please install it to continue.',
+                      },
+                    }),
+                  });
+                } catch (err) {
+                  console.error('Failed to post extension-not-installed error:', err);
+                }
+              }
+            }
+            break;
+          case 'error':
+            if (event.message) {
+              onBotMessage(createBotMessage(event.message));
+            }
+            break;
+          case 'done':
+            // Stream complete
+            break;
+        }
+      }
+    }
+  } finally {
+    cleanupExtension();
+  }
+}
+
+// ============================================
+// Format Shopping List for Agent
+// ============================================
+
+function formatShoppingListForAgent(
+  items: AgentShoppingItem[],
+  storeName: string,
+  language: Language,
+): string {
+  const listLines = items.map((item, i) => {
+    let line = `${i + 1}. ${item.name}`;
+    if (item.quantity > 1) line += ` x${item.quantity}`;
+    if (item.unit) line += ` (${item.unit})`;
+    return line;
+  });
+
+  if (language === 'he') {
+    return `הנה רשימת הקניות שלי ב${storeName}:\n${listLines.join('\n')}`;
+  }
+  return `Here is my shopping list for ${storeName}:\n${listLines.join('\n')}`;
 }
 
 // ============================================
@@ -236,8 +303,9 @@ export interface AgentResponse {
 }
 
 /**
- * Start a new agent session.
- * Calls PricePilot v2 /api/build-cart and returns initial messages.
+ * Start a new agent session with PricePilot v4.
+ * Creates a session, then streams the first message (the shopping list) to the agent.
+ * Messages are delivered to the UI in real-time via onBotMessage callback.
  */
 export async function startAgentSession(
   userId: string,
@@ -247,6 +315,8 @@ export async function startAgentSession(
   storeName?: string,
   storeId?: string,
   userCity?: string,
+  onBotMessage?: (msg: ChatMessage) => void,
+  onToolActivity?: (toolName: string, type: 'call' | 'result') => void,
 ): Promise<AgentResponse> {
   const now = Date.now();
 
@@ -256,13 +326,8 @@ export async function startAgentSession(
   }
 
   try {
-    const effectiveStoreId = storeId || STORE_DEFAULT_IDS[storeName] || '';
-    const apiResponse = await apiBuildCart(
-      storeName,
-      effectiveStoreId,
-      groceryList,
-      userCity,
-    );
+    const effectiveStoreId = storeId || STORE_DEFAULT_IDS[storeName] || '331';
+    const apiResponse = await apiCreateSession(userId, effectiveStoreId);
 
     // Create local session for state tracking
     const session: AgentSession = {
@@ -277,19 +342,32 @@ export async function startAgentSession(
       updatedAt: now,
     };
 
-    // Store PricePilot v2 metadata
+    // Store metadata
     sessionMeta.set(session.id, {
       pricepilotUserId: apiResponse.user_id,
       storeName,
     });
 
-    // Convert API messages to ChatMessage format
-    const newMessages = mapApiMessages(apiResponse.messages, storeName);
-
-    session.messages.push(...newMessages);
     sessions.set(session.id, session);
 
-    return { session, newMessages };
+    const collectedMessages: ChatMessage[] = [];
+
+    // Send the shopping list as the first message
+    const firstMessage = formatShoppingListForAgent(groceryList, storeName, language);
+    await apiStreamChat(
+      session.id,
+      apiResponse.user_id,
+      firstMessage,
+      (msg) => {
+        session.messages.push(msg);
+        collectedMessages.push(msg);
+        onBotMessage?.(msg);
+      },
+      onToolActivity,
+    );
+
+    updateSession(session);
+    return { session, newMessages: collectedMessages };
   } catch (error) {
     console.error('Failed to create PricePilot session, falling back to local:', error);
     return startAgentSessionLocal(userId, listId, groceryList, language);
@@ -297,83 +375,16 @@ export async function startAgentSession(
 }
 
 /**
- * Process a button action from the user.
- * Sends the action as a text message to PricePilot v2 /api/message.
- */
-export async function handleButtonAction(
-  sessionId: string,
-  action: string,
-  language: Language
-): Promise<AgentResponse> {
-  const session = getSession(sessionId);
-  if (!session) {
-    throw new Error('Session not found');
-  }
-
-  const meta = sessionMeta.get(sessionId);
-  const newMessages: ChatMessage[] = [];
-
-  // Add user action as a message locally
-  const userMessage = createUserMessage(action);
-  session.messages.push(userMessage);
-  newMessages.push(userMessage);
-
-  // If no PricePilot metadata, use local fallback
-  if (!meta) {
-    return handleButtonActionLocal(session, action, language, newMessages);
-  }
-
-  try {
-    const apiResponse = await apiSendMessage(
-      sessionId,
-      meta.pricepilotUserId,
-      action,
-    );
-
-    // Update metadata
-    meta.phase = apiResponse.phase ?? meta.phase;
-    meta.cartPersisted = apiResponse.cart_persisted;
-    meta.checkoutUrl = apiResponse.checkout_url ?? meta.checkoutUrl;
-
-    const botMessages = mapApiMessages(apiResponse.messages, meta.storeName);
-
-    // If checkout URL available and not already added by mapApiMessages, add button
-    if (apiResponse.checkout_url && botMessages.length > 0) {
-      const lastMsg = botMessages[botMessages.length - 1];
-      const hasCheckout = lastMsg.buttons?.some(b => b.action.startsWith('checkout:'));
-      if (!hasCheckout) {
-        lastMsg.buttons = [
-          ...(lastMsg.buttons || []),
-          {
-            id: 'checkout',
-            label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
-            action: `checkout:${apiResponse.checkout_url}`,
-            variant: 'primary',
-          },
-        ];
-      }
-    }
-
-    session.messages.push(...botMessages);
-    newMessages.push(...botMessages);
-    updateSession(session);
-
-    return { session, newMessages };
-  } catch (error) {
-    console.error('Failed to send action via PricePilot API:', error);
-    return handleButtonActionLocal(session, action, language, newMessages);
-  }
-}
-
-/**
  * Process a text message from the user.
- * Sends to PricePilot v2 /api/message.
+ * Streams agent responses in real-time via onBotMessage callback.
  */
 export async function processUserMessage(
   sessionId: string,
   text: string,
   language: Language,
-  authToken?: string,
+  _authToken?: string,
+  onBotMessage?: (msg: ChatMessage) => void,
+  onToolActivity?: (toolName: string, type: 'call' | 'result') => void,
 ): Promise<AgentResponse> {
   const session = getSession(sessionId);
   if (!session) {
@@ -383,13 +394,8 @@ export async function processUserMessage(
   const meta = sessionMeta.get(sessionId);
   const newMessages: ChatMessage[] = [];
 
-  // Auto-detect JWT tokens pasted by the user
-  const detectedToken = authToken || (looksLikeJwt(text) ? text.trim() : undefined);
-
   // Add user message locally
-  const userMessage = createUserMessage(
-    detectedToken && !authToken ? (language === 'he' ? '🔑 טוקן התחברות התקבל' : '🔑 Login token received') : text
-  );
+  const userMessage = createUserMessage(text);
   session.messages.push(userMessage);
   newMessages.push(userMessage);
 
@@ -402,59 +408,54 @@ export async function processUserMessage(
     );
     session.messages.push(errorMsg);
     newMessages.push(errorMsg);
+    onBotMessage?.(errorMsg);
     updateSession(session);
     return { session, newMessages };
   }
 
   try {
-    const apiResponse = await apiSendMessage(
+    await apiStreamChat(
       sessionId,
       meta.pricepilotUserId,
-      detectedToken ? 'User has logged in. Here is the auth token.' : text,
-      detectedToken,
+      text,
+      (msg) => {
+        session.messages.push(msg);
+        newMessages.push(msg);
+        onBotMessage?.(msg);
+      },
+      onToolActivity,
     );
 
-    // Update metadata
-    meta.phase = apiResponse.phase ?? meta.phase;
-    meta.cartPersisted = apiResponse.cart_persisted;
-    meta.checkoutUrl = apiResponse.checkout_url ?? meta.checkoutUrl;
-
-    const botMessages = mapApiMessages(apiResponse.messages, meta.storeName);
-
-    // If checkout URL available and not already added by mapApiMessages, add button
-    if (apiResponse.checkout_url && botMessages.length > 0) {
-      const lastMsg = botMessages[botMessages.length - 1];
-      const hasCheckout = lastMsg.buttons?.some(b => b.action.startsWith('checkout:'));
-      if (!hasCheckout) {
-        lastMsg.buttons = [
-          ...(lastMsg.buttons || []),
-          {
-            id: 'checkout',
-            label: language === 'he' ? 'עבור לקופה' : 'Go to Checkout',
-            action: `checkout:${apiResponse.checkout_url}`,
-            variant: 'primary',
-          },
-        ];
-      }
-    }
-
-    session.messages.push(...botMessages);
-    newMessages.push(...botMessages);
     updateSession(session);
-
     return { session, newMessages };
   } catch (error) {
     console.error('Failed to send message via PricePilot API:', error);
-    const promptMessage = createBotMessage(
+    const errorMsg = createBotMessage(
       language === 'he'
         ? 'שגיאה בתקשורת עם השרת. נסו שוב.'
         : 'Error communicating with server. Please try again.'
     );
-    session.messages.push(promptMessage);
-    newMessages.push(promptMessage);
+    session.messages.push(errorMsg);
+    newMessages.push(errorMsg);
+    onBotMessage?.(errorMsg);
     updateSession(session);
     return { session, newMessages };
   }
+}
+
+/**
+ * Process a button action from the user.
+ * Sends the action as a text message to PricePilot v4.
+ */
+export async function handleButtonAction(
+  sessionId: string,
+  action: string,
+  language: Language,
+  onBotMessage?: (msg: ChatMessage) => void,
+  onToolActivity?: (toolName: string, type: 'call' | 'result') => void,
+): Promise<AgentResponse> {
+  // Route through processUserMessage — v4 treats all input as chat
+  return processUserMessage(sessionId, action, language, undefined, onBotMessage, onToolActivity);
 }
 
 // ============================================
@@ -546,51 +547,6 @@ function startAgentSessionLocal(
   sessions.set(session.id, session);
 
   return { session, newMessages: [welcomeMessage] };
-}
-
-function handleButtonActionLocal(
-  session: AgentSession,
-  action: string,
-  language: Language,
-  newMessages: ChatMessage[]
-): AgentResponse {
-  const m = messages[language];
-  const [actionType, actionValue] = action.split(':');
-
-  if (actionType === 'approve' && actionValue === 'yes') {
-    session.state = 'BUILDING_CART';
-    const buildingMessage = createBotMessage(m.buildingCart);
-    session.messages.push(buildingMessage);
-    newMessages.push(buildingMessage);
-
-    session.state = 'COMPLETED';
-    const cartMessage = createBotMessage(
-      m.completed,
-      [{ id: 'restart', label: m.restart, action: 'cancel:restart', variant: 'secondary' }]
-    );
-    session.messages.push(cartMessage);
-    newMessages.push(cartMessage);
-  } else if (actionType === 'approve' && actionValue === 'no') {
-    session.state = 'IDLE';
-    const declineMessage = createBotMessage(
-      language === 'he' ? 'הבנתי. אפשר להתחיל מחדש מתי שתרצו.' : "Got it. You can start again whenever you're ready.",
-      [{ id: 'restart', label: m.restart, action: 'cancel:restart', variant: 'secondary' }]
-    );
-    session.messages.push(declineMessage);
-    newMessages.push(declineMessage);
-  } else {
-    session.state = 'IDLE';
-    const resetMessage = createBotMessage(
-      language === 'he'
-        ? 'הפעולה בוטלה. לחצו על "מצא מחירים" כדי להתחיל מחדש.'
-        : 'Action cancelled. Click "Find Best Prices" to start again.'
-    );
-    session.messages.push(resetMessage);
-    newMessages.push(resetMessage);
-  }
-
-  updateSession(session);
-  return { session, newMessages };
 }
 
 // ============================================

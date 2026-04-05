@@ -33,3 +33,8 @@ Before writing a script, check `execution/` per your directive. Only create new 
 - Read error message and stack trace
 - Fix the script and test it again (unless it uses paid tokens/credits/etc—in which case you check w user first)
 
+## Logs for every new session 
+-- read /Users/tomer_itzhakov_nevo/Documents/Projects/Lista/PROJECT_DOCUMENTATION.md every new session the user start
+
+## Update logs rules
+-- update /Users/tomer_itzhakov_nevo/Documents/Projects/Lista/PROJECT_DOCUMENTATION.md before every commit and push to github. 

@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
             rewrite: (path: string) => path.replace(/^\/gov-data-api/, ''),
           },
           '/pricepilot-api': {
-            target: env.PRICEPILOT_API_TARGET || 'http://localhost:8000',
+            target: env.PRICEPILOT_API_TARGET || 'http://localhost:8080',
             changeOrigin: true,
             rewrite: (path: string) => path.replace(/^\/pricepilot-api/, ''),
           },

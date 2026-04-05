@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "PricePilot — Lista Shopping Assistant",
+  "version": "1.0.0",
+  "description": "Connects Lista to your supermarket browser sessions for automated cart building.",
+  "permissions": ["activeTab", "tabs", "scripting"],
+  "host_permissions": [
+    "https://www.rami-levy.co.il/*",
+    "https://rami-levy.co.il/*",
+    "http://localhost:3000/*",
+    "http://localhost:5173/*",
+    "https://lista-six-psi.vercel.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://lista-six-psi.vercel.app/*",
+        "http://localhost:3000/*",
+        "http://localhost:5173/*"
+      ],
+      "js": ["content_scripts/lista_bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.rami-levy.co.il/*",
+        "https://rami-levy.co.il/*"
+      ],
+      "js": ["content_scripts/rami_levy_keepalive.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

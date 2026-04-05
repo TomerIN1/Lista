@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Send, Bot, Loader2, ShoppingBag } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import {
@@ -11,9 +11,7 @@ import {
   handleButtonAction,
   processUserMessage,
   getSession,
-  getSessionMeta,
 } from '../services/agentService';
-import { openStoreLoginPopup } from '../services/storeAuthService';
 import ChatMessage from './ChatMessage';
 
 interface PriceAgentChatProps {
@@ -26,6 +24,35 @@ interface PriceAgentChatProps {
   storeId?: string;
   userCity?: string;
 }
+
+/** Friendly Hebrew labels for tool names */
+const TOOL_LABELS: Record<string, string> = {
+  initialize_shopping_session: 'מאתחל חיבור...',
+  open_rami_levy_browser: 'פותח דפדפן רמי לוי...',
+  start_login: 'מתחיל התחברות...',
+  submit_otp: 'מאמת קוד...',
+  search_products: 'מחפש מוצרים...',
+  read_cart: 'קורא עגלה...',
+  add_items_to_cart: 'מוסיף לעגלה...',
+  clear_cart: 'מרוקן עגלה...',
+  remove_cart_item: 'מסיר פריט...',
+  verify_session_continuity: 'בודק חיבור...',
+  generate_handoff: 'מכין קופה...',
+};
+
+const TOOL_LABELS_EN: Record<string, string> = {
+  initialize_shopping_session: 'Initializing session...',
+  open_rami_levy_browser: 'Opening Rami Levy browser...',
+  start_login: 'Starting login...',
+  submit_otp: 'Verifying code...',
+  search_products: 'Searching products...',
+  read_cart: 'Reading cart...',
+  add_items_to_cart: 'Adding to cart...',
+  clear_cart: 'Clearing cart...',
+  remove_cart_item: 'Removing item...',
+  verify_session_continuity: 'Verifying session...',
+  generate_handoff: 'Preparing checkout...',
+};
 
 const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
   isOpen,
@@ -42,8 +69,7 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
-  const [customStores, setCustomStores] = useState<string[]>([]);
+  const [toolStatus, setToolStatus] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -57,14 +83,27 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
   // Scroll to bottom when new messages arrive
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, toolStatus]);
+
+  const onBotMessage = useCallback((msg: ChatMessageType) => {
+    setMessages((prev) => [...prev, msg]);
+    setToolStatus('');
+  }, []);
+
+  const onToolActivity = useCallback((toolName: string, type: 'call' | 'result') => {
+    if (type === 'call') {
+      const labels = language === 'he' ? TOOL_LABELS : TOOL_LABELS_EN;
+      setToolStatus(labels[toolName] || toolName);
+    } else {
+      setToolStatus('');
+    }
+  }, [language]);
 
   const initializeSession = async () => {
     setIsLoading(true);
-    setSelectedStoreIds([]);
-    setCustomStores([]);
+    setToolStatus('');
     try {
-      const { session: newSession, newMessages } = await startAgentSession(
+      const { session: newSession } = await startAgentSession(
         userId,
         listId,
         groceryList,
@@ -72,13 +111,15 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
         storeName,
         storeId,
         userCity,
+        onBotMessage,
+        onToolActivity,
       );
       setSession(newSession);
-      setMessages(newMessages);
     } catch (error) {
       console.error('Failed to initialize session:', error);
     } finally {
       setIsLoading(false);
+      setToolStatus('');
     }
   };
 
@@ -89,20 +130,35 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
   const handleSendMessage = async () => {
     if (!inputText.trim() || !session || isLoading) return;
 
+    const text = inputText.trim();
+    setInputText('');
     setIsLoading(true);
+
+    // Add user message immediately
+    const userMsg: ChatMessageType = {
+      id: crypto.randomUUID(),
+      type: 'user',
+      text,
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
     try {
-      const { session: updatedSession, newMessages } = await processUserMessage(
+      await processUserMessage(
         session.id,
-        inputText.trim(),
-        language
+        text,
+        language,
+        undefined,
+        onBotMessage,
+        onToolActivity,
       );
-      setSession(updatedSession);
-      setMessages((prev) => [...prev, ...newMessages]);
-      setInputText('');
+      // Session already updated by processUserMessage
+      setSession(getSession(session.id) || session);
     } catch (error) {
       console.error('Failed to send message:', error);
     } finally {
       setIsLoading(false);
+      setToolStatus('');
     }
   };
 
@@ -124,33 +180,21 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
       return;
     }
 
-    // Handle store login popup action
-    if (action.startsWith('login:')) {
-      const store = action.replace('login:', '');
-      openStoreLoginPopup(store);
-      return;
-    }
-
     setIsLoading(true);
     try {
-      const { session: updatedSession, newMessages } = await handleButtonAction(
+      await handleButtonAction(
         session.id,
         action,
-        language
+        language,
+        onBotMessage,
+        onToolActivity,
       );
-      setSession(updatedSession);
-
-      // If newMessages is empty, it means the session was updated in place (e.g., store selection)
-      // In that case, sync messages from the session
-      if (newMessages.length === 0) {
-        setMessages([...updatedSession.messages]);
-      } else {
-        setMessages((prev) => [...prev, ...newMessages]);
-      }
+      setSession(getSession(session.id) || session);
     } catch (error) {
       console.error('Failed to handle button action:', error);
     } finally {
       setIsLoading(false);
+      setToolStatus('');
     }
   };
 
@@ -161,50 +205,12 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
     }
   };
 
-  const handleStoreSelectionChange = (newSelectedIds: string[]) => {
-    setSelectedStoreIds(newSelectedIds);
-  };
-
-  const handleCustomStoreAdd = (storeName: string) => {
-    // Add custom store to the selection
-    const customStoreId = `custom-${storeName.toLowerCase().replace(/\s+/g, '-')}`;
-    if (!customStores.includes(storeName)) {
-      setCustomStores(prev => [...prev, storeName]);
-    }
-    if (!selectedStoreIds.includes(customStoreId)) {
-      setSelectedStoreIds(prev => [...prev, customStoreId]);
-    }
-  };
-
-  const handleStoreSelectionComplete = async () => {
-    if (!session || selectedStoreIds.length === 0) return;
-
-    // Update session with selected stores and trigger the flow
-    setIsLoading(true);
-    try {
-      // First update session with selected stores
-      session.selectedStores = selectedStoreIds;
-
-      // Then trigger the done_stores action
-      const { session: updatedSession, newMessages } = await handleButtonAction(
-        session.id,
-        'done_stores:done',
-        language
-      );
-      setSession(updatedSession);
-      setMessages([...updatedSession.messages]);
-    } catch (error) {
-      console.error('Failed to complete store selection:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleClose = () => {
     // Reset state when closing
     setSession(null);
     setMessages([]);
     setInputText('');
+    setToolStatus('');
     onClose();
   };
 
@@ -271,15 +277,19 @@ const PriceAgentChat: React.FC<PriceAgentChatProps> = ({
               key={message.id}
               message={message}
               onButtonClick={handleButtonClick}
-              selectedStoreIds={selectedStoreIds}
-              onStoreSelectionChange={handleStoreSelectionChange}
-              onCustomStoreAdd={handleCustomStoreAdd}
-              onStoreSelectionComplete={handleStoreSelectionComplete}
             />
           ))}
 
-          {/* Loading indicator */}
-          {isLoading && (
+          {/* Tool activity indicator */}
+          {isLoading && toolStatus && (
+            <div className="flex items-center gap-2 text-indigo-600">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">{toolStatus}</span>
+            </div>
+          )}
+
+          {/* Generic loading indicator */}
+          {isLoading && !toolStatus && (
             <div className="flex items-center gap-2 text-slate-500">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span className="text-sm">
