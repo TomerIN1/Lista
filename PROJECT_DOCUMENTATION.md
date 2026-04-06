@@ -3728,16 +3728,23 @@ The extension architecture is designed for multiple supermarkets:
 ### UX Flow (April 5, 2026)
 
 1. **Welcome screen** in Lista shows PricePilot intro, extension status (blocks start if not installed), and Rami Levy info
-2. User clicks "Start Building Cart" → agent calls `initialize_shopping_session` → extension opens Rami Levy tab automatically
-3. Agent tells user: "I opened Rami Levy — stay here, I'll handle everything"
-4. Agent shows current cart with full details (name, qty, unit price, line total, subtotal, delivery, grand total)
-5. Agent searches products showing price, club/promo price, and availability
-6. Agent adds/removes items and verifies with `read_cart` after each mutation
+2. User clicks "Start Building Cart" → agent calls `initialize_shopping_session` → extension opens Rami Levy tab silently
+3. Agent shows current cart with full details (name, qty, unit price, promo info, line total, subtotal, delivery ₪29.90, grand total)
+4. Agent adds items **autonomously** — picks best match, adds without asking. Only asks if genuinely ambiguous.
+5. Agent verifies with `read_cart` after each mutation — detects out-of-stock (line_total=0), removes them, calls `find_replacements` (Rami Levy related items API), presents alternatives
+6. Agent shows promo info from cart (promo_text, original vs discounted price, quantity deals)
 7. At checkout, agent provides clickable link to Rami Levy checkout — user clicks from Lista chat
+
+### Key Technical Details
+
+- **Out-of-stock detection**: Search API `in_stock` is unreliable. Agent adds items first, then `read_cart` detects out-of-stock by `line_total === 0 && amount > 0`. Uses `find_replacements` tool (`GET /api/items/related`) for Rami Levy's own alternative recommendations.
+- **Promo extraction**: `read_cart` extracts `promo_text`, `original_price`, `has_promo` from Vuex cart item fields (promotion, price.promotion, badge).
+- **Delivery fee**: Always ₪29.90 (Rami Levy standard), defaults in extension if not found in cart.
+- **Price type safety**: `club_price` from Rami Levy API can be a dict or number — safely extracted with type checks.
 
 ### Status
 
-End-to-end working: cart reading, adding items, search with prices. Welcome screen with extension detection. Plain text cart formatting. Auth and remove flows need further testing.
+End-to-end working: cart reading, adding items, out-of-stock detection + replacement suggestions, promo display, autonomous product selection. Welcome screen with extension detection.
 
 **Location**: `pricepilot_agent_v4/`, `pricepilot_extension/`
 **Full details**: `pricepilot_extension/pricepilot_extension_log.md`

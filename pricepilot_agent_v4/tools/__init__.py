@@ -19,6 +19,7 @@ from tools.handoff_tools import (
     verify_session_continuity,
 )
 from tools.search_tools import (
+    find_replacements,
     search_products,
 )
 
@@ -35,6 +36,7 @@ __all__ = [
     "remove_cart_item",
     # Search
     "search_products",
+    "find_replacements",
     # Handoff
     "verify_session_continuity",
     "generate_handoff",

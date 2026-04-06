@@ -119,5 +119,30 @@ pricepilot_extension/
 
 ### read_cart Enrichment
 - Now includes: promo_price, line_total, in_stock per item
-- Captures delivery_price from the delivery line item
+- Captures delivery_price from the delivery line item (default ₪29.90)
 - Returns subtotal, delivery_price, total_with_delivery totals
+- Promo fields: promo_text, original_price, has_promo extracted from Vuex
+- Out-of-stock detection: line_total === 0 when amount > 0
+
+## Agent Behavior Improvements (April 5, 2026)
+
+### Autonomous Add (no asking)
+- Agent picks the best matching product from search and adds it immediately
+- Does NOT show search results list or ask the user to choose
+- Only asks if search results are genuinely ambiguous
+
+### Out-of-Stock via Cart (not search API)
+- Search API `in_stock` is unreliable — agent ignores it
+- Agent adds items first, then reads cart to detect out-of-stock (line_total=0)
+- Removes out-of-stock items, calls `find_replacements` (Rami Levy related items API)
+- Presents relevant alternatives, waits for user choice
+
+### find_replacements Tool
+- New tool: calls `GET /api/items/related?q={name}&ignore={id}&store={store}`
+- Returns only in-stock alternatives from Rami Levy's own recommendation engine
+- Used when cart items are detected as out-of-stock
+
+### Promo Display
+- read_cart extracts promo info from Vuex: promotion text, original price, badge
+- Agent shows promo details when displaying cart (e.g. "₪33.60 ← מבצע: 1 ב-29.9₪")
+- Agent notifies user of quantity deals (e.g. "2 ב-45 — want to update quantity?")

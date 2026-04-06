@@ -295,7 +295,9 @@ pricepilot_agent_v4/
 2. Agent opens Rami Levy tab automatically — user stays in Lista.
 3. OTP flow is `start_login` -> `submit_otp`.
 4. Always call `read_cart` after cart mutations.
-5. Show cart with plain text format: name, quantity, unit price, line total, subtotal, delivery, grand total.
-6. Search results must show price, club price, availability.
+5. Show cart with plain text format: name, quantity, unit price, promo info, line total, subtotal, delivery (₪29.90), grand total.
+6. Add items autonomously — do NOT show search results list or ask user to choose.
+7. Out-of-stock detected via cart (line_total=0), NOT via search API. Use `find_replacements` for alternatives.
+8. Show promo info when available (promo_text, original vs discounted price).
 7. Checkout provides clickable link — user clicks from Lista chat.
 8. Frontend owns the welcome text; the agent owns the startup/bootstrap logic after the first real action.

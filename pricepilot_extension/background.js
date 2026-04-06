@@ -148,13 +148,14 @@ async function handleReadCart(tabId) {
         const cart = window.$nuxt.$store.state.cart;
         if (cart.items && Array.isArray(cart.items)) {
           let subtotal = 0;
-          let deliveryPrice = 0;
+          let deliveryPrice = 29.90; // Default Rami Levy delivery fee
 
           const items = cart.items
             .filter(i => {
               // Capture delivery price but exclude from items list
               if (i.is_delivery || i.name === 'מחיר משלוח') {
-                deliveryPrice = (i.price && i.price.finalPrice) || i.sumPrice || i.price?.price || 0;
+                const dp = (i.price && i.price.finalPrice) || i.sumPrice || (i.price && i.price.price) || 0;
+                if (dp > 0) deliveryPrice = dp; // Only override default if actual price found
                 return false;
               }
               return true;
@@ -163,10 +164,36 @@ async function handleReadCart(tabId) {
               const isWeighted = !!(i.prop && (i.prop.sw_shakil || i.prop.by_kilo));
               const amount = i.amount || 1;
               const multiplication = i.multiplication || 1;
-              const unitPrice = i.price && i.price.price ? i.price.price : (typeof i.price === 'number' ? i.price : 0);
-              const lineTotal = i.price && i.price.finalPrice ? i.price.finalPrice : (i.sumPrice || 0);
+              const unitPrice = i.price && i.price.price != null ? i.price.price : (typeof i.price === 'number' ? i.price : null);
+              const lineTotal = i.price && i.price.finalPrice != null ? i.price.finalPrice : (i.sumPrice || 0);
               const promoPrice = i.price && i.price.club_price ? i.price.club_price : null;
-              const inStock = i.in_stock !== undefined ? i.in_stock : true;
+
+              // Extract promo/promotion info from all possible Vuex fields
+              const priceObj = i.price || {};
+              const originalPrice = priceObj.originalPrice || priceObj.regular_price || priceObj.price1 || null;
+              let promoText = '';
+              // Try multiple known promo field locations
+              if (i.promotion) {
+                promoText = typeof i.promotion === 'string' ? i.promotion
+                  : (i.promotion.text || i.promotion.title || i.promotion.description || JSON.stringify(i.promotion));
+              }
+              if (!promoText && priceObj.promotion) {
+                promoText = typeof priceObj.promotion === 'string' ? priceObj.promotion
+                  : (priceObj.promotion.text || priceObj.promotion.title || '');
+              }
+              if (!promoText && i.promo_text) promoText = i.promo_text;
+              if (!promoText && i.badge) promoText = typeof i.badge === 'string' ? i.badge : (i.badge.text || '');
+              if (!promoText && priceObj.badge) promoText = typeof priceObj.badge === 'string' ? priceObj.badge : (priceObj.badge.text || '');
+              // If original price differs from unit price, there's a discount
+              const hasPromo = !!(promoText || (originalPrice && unitPrice && originalPrice > unitPrice));
+              // Build promo display if we have original price but no text
+              if (!promoText && originalPrice && unitPrice && originalPrice > unitPrice) {
+                promoText = amount + ' ב-' + (lineTotal || unitPrice);
+              }
+
+              // Out-of-stock detection: line_total is 0 when quantity > 0 means unavailable
+              // (unit price may still show, but finalPrice/sumPrice is 0 for out-of-stock items)
+              const inStock = !(amount > 0 && lineTotal === 0);
 
               subtotal += lineTotal;
 
@@ -179,11 +206,16 @@ async function handleReadCart(tabId) {
                 is_weighted: isWeighted,
                 quantity_display: isWeighted ? amount + ' ק"ג' : amount + ' יחידות',
                 unit_price: unitPrice,
+                original_price: originalPrice,
                 promo_price: promoPrice,
+                promo_text: promoText,
+                has_promo: hasPromo,
                 line_total: lineTotal,
                 in_stock: inStock,
               };
             });
+
+          const outOfStockItems = items.filter(i => !i.in_stock);
 
           return {
             status: 'success',
@@ -192,13 +224,18 @@ async function handleReadCart(tabId) {
             subtotal: subtotal,
             delivery_price: deliveryPrice,
             total_with_delivery: subtotal + deliveryPrice,
+            out_of_stock_items: outOfStockItems.map(i => ({ id: i.id, name: i.name })),
+            out_of_stock_count: outOfStockItems.length,
             message: items.length > 0
               ? 'Cart has ' + items.length + ' item(s). Subtotal: ₪' + subtotal.toFixed(2)
+                + (outOfStockItems.length > 0
+                  ? '. WARNING: ' + outOfStockItems.length + ' item(s) are OUT OF STOCK: ' + outOfStockItems.map(i => i.name).join(', ')
+                  : '')
               : 'Cart is empty.',
           };
         }
       }
-      return { status: 'success', items: [], item_count: 0, subtotal: 0, delivery_price: 0, total_with_delivery: 0, message: 'Cart is empty.' };
+      return { status: 'success', items: [], item_count: 0, subtotal: 0, delivery_price: 29.90, total_with_delivery: 29.90, message: 'Cart is empty.' };
     } catch (e) {
       return { status: 'error', message: 'Failed to read cart: ' + e.message };
     }

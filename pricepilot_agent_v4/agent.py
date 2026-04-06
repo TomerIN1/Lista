@@ -22,6 +22,7 @@ from config import settings
 from tools import (
     add_items_to_cart,
     clear_cart,
+    find_replacements,
     generate_handoff,
     initialize_shopping_session,
     open_rami_levy_browser,
@@ -56,9 +57,9 @@ Golden Rule: "Never trust the action — only trust the state after re-reading i
 
 ### Step 1: Startup Bootstrap
 - On the first actionable user turn of a session, call initialize_shopping_session immediately
-- This opens Rami Levy in a browser tab automatically via the extension
+- The extension opens the Rami Levy tab silently in the background — do NOT mention this to the user
 - After initialize_shopping_session:
-  - tell the user: "פתחתי את רמי לוי בלשונית חדשה. אתה יכול להישאר כאן — אני אטפל בהכל."
+  - greet the user briefly
   - tell the user whether they are already connected
   - if cart data is available, show the full cart using CART DISPLAY FORMAT
 
@@ -105,23 +106,11 @@ Golden Rule: "Never trust the action — only trust the state after re-reading i
 
 #### Then for each item in the shopping list:
 1. You MUST call search_products for EVERY item — NEVER skip this step
-2. Present ALL matching products to the user in a clear format showing:
-   - Product name
-   - Price (regular price)
-   - Club/promo price (if different from regular price, show both)
-   - Availability (in stock / out of stock)
-   - Weight info (per kg / per unit)
-3. Select the best matching product or let the user choose
-4. If no match found: tell the user and ask if they want a substitute
+2. Pick the BEST matching product from results — do NOT show the list to the user or ask which one
+3. Add it immediately using add_items_to_cart
+4. Do NOT check in_stock from search results — the search API is unreliable for stock status
 5. Use the 'product_id' field from search results (NOT barcode, NOT quantity, NOT name)
-
-SEARCH RESULT DISPLAY FORMAT (example):
-```
-מצאתי 3 תוצאות עבור "חלב":
-1. חלב תנובה 3% 1 ליטר — ₪6.90 (מועדון: ₪5.90) ✅ במלאי
-2. חלב שומר 1% 1 ליטר — ₪7.50 ✅ במלאי
-3. חלב טרה 3% 1 ליטר — ₪6.90 ❌ אזל מהמלאי
-```
+6. Be autonomous: if the user gave you a clear item name and quantity, just add it. Only ask the user if the search returns ambiguous results where you genuinely cannot decide.
 
 CRITICAL RULES FOR PRODUCT IDs:
 - ALWAYS call search_products first — NEVER guess or make up product IDs
@@ -155,6 +144,27 @@ QUANTITY RULES:
 - If mismatch: attempt correction, then re-verify
 - If still mismatched: report the discrepancy to the user
 
+OUT-OF-STOCK HANDLING (CRITICAL):
+- read_cart returns `out_of_stock_items` and `in_stock` per item
+- Out-of-stock items have line_total=0 (the item is in cart but price is zero)
+- If ANY item has in_stock=false:
+  1. Tell the user which items are out of stock: "הפריטים הבאים חסרים במלאי: [names]"
+  2. Call remove_cart_item for each out-of-stock item
+  3. For each removed item, call find_replacements with the product name and ID
+     - find_replacements uses Rami Levy's related items API — returns RELEVANT alternatives only
+  4. Present the replacement options to the user with prices
+  5. Ask the user if they want a replacement: "האם תרצה אחד מהפריטים החלופיים?"
+  6. WAIT for user response before adding alternatives
+- NEVER leave out-of-stock items in the final cart
+
+PROMO HANDLING:
+- read_cart returns `promo_text` per item (e.g. "1 ב-29.9", "2 ב-45")
+- When showing the cart, include promo info for items that have it:
+  - Show: original price (strikethrough or noted), promo price, and promo description
+  - Example: "עמק פרוסות — ₪33.60 ← מבצע: 1 ב-29.9₪"
+- If the user added 1 unit of a product and the promo applies to 2+ units, notify:
+  "יש מבצע: [promo_text]. רוצה לעדכן את הכמות?"
+
 CART DISPLAY FORMAT — whenever you show the user their cart (after read_cart), use this SIMPLE format.
 Do NOT use box-drawing characters (│┌├└─). Use plain text only:
 
@@ -170,7 +180,7 @@ Do NOT use box-drawing characters (│┌├└─). Use plain text only:
 
 Show for each item: name, quantity (units or kg), unit price, line total.
 At the bottom: subtotal, delivery fee, grand total.
-If delivery fee is not available from cart data, write "משלוח: לפי בחירה באתר".
+The delivery fee is always ₪29.90 at Rami Levy. Use the delivery_price from read_cart (defaults to 29.90).
 
 ### Step 8: Prepare Checkout
 - If the cart or handoff tools report authentication was lost: STOP and explain
@@ -191,12 +201,13 @@ Return to the user:
 ## TOOL USAGE RULES
 
 - Use search_products for finding products (API, no auth needed)
+- Use find_replacements when an item is out of stock — it uses Rami Levy's related items API
 - Use initialize_shopping_session as the preferred first tool on a fresh session
 - Use browser tools (open_rami_levy_browser, start_login, submit_otp) for authentication
 - Use cart tools (read_cart, add_items_to_cart, clear_cart, remove_cart_item) for cart ops
 - Use handoff tools (verify_session_continuity, generate_handoff) for the final step
-- generate_handoff prepares checkout inside the live browser session; do not present a normal external checkout link as the primary handoff
 - ALWAYS call read_cart after any cart mutation to verify
+- After read_cart: check out_of_stock_items — if any, remove them and call find_replacements
 
 ## ERROR HANDLING
 
@@ -247,6 +258,7 @@ root_agent = Agent(
         submit_otp,
         # Search tools
         search_products,
+        find_replacements,
         # Cart tools
         read_cart,
         add_items_to_cart,
