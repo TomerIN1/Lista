@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Search, X, Loader2, Leaf, ChevronRight, SlidersHorizontal, Check, ArrowUpDown, Tag, DollarSign } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DbProductEnhanced, ShoppingProduct, Unit, CategoryNode, ProductSortOption } from '../types';
-import { getCategories, browseProducts, searchProducts } from '../services/priceDbService';
+import { getCategories, browseProducts, searchProducts, getProductGroups, ProductGroupSummary } from '../services/priceDbService';
 import { useDebounce } from '../hooks/useDebounce';
 import ProductCard from './ProductCard';
 import ProductDetailModal from './ProductDetailModal';
+import GroupDetailModal from './GroupDetailModal';
 import { defaultCartUnit } from '../utils/priceFormat';
 
 // ─── Category icon helpers ──────────────────────────────────────────────────
@@ -43,6 +44,31 @@ const CATEGORY_ORDER: string[] = [
   'מבצעים',
   'אחר ולא מסווג',
 ];
+
+// Custom sub-subcategory ordering within specific subcategories
+const SUBCATEGORY_ORDER: Record<string, string[]> = {
+  'ירקות טריים': [
+    'עגבניות',
+    'מלפפונים',
+    'פלפלים',
+    'בצלים ושום',
+    'פטריות',
+    'ירקות עלים',
+    'ירקות שורש',
+  ],
+};
+
+export function sortSubItems<T extends { name: string }>(items: T[], parentName: string): T[] {
+  const order = SUBCATEGORY_ORDER[parentName.replace(/\s+/g, ' ')];
+  if (!order) return items;
+  const orderMap = new Map(order.map((name, i) => [name.replace(/\s+/g, ' '), i]));
+  return [...items].sort((a, b) => {
+    const aIdx = orderMap.get(a.name.replace(/\s+/g, ' ')) ?? 999;
+    const bIdx = orderMap.get(b.name.replace(/\s+/g, ' ')) ?? 999;
+    if (aIdx !== bIdx) return aIdx - bIdx;
+    return a.name.localeCompare(b.name, 'he');
+  });
+}
 
 export function sortCategories(cats: CategoryNode[]): CategoryNode[] {
   const orderMap = new Map(CATEGORY_ORDER.map((name, i) => [name.replace(/\s+/g, ' '), i]));
@@ -339,6 +365,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedQuery = useDebounce(searchQuery, 300);
   const [categories, setCategories] = useState<CategoryNode[]>([]);
+  const [productGroups, setProductGroups] = useState<Map<number, ProductGroupSummary>>(new Map());
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const [selectedSubSubcategory, setSelectedSubSubcategory] = useState<string | null>(null);
@@ -362,6 +389,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   const [detailBarcode, setDetailBarcode] = useState<string | null>(null);
   const [detailImageUrl, setDetailImageUrl] = useState<string | null>(null);
   const [detailProduct, setDetailProduct] = useState<DbProductEnhanced | null>(null);
+  const [detailGroupId, setDetailGroupId] = useState<number | null>(null);
 
   // Landing page product sections
   const [featuredProducts, setFeaturedProducts] = useState<DbProductEnhanced[]>([]); // worth comparing
@@ -380,6 +408,15 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
       })
       .catch(() => setCategories([]))
       .finally(() => setIsLoadingCategories(false));
+
+    // Load product groups for image dedup (47 groups, lightweight)
+    getProductGroups()
+      .then((groups) => {
+        const map = new Map<number, ProductGroupSummary>();
+        groups.forEach(g => map.set(g.id, g));
+        setProductGroups(map);
+      })
+      .catch(() => {});
 
     // Load "worth comparing" products — popular items with biggest price gaps
     // Search for well-known Israeli grocery staples, pick those with highest savings
@@ -481,6 +518,8 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           );
           result = { products: sr.products as DbProductEnhanced[], total: sr.total };
         } else {
+          // Use API-level sub-subcategory sorting when viewing a subcategory with defined order
+          const useSubcatSort = selectedSubcategory && !selectedSubSubcategory && SUBCATEGORY_ORDER[selectedSubcategory];
           const br = await browseProducts({
             category: selectedCategory || undefined,
             subcategory: selectedSubcategory || undefined,
@@ -492,6 +531,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
             chains: selectedChains && selectedChains.length > 0 ? selectedChains : undefined,
             limit: PAGE_SIZE,
             page,
+            sort_by: useSubcatSort ? 'sub_subcategory_order' : undefined,
           });
           result = { products: br.products, total: br.total };
         }
@@ -590,7 +630,35 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
 
   // ── displayProducts: client-side filter + sort ─────────────────────────────
   const displayProducts = useMemo(() => {
-    let list = [...products];
+    // Deduplicate products sharing the same product_group_id (fresh produce).
+    // Keep the one with the lowest min_price as the representative card.
+    // Override image_url with the group's curated image when available.
+    const seen = new Map<number, DbProductEnhanced>();
+    const deduped: DbProductEnhanced[] = [];
+    for (const p of products) {
+      const gid = (p as any).product_group_id as number | null | undefined;
+      if (gid != null) {
+        const existing = seen.get(gid);
+        if (!existing) {
+          // Use group's curated image if available
+          const groupInfo = productGroups.get(gid);
+          const rep = groupInfo?.image_url
+            ? { ...p, image_url: groupInfo.image_url }
+            : p;
+          seen.set(gid, rep);
+          deduped.push(rep);
+        } else if (p.min_price < existing.min_price) {
+          // Replace: cheaper representative, keep the group image
+          const rep = { ...p, image_url: existing.image_url };
+          const idx = deduped.indexOf(existing);
+          deduped[idx] = rep;
+          seen.set(gid, rep);
+        }
+      } else {
+        deduped.push(p);
+      }
+    }
+    let list = deduped;
 
     // On-sale filter: keep products whose labels contain promo-related text
     if (filterOnSale) {
@@ -614,10 +682,23 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           default: return 0;
         }
       });
+    } else if (selectedSubcategory && !selectedSubSubcategory && SUBCATEGORY_ORDER[selectedSubcategory]) {
+      // Custom sort: group by sub-subcategory order, weighted products first within each group
+      const subOrder = SUBCATEGORY_ORDER[selectedSubcategory];
+      const orderMap = new Map(subOrder.map((name, i) => [name, i]));
+      list.sort((a, b) => {
+        const aIdx = orderMap.get(a.sub_subcategory || '') ?? 999;
+        const bIdx = orderMap.get(b.sub_subcategory || '') ?? 999;
+        if (aIdx !== bIdx) return aIdx - bIdx;
+        // Within same sub-subcategory: weighted first
+        const aW = a.is_weighted ? 0 : 1;
+        const bW = b.is_weighted ? 0 : 1;
+        return aW - bW;
+      });
     }
 
     return list;
-  }, [products, filterOnSale, priceMin, priceMax, sortBy, view]);
+  }, [products, filterOnSale, priceMin, priceMax, sortBy, view, productGroups, selectedSubcategory, selectedSubSubcategory]);
 
   const hasClientSideFilters = filterOnSale || priceMin !== '' || priceMax !== '';
 
@@ -790,7 +871,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           {/* Sub-subcategory chips */}
           {activeSubcategoryNode && !selectedSubSubcategory && activeSubcategoryNode.sub_subcategories.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {activeSubcategoryNode.sub_subcategories.map((subsub) => (
+              {sortSubItems(activeSubcategoryNode.sub_subcategories, activeSubcategoryNode.name).map((subsub) => (
                 <button
                   key={subsub.name}
                   type="button"
@@ -900,6 +981,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                               setDetailBarcode(fp.barcode);
                               setDetailImageUrl(fp.image_url);
                               setDetailProduct(fp);
+                              setDetailGroupId((fp as any).product_group_id ?? null);
                             }}
                           />
                         </div>
@@ -961,7 +1043,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                         <div
                           className="absolute inset-0 cursor-pointer"
                           style={{ bottom: '40px' }}
-                          onClick={() => { setDetailBarcode(cp.barcode); setDetailImageUrl(cp.image_url); setDetailProduct(cp); }}
+                          onClick={() => { setDetailBarcode(cp.barcode); setDetailImageUrl(cp.image_url); setDetailProduct(cp); setDetailGroupId((cp as any).product_group_id ?? null); }}
                         />
                       </div>
                     ))}
@@ -1005,7 +1087,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                     product={product}
                     isSelected={selectedProducts.some((p) => p.barcode === product.barcode)}
                     onAdd={(amount) => handleAddProduct(product, amount)}
-                    onClick={() => { setDetailBarcode(product.barcode); setDetailImageUrl(product.image_url ?? null); setDetailProduct(product); }}
+                    onClick={() => { setDetailBarcode(product.barcode); setDetailImageUrl(product.image_url ?? null); setDetailProduct(product); setDetailGroupId((product as any).product_group_id ?? null); }}
                   />
                 ))}
               </div>
@@ -1028,16 +1110,32 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
         )}
       </div>
 
-      {/* Detail modal */}
-      {detailBarcode && (
+      {/* Detail modal — use GroupDetailModal for grouped products, ProductDetailModal otherwise */}
+      {detailBarcode && detailGroupId != null && (
+        <GroupDetailModal
+          groupId={detailGroupId}
+          fallbackProduct={detailProduct}
+          onClose={() => { setDetailBarcode(null); setDetailGroupId(null); }}
+          onAdd={(product, amount) => {
+            handleAddProduct(product, amount);
+            setDetailBarcode(null);
+            setDetailGroupId(null);
+          }}
+          isAdded={selectedProducts.some((p) => p.barcode === detailBarcode)}
+          city={city}
+          storeType={storeType}
+        />
+      )}
+      {detailBarcode && detailGroupId == null && (
         <ProductDetailModal
           barcode={detailBarcode}
           fallbackImageUrl={detailImageUrl}
           fallbackProduct={detailProduct}
-          onClose={() => setDetailBarcode(null)}
+          onClose={() => { setDetailBarcode(null); setDetailGroupId(null); }}
           onAdd={(product, amount) => {
             handleAddProduct(product, amount);
             setDetailBarcode(null);
+            setDetailGroupId(null);
           }}
           isAdded={selectedProducts.some((p) => p.barcode === detailBarcode)}
         />

@@ -1,29 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, Tag, TrendingDown, Store, Truck, ChevronDown, ChevronUp } from 'lucide-react';
-import { ProductGroupDetail, GroupPriceEntry } from '../types';
+import { X, Package, Tag, TrendingDown, Store, Truck, ChevronDown, ChevronUp, Plus, Minus, Weight } from 'lucide-react';
+import { ProductGroupDetail, DbProductEnhanced } from '../types';
 import { getGroupDetail } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
 
 interface GroupDetailModalProps {
   groupId: number;
+  fallbackProduct?: DbProductEnhanced | null;
   onClose: () => void;
+  onAdd?: (product: DbProductEnhanced, amount: number) => void;
+  isAdded?: boolean;
   city?: string;
   storeType?: string;
 }
 
-const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, onClose, city, storeType }) => {
-  const { isRTL } = useLanguage();
+const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackProduct, onClose, onAdd, isAdded, city, storeType }) => {
+  const { t, isRTL } = useLanguage();
   const [detail, setDetail] = useState<ProductGroupDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [imgFailed, setImgFailed] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [qty, setQty] = useState(0.5);
+  const qtyStep = 0.5;
+  const minQty = 0.5;
 
   useEffect(() => {
     setIsLoading(true);
     setImgFailed(false);
-    getGroupDetail(groupId, { city, store_type: storeType })
+    getGroupDetail(groupId, city, storeType)
       .then(setDetail)
       .catch(() => setDetail(null))
       .finally(() => setIsLoading(false));
@@ -51,10 +57,10 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, onClose, c
 
         {/* Image + name */}
         <div className="relative flex-shrink-0 h-48 sm:h-56 bg-slate-50 rounded-t-3xl sm:rounded-t-2xl overflow-hidden">
-          {detail?.group.image_url && !imgFailed ? (
+          {(fallbackProduct?.image_url || detail?.group.image_url) && !imgFailed ? (
             <img
-              src={detail.group.image_url}
-              alt={detail.group.name}
+              src={fallbackProduct?.image_url || detail?.group.image_url || ''}
+              alt={detail?.group.name ?? ''}
               className="w-full h-full object-contain p-4"
               onError={() => setImgFailed(true)}
             />
@@ -219,6 +225,46 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, onClose, c
             </div>
           )}
         </div>
+
+        {/* Sticky Add button with quantity selector */}
+        {!isLoading && detail && onAdd && fallbackProduct && (
+          <div className="flex-shrink-0 px-4 py-3 border-t border-slate-100 bg-white rounded-b-3xl sm:rounded-b-2xl space-y-2">
+            {!isAdded && (
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setQty(Math.max(minQty, +(qty - qtyStep).toFixed(1)))}
+                  disabled={qty <= minQty}
+                  className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-30 disabled:cursor-default"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <div className="flex flex-col items-center min-w-[3.5rem]">
+                  <span className="text-lg font-bold text-slate-700">{qty}</span>
+                  <span className="text-xs text-slate-400 leading-none">{isRTL ? 'ק״ג' : 'kg'}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQty(+(qty + qtyStep).toFixed(1))}
+                  className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => { if (!isAdded) onAdd(fallbackProduct, qty); }}
+              className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
+                isAdded
+                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default'
+                  : 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-lg shadow-emerald-100'
+              }`}
+            >
+              {isAdded ? t('productBrowse.added') : t('productBrowse.addToList')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

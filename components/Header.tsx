@@ -119,12 +119,18 @@ const Header: React.FC<HeaderProps> = ({
           {/* Mode toggle */}
           <ModeToggle />
 
-          {/* Logo (compact) */}
-          <img
-            src="/lista-05.svg"
-            alt="Lista"
-            className="h-7 w-auto hidden sm:block flex-shrink-0"
-          />
+          {/* Logo (compact) — click to go home */}
+          <button
+            onClick={() => onModeSwitch?.('shopping')}
+            className="hidden sm:block flex-shrink-0 hover:opacity-80 transition-opacity"
+            title={isRTL ? 'חזרה לדף הבית' : 'Back to home'}
+          >
+            <img
+              src="/lista-05.svg"
+              alt="Lista"
+              className="h-7 w-auto"
+            />
+          </button>
 
           {/* Search bar */}
           <div className="flex-1 flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100 transition-all min-w-0">
@@ -194,11 +200,17 @@ const Header: React.FC<HeaderProps> = ({
     <header className="mb-8 sm:mb-12 relative">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-4 text-center sm:text-start">
-          <img
-            src="/lista-05.svg"
-            alt="Lista"
-            className="h-12 w-auto"
-          />
+          <button
+            onClick={() => onModeSwitch?.('shopping')}
+            className="hover:opacity-80 transition-opacity"
+            title={isRTL ? 'חזרה לדף הבית' : 'Back to home'}
+          >
+            <img
+              src="/lista-05.svg"
+              alt="Lista"
+              className="h-12 w-auto"
+            />
+          </button>
           <ModeToggle />
         </div>
 

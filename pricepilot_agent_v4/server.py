@@ -12,10 +12,15 @@ Provides:
 import asyncio
 import json
 import logging
+import os
 import sys
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Load .env into os.environ BEFORE any google.genai imports (ADK reads env directly)
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env", override=True)
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request

@@ -89,6 +89,7 @@ export interface DbProduct {
   unit_of_measure?: string | null; // "kg", "100 גרם", etc. — only meaningful when is_weighted is true
   is_weighted?: boolean | null;    // true = sold by weight, false = packaged, null = unknown
   unit_qty?: string | null;        // e.g. "1 ליטר", "400 גרם" — representative value from price entries, null for Rami Levy-only
+  product_group_id?: number | null; // links to product_groups entry for fresh produce dedup; null for regular products
   // Optional enhanced fields (present when using browse/detail endpoints)
   subcategory?: string | null;
   sub_subcategory?: string | null;
@@ -132,6 +133,28 @@ export interface DbProductDetail extends DbProductEnhanced {
 export interface ShoppingProduct extends DbProduct {
   amount: number;
   unit: Unit;
+}
+
+// Product group (fresh produce dedup)
+export interface ProductGroupDetail {
+  group: {
+    id: number;
+    name: string;
+    category: string;
+    sub_subcategory: string;
+    image_url: string | null;
+  };
+  prices: {
+    supermarket: string;
+    regular_price: number;
+    effective_price: number;
+    unit_qty: string | null;
+    product_name: string;
+    barcode: string;
+    promotion: { description: string; type: string; ends_at: string | null } | null;
+    store: { store_id: string; store_name: string; city: string | null; address: string | null; is_online: boolean; delivery_fee: number | null; minimum_order: number | null };
+  }[];
+  members: { barcode: string; name: string; is_weighted: boolean }[];
 }
 
 export interface DbProductSearchResult {

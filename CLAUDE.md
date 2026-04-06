@@ -38,3 +38,4 @@ Before writing a script, check `execution/` per your directive. Only create new 
 
 ## Update logs rules
 -- update /Users/tomer_itzhakov_nevo/Documents/Projects/Lista/PROJECT_DOCUMENTATION.md before every commit and push to github. 
+

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CategoryNode } from '../types';
 import { getCategories } from '../services/priceDbService';
-import { getCategoryIconSrc, sortCategories } from './ProductCatalogArea';
+import { getCategoryIconSrc, sortCategories, sortSubItems } from './ProductCatalogArea';
 
 interface CategoryNavBarProps {
   activeCategory: string | null;
@@ -125,7 +125,7 @@ const CategoryNavBar: React.FC<CategoryNavBarProps> = ({ activeCategory, onSelec
                   </button>
                   {sub.sub_subcategories.length > 0 && (
                     <div className="ps-3 mt-0.5 space-y-0.5">
-                      {sub.sub_subcategories.map((subsub) => (
+                      {sortSubItems(sub.sub_subcategories, sub.name).map((subsub) => (
                         <button
                           key={subsub.name}
                           type="button"

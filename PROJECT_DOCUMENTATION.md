@@ -3751,7 +3751,39 @@ End-to-end working: cart reading, adding items, out-of-stock detection + replace
 
 ---
 
-**Last Updated**: April 5, 2026
-**Version**: 5.4.1
+## Session: April 6, 2026
+
+### Changes Made
+
+#### 1. Logo Click → Shopping Homepage
+- Made the "Lista" logo clickable in both organize and shopping mode headers (`Header.tsx`)
+- Clicking the logo navigates to shopping mode (the main homepage)
+
+#### 2. Sub-subcategory Ordering for Fresh Vegetables
+- Added `SUBCATEGORY_ORDER` config in `ProductCatalogArea.tsx` defining custom display order for sub-subcategories within "ירקות טריים": עגבניות → מלפפונים → פלפלים → בצלים ושום → פטריות → ירקות עלים → ירקות שורש
+- Applied via `sortSubItems()` helper to both the subcategory chips in `ProductCatalogArea.tsx` and the category dropdown in `CategoryNavBar.tsx`
+- Extensible: add more subcategories to `SUBCATEGORY_ORDER` dict as needed
+
+#### 3. API-Level Product Sorting (sub_subcategory_order)
+- Added `sort_by=sub_subcategory_order` parameter support to `browseProducts()` in `priceDbService.ts`
+- When browsing "ירקות טריים" without a specific sub-subcategory selected, the API sorts products by sub-subcategory group order with `is_weighted=true` products first within each group
+- This ensures fresh loose vegetables (נמכר במשקל) appear before packaged products in each category
+- Client-side fallback sort also added in `displayProducts` useMemo for resilience
+- API change was implemented by the db-api agent in the external price database API
+
+#### 4. PricePilot v4: dotenv Fix
+- Fixed `server.py` to load `.env` via `python-dotenv` into `os.environ` before Google ADK imports
+- Root cause: ADK's `google.genai` client reads `GOOGLE_API_KEY` from OS environment directly, not from pydantic-settings
+- Updated `GOOGLE_API_KEY` in `pricepilot_agent_v4/.env`
+
+#### 5. Product Groups & GroupDetailModal
+- Added `getProductGroups()` and `getGroupDetail()` API functions in `priceDbService.ts`
+- Added `GroupDetailModal` component integration in `ProductCatalogArea.tsx` for grouped product views
+- Products with `product_group_id` are deduplicated in display, showing cheapest representative with curated group image
+
+---
+
+**Last Updated**: April 6, 2026
+**Version**: 5.5.0
 **Status**: Production Ready
 

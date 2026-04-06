@@ -14,6 +14,7 @@ import {
   ProductBrowseResult,
   DbProductDetail,
   DbProductEnhanced,
+  ProductGroupDetail,
 } from '../types';
 
 // ============================================
@@ -183,8 +184,9 @@ export async function browseProducts(params: {
   chains?: string[];
   limit?: number;
   page?: number;
+  sort_by?: string;
 }): Promise<ProductBrowseResult> {
-  const cacheKey = `browse:${params.category || ''}:${params.subcategory || ''}:${params.sub_subcategory || ''}:${params.is_vegan ?? ''}:${params.allergen_free?.join(',') || ''}:${params.city || ''}:${params.store_type || ''}:${params.chains?.join(',') || ''}:${params.page ?? 1}`;
+  const cacheKey = `browse:${params.category || ''}:${params.subcategory || ''}:${params.sub_subcategory || ''}:${params.is_vegan ?? ''}:${params.allergen_free?.join(',') || ''}:${params.city || ''}:${params.store_type || ''}:${params.chains?.join(',') || ''}:${params.sort_by || ''}:${params.page ?? 1}`;
   const cached = cache.get<ProductBrowseResult>(cacheKey);
   if (cached) return cached;
 
@@ -199,6 +201,7 @@ export async function browseProducts(params: {
   if (params.chains && params.chains.length > 0) apiParams.chain = params.chains.join(',');
   if (params.limit) apiParams.limit = params.limit;
   if (params.page) apiParams.page = params.page;
+  if (params.sort_by) apiParams.sort_by = params.sort_by;
 
   const result = await apiFetch<ProductBrowseResult>('/api/products/browse', apiParams);
   result.products.forEach(p => { p.image_url = proxyImageUrl(p.image_url); });
@@ -229,6 +232,49 @@ export async function getProductByBarcode(barcode: string): Promise<DbProduct | 
 
   try {
     const result = await apiFetch<DbProduct>(`/api/products/${barcode}`);
+    cache.set(cacheKey, result, PRICES_TTL);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+// GET /api/groups/ — list all product groups (30min cache, only 47 groups)
+export interface ProductGroupSummary {
+  id: number;
+  name: string;
+  image_url: string | null;
+}
+
+export async function getProductGroups(): Promise<ProductGroupSummary[]> {
+  const cacheKey = 'product-groups';
+  const cached = cache.get<ProductGroupSummary[]>(cacheKey);
+  if (cached) return cached;
+
+  const result = await apiFetch<{ total: number; groups: ProductGroupSummary[] }>('/api/groups/');
+  const groups = result.groups.map(g => ({
+    ...g,
+    image_url: proxyImageUrl(g.image_url),
+  }));
+  cache.set(cacheKey, groups, SUPERMARKETS_TTL);
+  return groups;
+}
+
+// GET /api/groups/{group_id} — group detail with best price per chain (10min cache)
+export async function getGroupDetail(groupId: number, city?: string, storeType?: string): Promise<ProductGroupDetail | null> {
+  const cacheKey = `group:${groupId}:${city || ''}:${storeType || ''}`;
+  const cached = cache.get<ProductGroupDetail | null>(cacheKey);
+  if (cached !== null) return cached;
+
+  try {
+    const params: Record<string, string | number> = {};
+    if (city) params.city = city;
+    if (storeType) params.store_type = storeType;
+
+    const result = await apiFetch<ProductGroupDetail>(`/api/groups/${groupId}`, params);
+    if (result.group.image_url) {
+      result.group.image_url = proxyImageUrl(result.group.image_url);
+    }
     cache.set(cacheKey, result, PRICES_TTL);
     return result;
   } catch {
