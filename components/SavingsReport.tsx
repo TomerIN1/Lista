@@ -233,10 +233,10 @@ const StoreRow: React.FC<StoreRowProps> = ({
                     </span>
                     <span className="whitespace-nowrap flex-shrink-0 flex items-center gap-1">
                       {ip.originalPrice != null && (
-                        <span className="line-through text-slate-400">₪{ip.originalPrice.toFixed(2)}</span>
+                        <span className="line-through text-slate-400">₪{(ip.displayOriginalPrice ?? ip.originalPrice).toFixed(2)}</span>
                       )}
                       <span className={ip.originalPrice != null ? 'text-rose-600 font-semibold' : 'text-slate-400'}>
-                        ₪{ip.price.toFixed(2)}{ip.amount > 1 ? ` × ${ip.amount}` : ''}
+                        ₪{(ip.displayPrice ?? ip.price).toFixed(2)}{ip.displayUnit ? ` / ${ip.displayUnit}` : ''}{ip.amount > 1 ? ` × ${ip.amount}` : ''}
                       </span>
                     </span>
                     <span className="text-slate-800 font-medium whitespace-nowrap flex-shrink-0">

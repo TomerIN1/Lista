@@ -35,12 +35,19 @@ const ItemRow: React.FC<{ item: ItemPriceDetail; isRTL: boolean }> = ({ item, is
       <div className="text-end flex-shrink-0">
         <div className="flex items-baseline gap-1">
           {hasDiscount && (
-            <span className="text-[10px] text-slate-400 line-through">₪{item.originalPrice!.toFixed(2)}</span>
+            <span className="text-[10px] text-slate-400 line-through">
+              ₪{(item.displayOriginalPrice ?? item.originalPrice!).toFixed(2)}
+              {item.displayUnit ? ` / ${item.displayUnit}` : ''}
+            </span>
           )}
           <span className={`text-xs font-bold ${hasDiscount ? 'text-rose-600' : 'text-slate-700'}`}>
-            ₪{item.price.toFixed(2)}
+            ₪{(item.displayPrice ?? item.price).toFixed(2)}
+            {item.displayUnit ? ` / ${item.displayUnit}` : ''}
           </span>
         </div>
+        {item.pricePer100g != null && (
+          <p className="text-[10px] text-slate-400">₪{item.pricePer100g.toFixed(2)} / 100 גרם</p>
+        )}
         {item.amount > 1 && (
           <p className="text-[10px] text-slate-400">×{item.amount} = ₪{item.total.toFixed(2)}</p>
         )}

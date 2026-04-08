@@ -3839,9 +3839,40 @@ Wired up three new API sort modes in the browse fetch logic:
 - `components/ProductCard.tsx` — Consistent card info layout for weighted vs unit products
 - `components/ProductCatalogArea.tsx` — Weight filter, default sort, auto-fetch, API sort integration
 
+#### 7. API Display Fields Integration (display_price, display_unit, price_per_100g)
+The API now provides backend-computed display fields so the frontend no longer guesses how to format prices from `unit_of_measure`. This fixed the bug where deli products (e.g., גבינת עמק 28%) showed ₪52.30 "per 100g" when the actual price was ₪52.30 per kg.
+
+**New API fields used:**
+- `display_min_price` / `display_price` / `display_effective_price` — consumer-friendly price (always per-kg for weighted)
+- `display_unit` — unit label ("ק״ג" for weighted, null for unit products)
+- `min_price_per_100g` / `price_per_100g` / `effective_price_per_100g` — price ÷ 10 for weighted products
+
+**Frontend rendering (matches Israeli supermarket websites):**
+- Weighted products: main price per kg (big) + per-100g below (small)
+- Non-weighted products: price per unit + per-100g from `unit_qty` computation
+
+**Added `formatDisplayPrice()` utility** — simple renderer: `₪{price} / {unit}` when unit exists, `₪{price}` when null. Replaces the old `effectiveUnit() → unitSuffix()` chain for display.
+
+#### 8. Fully API-Driven Sub-subcategory Ordering
+- Removed `SUBCATEGORY_ORDER` config entirely (was already emptied, now `sortSubItems()` is a passthrough)
+- The API's `/categories` endpoint now returns sub-subcategories in custom order (e.g., עגבניות → מלפפונים → פלפלים for ירקות טריים)
+- `sort_by=subcategory_order` used for both category and subcategory level browse
+- `sort_by=is_weighted` used at sub-subcategory level only
+
+### Files Changed (all sessions combined)
+- `types.ts` — Added `display_min_price`, `display_unit`, `min_price_per_100g`, `display_price`, `display_effective_price`, `price_per_100g`, `effective_price_per_100g`, `item_status` to product/price interfaces
+- `utils/priceFormat.ts` — Added `formatDisplayPrice()` helper
+- `components/ProductCard.tsx` — Uses `display_min_price` + `display_unit` + `min_price_per_100g`
+- `components/ProductDetailModal.tsx` — Uses `display_effective_price` + `effective_price_per_100g` per chain
+- `components/GroupDetailModal.tsx` — Uses `display_effective_price` + `effective_price_per_100g`, removed hardcoded "/ ק״ג"
+- `components/ProductCatalogArea.tsx` — Weight filter, API-driven sorting, auto-fetch
+- `components/BasketBreakdownView.tsx` — Uses `displayPrice` + `pricePer100g` per item
+- `components/SavingsReport.tsx` — Uses `displayPrice` + `displayUnit` per item
+- `services/priceDbService.ts` — Maps new API display fields into `ItemPriceDetail`
+
 ---
 
 **Last Updated**: April 9, 2026
-**Version**: 5.6.0
+**Version**: 5.7.0
 **Status**: Production Ready
 

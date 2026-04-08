@@ -86,10 +86,13 @@ export interface DbProduct {
   min_price: number;
   max_price?: number;   // absent from browse endpoint
   savings?: number;     // absent from browse endpoint
-  unit_of_measure?: string | null; // "kg", "100 גרם", etc. — only meaningful when is_weighted is true
+  unit_of_measure?: string | null; // canonical price unit: "ק"ג", "גרם", "ליטר", "מ"ל", "יחידה" — what the stored price number means
   is_weighted?: boolean | null;    // true = sold by weight, false = packaged, null = unknown
   unit_qty?: string | null;        // e.g. "1 ליטר", "400 גרם" — representative value from price entries, null for Rami Levy-only
   product_group_id?: number | null; // links to product_groups entry for fresh produce dedup; null for regular products
+  display_min_price?: number | null;  // consumer-friendly min price (always per-kg for weighted)
+  display_unit?: string | null;       // unit label for display (e.g. "ק״ג" for weighted, null for unit products)
+  min_price_per_100g?: number | null; // price per 100g for weighted products (min_price ÷ 10)
   // Optional enhanced fields (present when using browse/detail endpoints)
   subcategory?: string | null;
   sub_subcategory?: string | null;
@@ -121,7 +124,12 @@ export interface ProductStorePrice {
   supermarket: string;
   price: number;
   effective_price: number;
+  display_price?: number | null;            // consumer-friendly regular price (per-kg for weighted)
+  display_effective_price?: number | null;  // consumer-friendly effective price (per-kg for weighted)
+  price_per_100g?: number | null;           // price ÷ 10 for weighted products
+  effective_price_per_100g?: number | null; // effective_price ÷ 10 for weighted products
   unit_qty?: string | null; // e.g. "1 ליטר", "400 גרם", "1 ק"ג" — per-price, null for Rami Levy
+  item_status?: number | null;              // 1 = sold, 0 = delisted, null = unknown
   promotion: { description: string; type: string; ends_at: string | null } | null;
   store: { store_id: string; store_name: string; city: string | null; address: string | null; is_online: boolean };
 }
@@ -148,9 +156,15 @@ export interface ProductGroupDetail {
     supermarket: string;
     regular_price: number;
     effective_price: number;
+    display_price?: number | null;
+    display_effective_price?: number | null;
+    display_unit?: string | null;
+    price_per_100g?: number | null;
+    effective_price_per_100g?: number | null;
     unit_qty: string | null;
     product_name: string;
     barcode: string;
+    item_status?: number | null;
     promotion: { description: string; type: string; ends_at: string | null } | null;
     store: { store_id: string; store_name: string; city: string | null; address: string | null; is_online: boolean; delivery_fee: number | null; minimum_order: number | null };
   }[];
@@ -251,6 +265,10 @@ export interface ItemPriceDetail {
   itemName: string;
   price: number;
   originalPrice?: number;  // regular price before promo (if discounted)
+  displayPrice?: number;         // consumer-friendly effective price (per-kg for weighted)
+  displayOriginalPrice?: number; // consumer-friendly regular price (per-kg for weighted)
+  displayUnit?: string | null;   // unit label for display (e.g. "ק״ג")
+  pricePer100g?: number | null;  // effective price per 100g for weighted products
   amount: number;
   total: number;
   promotion?: ItemPromotion;

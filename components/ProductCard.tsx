@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Package, Weight, Plus, Minus } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
-import { formatPriceLabel, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct } from '../utils/priceFormat';
+import { formatDisplayPrice, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct } from '../utils/priceFormat';
 
 interface ProductCardProps {
   product: DbProductEnhanced;
@@ -21,6 +21,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
   const displayUnitQty = normalizeUnitQty(product.unit_qty);
   const unitPriceLine = formatUnitPriceLine(product.min_price, product.unit_qty, product.is_weighted);
   const hasPromo = product.max_price != null && product.min_price < product.max_price;
+  // Use backend-computed display fields for correct price labels
+  const cardPrice = product.display_min_price ?? product.min_price;
+  const cardPriceLabel = formatDisplayPrice(cardPrice, product.display_unit);
   const discountPct = hasPromo && product.max_price
     ? Math.round((1 - product.min_price / product.max_price) * 100)
     : 0;
@@ -74,13 +77,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
           {hasPromo && product.max_price != null ? (
             <>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-sm font-black text-rose-600">
-                  {weighted
-                    ? formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)
-                    : `₪${product.min_price.toFixed(2)} ${isRTL ? 'ליח׳' : '/unit'}`}
-                </span>
+                <span className="text-sm font-black text-rose-600">{cardPriceLabel}</span>
                 <span className="text-xs font-normal text-slate-400 line-through">₪{product.max_price.toFixed(2)}</span>
               </div>
+              {weighted && product.min_price_per_100g != null && (
+                <p className="text-[10px] text-slate-400">₪{product.min_price_per_100g.toFixed(2)} / 100 גרם</p>
+              )}
               {!weighted && unitPriceLine && (
                 <p className="text-[10px] text-slate-400">{unitPriceLine}</p>
               )}
@@ -90,11 +92,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
             </>
           ) : (
             <>
-              <span className="text-sm font-bold text-emerald-600">
-                {weighted
-                  ? formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)
-                  : `₪${product.min_price.toFixed(2)} ${isRTL ? 'ליח׳' : '/unit'}`}
-              </span>
+              <span className="text-sm font-bold text-emerald-600">{cardPriceLabel}</span>
+              {weighted && product.min_price_per_100g != null && (
+                <p className="text-[10px] text-slate-400">₪{product.min_price_per_100g.toFixed(2)} / 100 גרם</p>
+              )}
               {!weighted && unitPriceLine && (
                 <p className="text-[10px] text-slate-400">{unitPriceLine}</p>
               )}

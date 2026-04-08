@@ -5,6 +5,7 @@ import { ProductGroupDetail, DbProductEnhanced } from '../types';
 import { getGroupDetail } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
+import { formatDisplayPrice } from '../utils/priceFormat';
 
 interface GroupDetailModalProps {
   groupId: number;
@@ -45,6 +46,7 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
   const cheapest = prices[0]?.effective_price ?? null;
   const mostExpensive = prices[prices.length - 1]?.effective_price ?? null;
   const maxSavings = cheapest != null && mostExpensive != null ? mostExpensive - cheapest : 0;
+  const displayUnit = prices[0]?.display_unit || null;
 
   const modal = (
     <div
@@ -110,8 +112,13 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
                       {isRTL ? 'המחיר הזול ביותר' : 'Cheapest Price'}
                     </p>
                     <p className="text-3xl font-black text-emerald-700 leading-none">
-                      ₪{cheapest.toFixed(2)} / {isRTL ? 'ק״ג' : 'kg'}
+                      {formatDisplayPrice(prices[0]?.display_effective_price ?? cheapest, displayUnit)}
                     </p>
+                    {prices[0]?.effective_price_per_100g != null && (
+                      <p className="text-[11px] text-slate-500 font-medium mt-1">
+                        ₪{prices[0].effective_price_per_100g.toFixed(2)} / 100 גרם
+                      </p>
+                    )}
                     <p className="text-xs text-slate-500 mt-1">
                       {prices[0].supermarket} — {prices[0].product_name}
                     </p>
@@ -177,13 +184,15 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
                         </div>
                         <div className="text-end flex-shrink-0">
                           <p className={`text-sm font-black ${isCheapest ? 'text-emerald-700' : hasDiscount ? 'text-rose-600' : 'text-slate-700'}`}>
-                            ₪{p.effective_price.toFixed(2)} / {isRTL ? 'ק״ג' : 'kg'}
+                            {formatDisplayPrice(p.display_effective_price ?? p.effective_price, p.display_unit || displayUnit)}
                           </p>
                           {hasDiscount && (
-                            <p className="text-[11px] text-slate-400 line-through">₪{p.regular_price.toFixed(2)}</p>
+                            <p className="text-[11px] text-slate-400 line-through">
+                              {formatDisplayPrice(p.display_price ?? p.regular_price, p.display_unit || displayUnit)}
+                            </p>
                           )}
-                          {p.unit_qty && (
-                            <p className="text-[10px] text-slate-400">{p.unit_qty}</p>
+                          {p.effective_price_per_100g != null && (
+                            <p className="text-[10px] text-slate-400">₪{p.effective_price_per_100g.toFixed(2)} / 100 גרם</p>
                           )}
                           {!isCheapest && diff > 0.01 && (
                             <p className="text-[11px] text-slate-400 font-medium">+₪{diff.toFixed(2)}</p>

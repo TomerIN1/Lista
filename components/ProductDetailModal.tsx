@@ -4,7 +4,7 @@ import { X, Package, Leaf, Tag, TrendingDown, AlertCircle, Weight, Plus, Minus }
 import { DbProductDetail, DbProductEnhanced, ProductStorePrice } from '../types';
 import { getProductDetail } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
-import { unitBadgeLabel, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct } from '../utils/priceFormat';
+import { normalizeUnitQty, formatUnitPriceLine, isWeightedProduct, formatDisplayPrice } from '../utils/priceFormat';
 
 interface ProductDetailModalProps {
   barcode: string;
@@ -80,8 +80,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
   useEffect(() => {
     if (product || fallbackProduct) setQty(minQty);
   }, [product, fallbackProduct, minQty]);
-  const badge = unitBadgeLabel(uom, weighted);
-  const priceSuffix = badge ? ` / ${badge}` : '';
+  // Use backend-computed display fields
+  const displayUnit = product?.display_unit || fallbackProduct?.display_unit || null;
 
   // Extract representative unit_qty from price entries (first non-null)
   const representativeUnitQty = sortedPrices.find(p => p.unit_qty)?.unit_qty ?? null;
@@ -162,7 +162,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                   { label: isRTL ? 'יצרן' : 'Manufacturer', value: info.manufacturer },
                   { label: isRTL ? 'גודל אריזה' : 'Package Size', value: displayUnitQty },
                   { label: isRTL ? 'סוג מכירה' : 'Sale Type', value: isWeightedProduct(uom, weighted) ? (isRTL ? 'נמכר במשקל' : 'Sold by weight') : (isRTL ? 'יחידה' : 'Per unit') },
-                  { label: isRTL ? 'יחידת מידה' : 'Unit of Measure', value: badge },
+                  { label: isRTL ? 'יחידת מידה' : 'Unit of Measure', value: displayUnit },
                   { label: isRTL ? 'קטגוריה' : 'Category', value: info.category },
                   { label: isRTL ? 'תת-קטגוריה' : 'Subcategory', value: info.subcategory },
                   { label: isRTL ? 'תת-תת-קטגוריה' : 'Sub-subcategory', value: info.sub_subcategory },
@@ -187,15 +187,12 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                       {isRTL ? 'מחיר מינימלי' : 'Best Price'}
                     </p>
                     <p className="text-3xl font-black text-emerald-700 leading-none">
-                      ₪{cheapestPrice.toFixed(2)}{priceSuffix}
+                      {formatDisplayPrice(sortedPrices[0]?.display_effective_price ?? cheapestPrice, displayUnit)}
                     </p>
-                    {badge && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <Weight className="w-3 h-3 text-amber-500" />
-                        <span className="text-[11px] text-amber-600 font-medium">
-                          {isRTL ? `מחיר ל-${badge}` : `Price per ${badge}`}
-                        </span>
-                      </div>
+                    {sortedPrices[0]?.effective_price_per_100g != null && (
+                      <p className="text-[11px] text-slate-500 font-medium mt-1">
+                        ₪{sortedPrices[0].effective_price_per_100g.toFixed(2)} / 100 גרם
+                      </p>
                     )}
                     {cheapestUnitPriceLine && (
                       <p className="text-[11px] text-slate-500 font-medium mt-1">
@@ -205,7 +202,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                     {mostExpensivePrice != null && mostExpensivePrice !== cheapestPrice && (
                       <p className="text-xs text-slate-400 mt-1">
                         {isRTL ? 'עד' : 'up to'}{' '}
-                        <span className="line-through">₪{mostExpensivePrice.toFixed(2)}{priceSuffix}</span>
+                        <span className="line-through">
+                          {formatDisplayPrice(sortedPrices[sortedPrices.length - 1]?.display_effective_price ?? mostExpensivePrice, displayUnit)}
+                        </span>
                         {' '}{isRTL ? 'בחנויות אחרות' : 'elsewhere'}
                       </p>
                     )}
@@ -320,10 +319,15 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                           {/* Price column */}
                           <div className="text-end flex-shrink-0">
                             <p className={`text-sm font-black ${isCheapest ? 'text-emerald-700' : hasDiscount ? 'text-rose-600' : 'text-slate-700'}`}>
-                              ₪{p.effective_price.toFixed(2)}{priceSuffix}
+                              {formatDisplayPrice(p.display_effective_price ?? p.effective_price, displayUnit)}
                             </p>
                             {hasDiscount && (
-                              <p className="text-[11px] text-slate-400 line-through">₪{p.price.toFixed(2)}</p>
+                              <p className="text-[11px] text-slate-400 line-through">
+                                {formatDisplayPrice(p.display_price ?? p.price, displayUnit)}
+                              </p>
+                            )}
+                            {p.effective_price_per_100g != null && (
+                              <p className="text-[10px] text-slate-400">₪{p.effective_price_per_100g.toFixed(2)} / 100 גרם</p>
                             )}
                             {storeUnitPriceLine && (
                               <p className="text-[10px] text-slate-400">{storeUnitPriceLine}</p>

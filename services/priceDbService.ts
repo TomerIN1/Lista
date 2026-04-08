@@ -398,7 +398,13 @@ interface ApiStoreItem {
   quantity: number;
   unit_price: number | null;
   effective_unit_price: number | null;
+  display_unit_price?: number | null;
+  display_effective_unit_price?: number | null;
+  display_unit?: string | null;
+  unit_price_per_100g?: number | null;
+  effective_unit_price_per_100g?: number | null;
   total_price: number | null;
+  item_status?: number | null;
   promotion: ApiStoreItemPromotion | null;
   available: boolean;
 }
@@ -472,17 +478,21 @@ export async function compareListPrices(
     chainMap.set(displayName, existing);
   }
 
-  // Map an API item to our ItemPriceDetail (with promotion data)
+  // Map an API item to our ItemPriceDetail (with promotion data + display fields)
   const mapItemPrice = (item: ApiStoreItem): ItemPriceDetail => {
     const detail: ItemPriceDetail = {
       itemName: item.name || item.barcode,
       price: item.effective_unit_price!,
+      displayPrice: item.display_effective_unit_price ?? undefined,
+      displayUnit: item.display_unit ?? undefined,
+      pricePer100g: item.effective_unit_price_per_100g ?? undefined,
       amount: item.quantity,
       total: item.total_price!,
     };
     // Include original price if there's a discount
     if (item.promotion && item.unit_price != null && item.unit_price !== item.effective_unit_price) {
       detail.originalPrice = item.unit_price;
+      detail.displayOriginalPrice = item.display_unit_price ?? undefined;
       detail.promotion = {
         description: item.promotion.description,
         type: item.promotion.type,

@@ -63,9 +63,20 @@ function unitSuffix(unitOfMeasure?: string | null, isWeighted?: boolean | null):
 /**
  * Formats a single price with unit suffix.
  * e.g. "₪8.90 / ק״ג", "₪82.00 / 100 ג׳", "₪7.20 / ליטר", "₪7.20"
+ * @deprecated Use formatDisplayPrice() with API display_* fields instead.
  */
 export function formatPriceLabel(price: number, unitOfMeasure?: string | null, isWeighted?: boolean | null): string {
   return `₪${price.toFixed(2)}${unitSuffix(unitOfMeasure, isWeighted)}`;
+}
+
+/**
+ * Formats a price using the backend-computed display fields.
+ * If display_unit is present: "₪5.23 / 100 גרם"
+ * If display_unit is null: "₪7.20"
+ */
+export function formatDisplayPrice(displayPrice: number, displayUnit?: string | null): string {
+  if (displayUnit) return `₪${displayPrice.toFixed(2)} / ${displayUnit}`;
+  return `₪${displayPrice.toFixed(2)}`;
 }
 
 /**
