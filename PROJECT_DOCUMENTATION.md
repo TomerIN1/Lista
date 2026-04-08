@@ -3783,7 +3783,65 @@ End-to-end working: cart reading, adding items, out-of-stock detection + replace
 
 ---
 
-**Last Updated**: April 6, 2026
-**Version**: 5.5.0
+---
+
+## Session: April 8–9, 2026
+
+### Changes Made
+
+#### 1. Consistent Product Card Info Layout (`ProductCard.tsx`)
+Redesigned product card info section to show consistent data based on `is_weighted`:
+
+- **Weighted products (`is_weighted=true`):**
+  1. Product name
+  2. "נמכר במשקל" badge (with weight icon, amber color)
+  3. Price per unit (e.g., "₪8.90 / ק״ג")
+
+- **Unit products (`is_weighted=false`):**
+  1. Product name
+  2. "יחידה" label + package size (e.g., "יחידה | 400 גרם")
+  3. Price per unit (e.g., "₪10.90 ליח׳")
+  4. Price per 100g (e.g., "₪3.12 ל-100 גרם") — only when `unit_qty` has numeric weight data
+
+- Removed old mixed manufacturer/unitQty line and bottom-placed weighted badge
+- Removed `formatWeightedSubprice` usage (no longer showing ≈ per-100g for weighted products)
+
+#### 2. Weight Filter in Filter Panel (`ProductCatalogArea.tsx`)
+Added "סוג מוצר" (Product type) filter section with two options:
+- **נמכר במשקל** (amber) — shows only `is_weighted=true` products
+- **יחידה** (blue) — shows only `is_weighted=false/null` products
+- Behaves as radio buttons (selecting one deselects the other)
+- Active filter chip shown in summary row with dismiss button
+- Included in filter count badge and clear-all action
+
+#### 3. Default Sort Changed to `'default'`
+- Changed initial sort from `'price_asc'` to `'default'` to preserve API ordering
+- Prevents products from reshuffling when loading more pages
+
+#### 4. Auto-fetch for Client-Side Filters
+- When client-side filters (weight, on-sale, price range) reduce visible products below 16, automatically fetches next page from API
+- Prevents showing only 2 products when most of a page is filtered out
+
+#### 5. API-Level Sorting Integration (new sort_by options)
+Wired up three new API sort modes in the browse fetch logic:
+- **Category level** (no subcategory selected): `sort_by=subcategory_order` — groups products by subcategory (largest first), weighted products first within each
+- **Subcategory level** (with sub-subcategory order): `sort_by=sub_subcategory_order` — existing, now fully API-driven
+- **Any other level**: `sort_by=is_weighted` — weighted products appear first
+- Removed hardcoded `SUBCATEGORY_ORDER` for ירקות טריים (now empty `{}`) — sub-subcategory ordering is fully handled by the API
+- Simplified client-side default sort to just preserve API order
+
+#### 6. API-Side Fixes (db-api agent)
+- **`unit_qty` normalization**: Fixed bare unit names (e.g., "גרמים") to include numeric values (e.g., "500 גרם") across all 5 chain ETLs. Enables per-100g pricing display on product cards.
+- **New sort_by options**: `subcategory_order`, `is_weighted`, and improved `sub_subcategory_order` — all sort weighted products first within their groups.
+- API version bumped to 1.6.0
+
+### Files Changed (Lista Frontend)
+- `components/ProductCard.tsx` — Consistent card info layout for weighted vs unit products
+- `components/ProductCatalogArea.tsx` — Weight filter, default sort, auto-fetch, API sort integration
+
+---
+
+**Last Updated**: April 9, 2026
+**Version**: 5.6.0
 **Status**: Production Ready
 

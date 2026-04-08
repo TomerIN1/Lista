@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Search, X, Loader2, Leaf, ChevronRight, SlidersHorizontal, Check, ArrowUpDown, Tag, DollarSign } from 'lucide-react';
+import { Search, X, Loader2, Leaf, ChevronRight, SlidersHorizontal, Check, ArrowUpDown, Tag, DollarSign, Weight, Package } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DbProductEnhanced, ShoppingProduct, Unit, CategoryNode, ProductSortOption } from '../types';
 import { getCategories, browseProducts, searchProducts, getProductGroups, ProductGroupSummary } from '../services/priceDbService';
@@ -45,18 +45,8 @@ const CATEGORY_ORDER: string[] = [
   'אחר ולא מסווג',
 ];
 
-// Custom sub-subcategory ordering within specific subcategories
-const SUBCATEGORY_ORDER: Record<string, string[]> = {
-  'ירקות טריים': [
-    'עגבניות',
-    'מלפפונים',
-    'פלפלים',
-    'בצלים ושום',
-    'פטריות',
-    'ירקות עלים',
-    'ירקות שורש',
-  ],
-};
+// Sub-subcategory ordering is handled server-side via sort_by=sub_subcategory_order
+const SUBCATEGORY_ORDER: Record<string, string[]> = {};
 
 export function sortSubItems<T extends { name: string }>(items: T[], parentName: string): T[] {
   const order = SUBCATEGORY_ORDER[parentName.replace(/\s+/g, ' ')];
@@ -106,6 +96,8 @@ type View = 'categories' | 'browse' | 'search';
 const PAGE_SIZE = 24;
 
 // ─── Filter dropdown ─────────────────────────────────────────────────────────
+type WeightFilter = 'all' | 'weighted' | 'unit';
+
 interface FilterPanelProps {
   filterVegan: boolean;
   onToggleVegan: () => void;
@@ -113,6 +105,8 @@ interface FilterPanelProps {
   onToggleAllergen: (a: string) => void;
   filterOnSale: boolean;
   onToggleOnSale: () => void;
+  filterWeight: WeightFilter;
+  onWeightChange: (v: WeightFilter) => void;
   priceMin: string;
   priceMax: string;
   onPriceMinChange: (v: string) => void;
@@ -123,7 +117,8 @@ interface FilterPanelProps {
 
 const FilterPanel: React.FC<FilterPanelProps> = ({
   filterVegan, onToggleVegan, filterAllergenFree, onToggleAllergen,
-  filterOnSale, onToggleOnSale, priceMin, priceMax, onPriceMinChange, onPriceMaxChange,
+  filterOnSale, onToggleOnSale, filterWeight, onWeightChange,
+  priceMin, priceMax, onPriceMinChange, onPriceMaxChange,
   onClearFilters, activeCount
 }) => {
   const { t } = useLanguage();
@@ -197,6 +192,42 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   filterOnSale ? 'bg-red-500 border-red-500' : 'border-slate-300'
                 }`}>
                   {filterOnSale && <Check className="w-3 h-3 text-white" />}
+                </span>
+              </button>
+
+              {/* Weight type filter */}
+              <div className="h-px bg-slate-100 my-2" />
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">
+                סוג מוצר
+              </p>
+              <button
+                type="button"
+                onClick={() => onWeightChange(filterWeight === 'weighted' ? 'all' : 'weighted')}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                <span className="flex items-center gap-2 text-sm text-slate-700">
+                  <Weight className="w-4 h-4 text-amber-500" />
+                  נמכר במשקל
+                </span>
+                <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+                  filterWeight === 'weighted' ? 'bg-amber-500 border-amber-500' : 'border-slate-300'
+                }`}>
+                  {filterWeight === 'weighted' && <Check className="w-3 h-3 text-white" />}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onWeightChange(filterWeight === 'unit' ? 'all' : 'unit')}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                <span className="flex items-center gap-2 text-sm text-slate-700">
+                  <Package className="w-4 h-4 text-blue-500" />
+                  יחידה
+                </span>
+                <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+                  filterWeight === 'unit' ? 'bg-blue-500 border-blue-500' : 'border-slate-300'
+                }`}>
+                  {filterWeight === 'unit' && <Check className="w-3 h-3 text-white" />}
                 </span>
               </button>
 
@@ -380,8 +411,9 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   // Filters
   const [filterVegan, setFilterVegan] = useState(false);
   const [filterAllergenFree, setFilterAllergenFree] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<ProductSortOption>('price_asc');
+  const [sortBy, setSortBy] = useState<ProductSortOption>('default');
   const [filterOnSale, setFilterOnSale] = useState(false);
+  const [filterWeight, setFilterWeight] = useState<WeightFilter>('all');
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
 
@@ -397,7 +429,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
 
   const fetchId = useRef(0);
 
-  const activeFilterCount = (filterVegan ? 1 : 0) + filterAllergenFree.length + (filterOnSale ? 1 : 0) + (priceMin ? 1 : 0) + (priceMax ? 1 : 0);
+  const activeFilterCount = (filterVegan ? 1 : 0) + filterAllergenFree.length + (filterOnSale ? 1 : 0) + (filterWeight !== 'all' ? 1 : 0) + (priceMin ? 1 : 0) + (priceMax ? 1 : 0);
 
   // ── Load categories + featured products on mount ─────────────────────────
   useEffect(() => {
@@ -518,8 +550,16 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           );
           result = { products: sr.products as DbProductEnhanced[], total: sr.total };
         } else {
-          // Use API-level sub-subcategory sorting when viewing a subcategory with defined order
-          const useSubcatSort = selectedSubcategory && !selectedSubSubcategory && SUBCATEGORY_ORDER[selectedSubcategory];
+          // Pick the right API sort:
+          // - Category level (no subcategory): subcategory_order → groups by subcategory, weighted first
+          // - Subcategory level (with custom sub-subcat order): sub_subcategory_order
+          // - Any other level: is_weighted → weighted products first
+          let apiSort: string | undefined = 'is_weighted';
+          if (selectedCategory && !selectedSubcategory) {
+            apiSort = 'subcategory_order';
+          } else if (selectedSubcategory && !selectedSubSubcategory && SUBCATEGORY_ORDER[selectedSubcategory]) {
+            apiSort = 'sub_subcategory_order';
+          }
           const br = await browseProducts({
             category: selectedCategory || undefined,
             subcategory: selectedSubcategory || undefined,
@@ -531,7 +571,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
             chains: selectedChains && selectedChains.length > 0 ? selectedChains : undefined,
             limit: PAGE_SIZE,
             page,
-            sort_by: useSubcatSort ? 'sub_subcategory_order' : undefined,
+            sort_by: apiSort,
           });
           result = { products: br.products, total: br.total };
         }
@@ -665,6 +705,13 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
       list = list.filter((p) => p.labels && p.labels.length > 0);
     }
 
+    // Weight type filter
+    if (filterWeight === 'weighted') {
+      list = list.filter((p) => p.is_weighted === true);
+    } else if (filterWeight === 'unit') {
+      list = list.filter((p) => p.is_weighted === false || p.is_weighted === null || p.is_weighted === undefined);
+    }
+
     // Price range filter
     const minP = priceMin ? parseFloat(priceMin) : null;
     const maxP = priceMax ? parseFloat(priceMax) : null;
@@ -682,25 +729,28 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           default: return 0;
         }
       });
-    } else if (selectedSubcategory && !selectedSubSubcategory && SUBCATEGORY_ORDER[selectedSubcategory]) {
-      // Custom sort: group by sub-subcategory order, weighted products first within each group
-      const subOrder = SUBCATEGORY_ORDER[selectedSubcategory];
-      const orderMap = new Map(subOrder.map((name, i) => [name, i]));
-      list.sort((a, b) => {
-        const aIdx = orderMap.get(a.sub_subcategory || '') ?? 999;
-        const bIdx = orderMap.get(b.sub_subcategory || '') ?? 999;
-        if (aIdx !== bIdx) return aIdx - bIdx;
-        // Within same sub-subcategory: weighted first
-        const aW = a.is_weighted ? 0 : 1;
-        const bW = b.is_weighted ? 0 : 1;
-        return aW - bW;
-      });
+    } else {
+      // Default: preserve API order (server already sorts by subcategory_order,
+      // sub_subcategory_order, or is_weighted depending on browse level)
     }
 
     return list;
-  }, [products, filterOnSale, priceMin, priceMax, sortBy, view, productGroups, selectedSubcategory, selectedSubSubcategory]);
+  }, [products, filterOnSale, filterWeight, priceMin, priceMax, sortBy, view, productGroups, selectedSubcategory, selectedSubSubcategory]);
 
-  const hasClientSideFilters = filterOnSale || priceMin !== '' || priceMax !== '';
+  const hasClientSideFilters = filterOnSale || filterWeight !== 'all' || priceMin !== '' || priceMax !== '';
+
+  // Auto-fetch more pages when client-side filters leave too few visible products
+  const MIN_DISPLAY = 16;
+  useEffect(() => {
+    if (
+      hasClientSideFilters &&
+      !isLoadingProducts &&
+      displayProducts.length < MIN_DISPLAY &&
+      products.length < totalProducts
+    ) {
+      fetchProducts(currentPage + 1, false);
+    }
+  }, [displayProducts.length, hasClientSideFilters, isLoadingProducts, products.length, totalProducts, currentPage, fetchProducts]);
 
   // Derived
   const activeCategoryNode = selectedCategory
@@ -753,11 +803,13 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           }
           filterOnSale={filterOnSale}
           onToggleOnSale={() => setFilterOnSale((v) => !v)}
+          filterWeight={filterWeight}
+          onWeightChange={setFilterWeight}
           priceMin={priceMin}
           priceMax={priceMax}
           onPriceMinChange={setPriceMin}
           onPriceMaxChange={setPriceMax}
-          onClearFilters={() => { setFilterVegan(false); setFilterAllergenFree([]); setFilterOnSale(false); setPriceMin(''); setPriceMax(''); }}
+          onClearFilters={() => { setFilterVegan(false); setFilterAllergenFree([]); setFilterOnSale(false); setFilterWeight('all'); setPriceMin(''); setPriceMax(''); }}
           activeCount={activeFilterCount}
         />
       </div>
@@ -779,6 +831,17 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
               <Tag className="w-3 h-3" />
               {t('productBrowse.onSale')}
               <button onClick={() => setFilterOnSale(false)} className="ms-0.5 hover:opacity-70">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filterWeight !== 'all' && (
+            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap flex-shrink-0 ${
+              filterWeight === 'weighted' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+            }`}>
+              {filterWeight === 'weighted' ? <Weight className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+              {filterWeight === 'weighted' ? 'נמכר במשקל' : 'יחידה'}
+              <button onClick={() => setFilterWeight('all')} className="ms-0.5 hover:opacity-70">
                 <X className="w-3 h-3" />
               </button>
             </span>

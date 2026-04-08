@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Package, Weight, Plus, Minus } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
-import { formatPriceLabel, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct, formatWeightedSubprice } from '../utils/priceFormat';
+import { formatPriceLabel, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct } from '../utils/priceFormat';
 
 interface ProductCardProps {
   product: DbProductEnhanced;
@@ -20,7 +20,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
   const [qty, setQty] = useState(minQty);
   const displayUnitQty = normalizeUnitQty(product.unit_qty);
   const unitPriceLine = formatUnitPriceLine(product.min_price, product.unit_qty, product.is_weighted);
-  const weightedSubprice = formatWeightedSubprice(product.min_price, product.unit_of_measure, product.is_weighted);
   const hasPromo = product.max_price != null && product.min_price < product.max_price;
   const discountPct = hasPromo && product.max_price
     ? Math.round((1 - product.min_price / product.max_price) * 100)
@@ -55,22 +54,34 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
         <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-tight">
           {product.name}
         </p>
-        {(product.manufacturer || displayUnitQty) && (
+
+        {weighted ? (
+          /* ── Weighted product meta ── */
+          <div className="flex items-center gap-1">
+            <Weight className="w-3 h-3 text-amber-500" />
+            <span className="text-[10px] text-amber-600 font-semibold">
+              {isRTL ? 'נמכר במשקל' : 'Sold by weight'}
+            </span>
+          </div>
+        ) : (
+          /* ── Unit product meta ── */
           <p className="text-[11px] text-slate-400 truncate">
-            {[product.manufacturer, displayUnitQty].filter(Boolean).join(' | ')}
+            {[isRTL ? 'יחידה' : 'Unit', displayUnitQty].filter(Boolean).join(' | ')}
           </p>
         )}
+
         <div className="mt-auto pt-1">
           {hasPromo && product.max_price != null ? (
             <>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-sm font-black text-rose-600">{formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}</span>
+                <span className="text-sm font-black text-rose-600">
+                  {weighted
+                    ? formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)
+                    : `₪${product.min_price.toFixed(2)} ${isRTL ? 'ליח׳' : '/unit'}`}
+                </span>
                 <span className="text-xs font-normal text-slate-400 line-through">₪{product.max_price.toFixed(2)}</span>
               </div>
-              {weightedSubprice && (
-                <p className="text-[10px] text-slate-400">{weightedSubprice}</p>
-              )}
-              {unitPriceLine && (
+              {!weighted && unitPriceLine && (
                 <p className="text-[10px] text-slate-400">{unitPriceLine}</p>
               )}
               <p className="text-[11px] text-rose-500 font-semibold">
@@ -79,22 +90,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
             </>
           ) : (
             <>
-              <span className="text-sm font-bold text-emerald-600">{formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}</span>
-              {weightedSubprice && (
-                <p className="text-[10px] text-slate-400">{weightedSubprice}</p>
-              )}
-              {unitPriceLine && (
+              <span className="text-sm font-bold text-emerald-600">
+                {weighted
+                  ? formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)
+                  : `₪${product.min_price.toFixed(2)} ${isRTL ? 'ליח׳' : '/unit'}`}
+              </span>
+              {!weighted && unitPriceLine && (
                 <p className="text-[10px] text-slate-400">{unitPriceLine}</p>
               )}
             </>
-          )}
-          {weighted && (
-            <div className="flex items-center gap-1 mt-1">
-              <Weight className="w-3 h-3 text-amber-500" />
-              <span className="text-[10px] text-amber-600 font-semibold">
-                {isRTL ? 'נמכר במשקל' : 'Sold by weight'}
-              </span>
-            </div>
           )}
         </div>
       </div>
