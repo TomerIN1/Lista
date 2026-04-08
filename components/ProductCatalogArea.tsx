@@ -45,19 +45,10 @@ const CATEGORY_ORDER: string[] = [
   'אחר ולא מסווג',
 ];
 
-// Sub-subcategory ordering is handled server-side via sort_by=sub_subcategory_order
-const SUBCATEGORY_ORDER: Record<string, string[]> = {};
-
-export function sortSubItems<T extends { name: string }>(items: T[], parentName: string): T[] {
-  const order = SUBCATEGORY_ORDER[parentName.replace(/\s+/g, ' ')];
-  if (!order) return items;
-  const orderMap = new Map(order.map((name, i) => [name.replace(/\s+/g, ' '), i]));
-  return [...items].sort((a, b) => {
-    const aIdx = orderMap.get(a.name.replace(/\s+/g, ' ')) ?? 999;
-    const bIdx = orderMap.get(b.name.replace(/\s+/g, ' ')) ?? 999;
-    if (aIdx !== bIdx) return aIdx - bIdx;
-    return a.name.localeCompare(b.name, 'he');
-  });
+// Sub-subcategory ordering is handled server-side via sort_by=subcategory_order.
+// sortSubItems is kept as a passthrough for CategoryNavBar compatibility.
+export function sortSubItems<T extends { name: string }>(items: T[], _parentName: string): T[] {
+  return items;
 }
 
 export function sortCategories(cats: CategoryNode[]): CategoryNode[] {
@@ -550,16 +541,9 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           );
           result = { products: sr.products as DbProductEnhanced[], total: sr.total };
         } else {
-          // Pick the right API sort:
-          // - Category level (no subcategory): subcategory_order → groups by subcategory, weighted first
-          // - Subcategory level (with custom sub-subcat order): sub_subcategory_order
-          // - Any other level: is_weighted → weighted products first
-          let apiSort: string | undefined = 'is_weighted';
-          if (selectedCategory && !selectedSubcategory) {
-            apiSort = 'subcategory_order';
-          } else if (selectedSubcategory && !selectedSubSubcategory && SUBCATEGORY_ORDER[selectedSubcategory]) {
-            apiSort = 'sub_subcategory_order';
-          }
+          // API sort: subcategory_order at category/subcategory level,
+          // is_weighted at sub-subcategory level (already filtered to one group)
+          const apiSort = selectedSubSubcategory ? 'is_weighted' : 'subcategory_order';
           const br = await browseProducts({
             category: selectedCategory || undefined,
             subcategory: selectedSubcategory || undefined,
