@@ -3881,9 +3881,16 @@ Applied in three places:
 - `components/ProductDetailModal.tsx` — quantity selector in product detail
 - `components/ShoppingInputArea.tsx` — quantity input in the shopping cart
 
+#### 10. Sort by Price Difference (%)
+Added two new sort options to the sort dropdown:
+- **פער מחיר: גבוה ← נמוך** (`savings_desc`) — products with the biggest price spread % across supermarkets first
+- **פער מחיר: נמוך ← גבוה** (`savings_asc`) — products with the smallest price spread first
+- Computed as `(1 - min_price / max_price)` — products with no spread sort to the bottom/top
+- Files: `types.ts`, `ProductCatalogArea.tsx`, `constants/translations.ts`
+
 ---
 
 **Last Updated**: April 9, 2026
-**Version**: 5.7.1
+**Version**: 5.7.2
 **Status**: Production Ready
 

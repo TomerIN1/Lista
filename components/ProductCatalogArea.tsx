@@ -299,12 +299,14 @@ interface SortDropdownProps {
   onSortChange: (sort: ProductSortOption) => void;
 }
 
-const SORT_OPTIONS: ProductSortOption[] = ['default', 'price_asc', 'price_desc', 'name_asc', 'name_desc'];
+const SORT_OPTIONS: ProductSortOption[] = ['default', 'price_asc', 'price_desc', 'savings_desc', 'savings_asc', 'name_asc', 'name_desc'];
 
 const SORT_LABEL_KEYS: Record<ProductSortOption, string> = {
   default: 'productBrowse.sortDefault',
   price_asc: 'productBrowse.sortPriceAsc',
   price_desc: 'productBrowse.sortPriceDesc',
+  savings_desc: 'productBrowse.sortSavingsDesc',
+  savings_asc: 'productBrowse.sortSavingsAsc',
   name_asc: 'productBrowse.sortNameAsc',
   name_desc: 'productBrowse.sortNameDesc',
 };
@@ -708,6 +710,16 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
         switch (sortBy) {
           case 'price_asc': return a.min_price - b.min_price;
           case 'price_desc': return b.min_price - a.min_price;
+          case 'savings_desc': {
+            const aPct = a.max_price && a.max_price > a.min_price ? (1 - a.min_price / a.max_price) : 0;
+            const bPct = b.max_price && b.max_price > b.min_price ? (1 - b.min_price / b.max_price) : 0;
+            return bPct - aPct;
+          }
+          case 'savings_asc': {
+            const aPct = a.max_price && a.max_price > a.min_price ? (1 - a.min_price / a.max_price) : 0;
+            const bPct = b.max_price && b.max_price > b.min_price ? (1 - b.min_price / b.max_price) : 0;
+            return aPct - bPct;
+          }
           case 'name_asc': return a.name.localeCompare(b.name, 'he');
           case 'name_desc': return b.name.localeCompare(a.name, 'he');
           default: return 0;
