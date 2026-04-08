@@ -192,20 +192,29 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
               </div>
               {/* Qty controls */}
               <div className="flex items-center gap-0.5 flex-shrink-0">
-                <input
-                  type="number"
-                  min={product.unit === 'pcs' ? 1 : 0.5}
-                  max="100"
-                  step={product.unit === 'pcs' ? 1 : 0.5}
-                  value={product.amount}
-                  onChange={(e) => {
-                    const raw = parseFloat(e.target.value);
-                    if (isNaN(raw) || raw <= 0) return;
-                    const val = product.unit === 'pcs' ? Math.round(raw) : Math.round(raw * 2) / 2;
-                    handleUpdateProduct(product.barcode, { amount: val });
-                  }}
-                  className="w-10 h-6 text-[11px] font-semibold text-center border border-slate-200 rounded outline-none bg-white text-slate-600"
-                />
+                {(() => {
+                  const fineStep = product.category === 'מוצרי חלב וביצים' || product.category === 'בשר עוף דגים ומעדניה';
+                  const weightStep = fineStep ? 0.1 : 0.5;
+                  const isPcs = product.unit === 'pcs';
+                  const step = isPcs ? 1 : weightStep;
+                  const min = isPcs ? 1 : weightStep;
+                  return (
+                    <input
+                      type="number"
+                      min={min}
+                      max="100"
+                      step={step}
+                      value={product.amount}
+                      onChange={(e) => {
+                        const raw = parseFloat(e.target.value);
+                        if (isNaN(raw) || raw <= 0) return;
+                        const val = isPcs ? Math.round(raw) : Math.round(raw / step) * step;
+                        handleUpdateProduct(product.barcode, { amount: +val.toFixed(1) });
+                      }}
+                      className="w-10 h-6 text-[11px] font-semibold text-center border border-slate-200 rounded outline-none bg-white text-slate-600"
+                    />
+                  );
+                })()}
               </div>
               <button onClick={() => handleRemoveProduct(product.barcode)} className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors flex-shrink-0">
                 <X className="w-3 h-3" />

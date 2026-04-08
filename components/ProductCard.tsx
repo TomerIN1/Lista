@@ -15,8 +15,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
   const { t, isRTL } = useLanguage();
   const [imgFailed, setImgFailed] = useState(false);
   const weighted = isWeightedProduct(product.unit_of_measure, product.is_weighted);
-  const step = weighted ? 0.5 : 1;
-  const minQty = weighted ? 0.5 : 1;
+  const fineCategoryStep = product.category === 'מוצרי חלב וביצים' || product.category === 'בשר עוף דגים ומעדניה';
+  const step = weighted ? (fineCategoryStep ? 0.1 : 0.5) : 1;
+  const minQty = weighted ? (fineCategoryStep ? 0.1 : 0.5) : 1;
   const [qty, setQty] = useState(minQty);
   const displayUnitQty = normalizeUnitQty(product.unit_qty);
   const unitPriceLine = formatUnitPriceLine(product.min_price, product.unit_qty, product.is_weighted);

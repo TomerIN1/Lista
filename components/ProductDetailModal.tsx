@@ -73,8 +73,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
   const uom = product?.unit_of_measure || fallbackProduct?.unit_of_measure;
   const weighted = product?.is_weighted ?? fallbackProduct?.is_weighted;
   const isWeight = isWeightedProduct(uom, weighted);
-  const qtyStep = isWeight ? 0.5 : 1;
-  const minQty = isWeight ? 0.5 : 1;
+  const productCategory = product?.category || fallbackProduct?.category || '';
+  const fineCategoryStep = productCategory === 'מוצרי חלב וביצים' || productCategory === 'בשר עוף דגים ומעדניה';
+  const qtyStep = isWeight ? (fineCategoryStep ? 0.1 : 0.5) : 1;
+  const minQty = isWeight ? (fineCategoryStep ? 0.1 : 0.5) : 1;
 
   // Initialize qty when product data arrives
   useEffect(() => {

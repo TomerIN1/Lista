@@ -3870,9 +3870,20 @@ The API now provides backend-computed display fields so the frontend no longer g
 - `components/SavingsReport.tsx` — Uses `displayPrice` + `displayUnit` per item
 - `services/priceDbService.ts` — Maps new API display fields into `ItemPriceDetail`
 
+#### 9. Category-Based Quantity Steps for Weighted Products
+Weighted product quantity selectors now use different step sizes based on category:
+- **פירות וירקות**: 0.5 kg steps (unchanged)
+- **מוצרי חלב וביצים**: 0.1 kg steps (100g increments for deli/cheese)
+- **בשר עוף דגים ומעדניה**: 0.1 kg steps (100g increments for meat/deli)
+
+Applied in three places:
+- `components/ProductCard.tsx` — quantity selector on product cards
+- `components/ProductDetailModal.tsx` — quantity selector in product detail
+- `components/ShoppingInputArea.tsx` — quantity input in the shopping cart
+
 ---
 
 **Last Updated**: April 9, 2026
-**Version**: 5.7.0
+**Version**: 5.7.1
 **Status**: Production Ready
 
