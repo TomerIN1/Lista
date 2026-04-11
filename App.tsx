@@ -59,7 +59,7 @@ const App: React.FC = () => {
   const [shoppingStep, setShoppingStep] = useState<ShoppingFlowStep>('setup');
   const [shoppingProducts, setShoppingProducts] = useState<ShoppingProduct[]>([]);
   const [priceComparison, setPriceComparison] = useState<ListPriceComparison | null>(null);
-  const [selectedShoppingMode, setSelectedShoppingMode] = useState<ShoppingMode | null>(null);
+  const [selectedShoppingMode, setSelectedShoppingMode] = useState<ShoppingMode | null>('online');
   const [storeRecommendation, setStoreRecommendation] = useState<{ storeName: string; savingsAmount: number } | null>(null);
   const [isShoppingComparing, setIsShoppingComparing] = useState(false);
   const [shoppingCity, setShoppingCity] = useState('');
@@ -722,7 +722,7 @@ const App: React.FC = () => {
     shoppingProductsRef.current = [];
     setShoppingStep('setup');
     setPriceComparison(null);
-    setSelectedShoppingMode(null);
+    setSelectedShoppingMode('online');
     setStoreRecommendation(null);
     setShoppingCity('');
     setShoppingLocation(null);

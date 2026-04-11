@@ -57,13 +57,26 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
     ? product.labels.split(',').map((l) => l.trim()).filter(Boolean)
     : [];
 
-  // Sort prices cheapest first
+  // Compute the real consumer price per store (accounting for promo discounted_price)
+  const getRealPrice = (p: ProductStorePrice): number => {
+    let best = p.effective_price;
+    if (p.promotion?.discounted_price != null && p.promotion.discounted_price < best) {
+      best = p.promotion.discounted_price;
+    }
+    if (p.promotion?.description) {
+      const m = p.promotion.description.match(/([\d]+\.[\d]+)/);
+      if (m) { const parsed = parseFloat(m[1]); if (!isNaN(parsed) && parsed < best) best = parsed; }
+    }
+    return best;
+  };
+
+  // Sort prices by real consumer price (cheapest first)
   const sortedPrices: ProductStorePrice[] = product?.prices
-    ? [...product.prices].sort((a, b) => a.effective_price - b.effective_price)
+    ? [...product.prices].sort((a, b) => getRealPrice(a) - getRealPrice(b))
     : [];
 
-  const cheapestPrice = sortedPrices[0]?.effective_price ?? null;
-  const mostExpensivePrice = sortedPrices[sortedPrices.length - 1]?.effective_price ?? null;
+  const cheapestPrice = sortedPrices.length > 0 ? getRealPrice(sortedPrices[0]) : null;
+  const mostExpensivePrice = sortedPrices.length > 0 ? getRealPrice(sortedPrices[sortedPrices.length - 1]) : null;
   const maxSavings = cheapestPrice != null && mostExpensivePrice != null
     ? mostExpensivePrice - cheapestPrice
     : 0;
@@ -189,13 +202,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                       {isRTL ? 'מחיר מינימלי' : 'Best Price'}
                     </p>
                     <p className="text-3xl font-black text-emerald-700 leading-none">
-                      {formatDisplayPrice(sortedPrices[0]?.display_effective_price ?? cheapestPrice, displayUnit)}
+                      {formatDisplayPrice(cheapestPrice, displayUnit)}
                     </p>
-                    {sortedPrices[0]?.effective_price_per_100g != null && (
-                      <p className="text-[11px] text-slate-500 font-medium mt-1">
-                        ₪{sortedPrices[0].effective_price_per_100g.toFixed(2)} / 100 גרם
-                      </p>
-                    )}
                     {cheapestUnitPriceLine && (
                       <p className="text-[11px] text-slate-500 font-medium mt-1">
                         {cheapestUnitPriceLine}
@@ -265,16 +273,26 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                   <p className="text-xs font-semibold text-slate-500 mb-2">{t('productBrowse.pricesAt')}</p>
                   <div className="rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
                     {sortedPrices.map((p, i) => {
-                      const isCheapest = i === 0;
-                      const diff = cheapestPrice != null ? p.effective_price - cheapestPrice : 0;
-                      const hasDiscount = p.effective_price < p.price - 0.01;
+                      const realPrice = getRealPrice(p);
+                      const isCheapest = i === 0 && cheapestPrice != null && mostExpensivePrice != null && cheapestPrice < mostExpensivePrice - 0.01;
+                      const diff = cheapestPrice != null ? realPrice - cheapestPrice : 0;
+                      // Promo discounted price: use it when available, or parse from description
+                      let promoPrice = p.promotion?.discounted_price ?? null;
+                      if (promoPrice == null && p.promotion?.description) {
+                        const priceMatch = p.promotion.description.match(/([\d]+\.[\d]+)/);
+                        if (priceMatch) {
+                          const parsed = parseFloat(priceMatch[1]);
+                          if (!isNaN(parsed) && parsed < p.price) promoPrice = parsed;
+                        }
+                      }
+                      const hasPromoDiscount = promoPrice != null && promoPrice < p.price - 0.01;
+                      const hasDiscount = p.effective_price < p.price - 0.01 || hasPromoDiscount;
+                      const shownPrice = hasPromoDiscount ? promoPrice : (p.display_effective_price ?? p.effective_price);
                       const discountPct = hasDiscount
-                        ? Math.round((1 - p.effective_price / p.price) * 100)
+                        ? Math.round((1 - shownPrice / p.price) * 100)
                         : 0;
                       const promoLabel = p.promotion?.description
                         || (hasDiscount ? (isRTL ? 'מחיר מבצע' : 'Sale price') : null);
-                      const storeUnitQty = normalizeUnitQty(p.unit_qty);
-                      const storeUnitPriceLine = formatUnitPriceLine(p.effective_price, p.unit_qty, weighted);
 
                       return (
                         <div
@@ -313,26 +331,22 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                                 </p>
                               </div>
                             )}
-                            {storeUnitQty && (
-                              <p className="text-[10px] text-slate-400 mt-0.5">{storeUnitQty}</p>
+                            {p.promotion?.min_qty != null && p.promotion.min_qty >= 2 && p.promotion.discounted_price != null && (
+                              <p className="text-[10px] text-rose-500 mt-0.5">
+                                ₪{(p.promotion.discounted_price / p.promotion.min_qty).toFixed(2)} ליחידה
+                              </p>
                             )}
                           </div>
 
                           {/* Price column */}
                           <div className="text-end flex-shrink-0">
                             <p className={`text-sm font-black ${isCheapest ? 'text-emerald-700' : hasDiscount ? 'text-rose-600' : 'text-slate-700'}`}>
-                              {formatDisplayPrice(p.display_effective_price ?? p.effective_price, displayUnit)}
+                              {formatDisplayPrice(shownPrice, displayUnit)}
                             </p>
                             {hasDiscount && (
                               <p className="text-[11px] text-slate-400 line-through">
                                 {formatDisplayPrice(p.display_price ?? p.price, displayUnit)}
                               </p>
-                            )}
-                            {p.effective_price_per_100g != null && (
-                              <p className="text-[10px] text-slate-400">₪{p.effective_price_per_100g.toFixed(2)} / 100 גרם</p>
-                            )}
-                            {storeUnitPriceLine && (
-                              <p className="text-[10px] text-slate-400">{storeUnitPriceLine}</p>
                             )}
                             {!isCheapest && diff > 0.01 && (
                               <p className="text-[11px] text-slate-400 font-medium">+₪{diff.toFixed(2)}</p>

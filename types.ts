@@ -93,6 +93,13 @@ export interface DbProduct {
   display_min_price?: number | null;  // consumer-friendly min price (always per-kg for weighted)
   display_unit?: string | null;       // unit label for display (e.g. "ק״ג" for weighted, null for unit products)
   min_price_per_100g?: number | null; // price per 100g for weighted products (min_price ÷ 10)
+  has_promotion?: boolean;            // true if any store has an active promotion for this product
+  promotion_summary?: {
+    supermarket: string;
+    description: string;
+    discounted_price: number | null;
+    min_qty: number | null;
+  } | null;
   // Optional enhanced fields (present when using browse/detail endpoints)
   subcategory?: string | null;
   sub_subcategory?: string | null;
@@ -130,7 +137,17 @@ export interface ProductStorePrice {
   effective_price_per_100g?: number | null; // effective_price ÷ 10 for weighted products
   unit_qty?: string | null; // e.g. "1 ליטר", "400 גרם", "1 ק"ג" — per-price, null for Rami Levy
   item_status?: number | null;              // 1 = sold, 0 = delisted, null = unknown
-  promotion: { description: string; type: string; ends_at: string | null } | null;
+  promotion: {
+    description: string;
+    type: string;
+    ends_at: string | null;
+    discount_type?: string;
+    discount_rate?: number | null;
+    end_date?: string | null;
+    discounted_price?: number | null;
+    min_qty?: number | null;
+    club_id?: number | null;
+  } | null;
   store: { store_id: string; store_name: string; city: string | null; address: string | null; is_online: boolean };
 }
 
@@ -165,7 +182,17 @@ export interface ProductGroupDetail {
     product_name: string;
     barcode: string;
     item_status?: number | null;
-    promotion: { description: string; type: string; ends_at: string | null } | null;
+    promotion: {
+      description: string;
+      type: string;
+      ends_at: string | null;
+      discount_type?: string;
+      discount_rate?: number | null;
+      end_date?: string | null;
+      discounted_price?: number | null;
+      min_qty?: number | null;
+      club_id?: number | null;
+    } | null;
     store: { store_id: string; store_name: string; city: string | null; address: string | null; is_online: boolean; delivery_fee: number | null; minimum_order: number | null };
   }[];
   members: { barcode: string; name: string; is_weighted: boolean }[];
@@ -259,6 +286,8 @@ export interface ItemPromotion {
   description: string;
   type: string;
   endsAt: string | null;
+  discountedPrice?: number | null;
+  minQty?: number | null;
 }
 
 export interface ItemPriceDetail {

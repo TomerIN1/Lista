@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Package, Weight, Plus, Minus } from 'lucide-react';
+import { Package, Weight, Plus, Minus, Tag } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { formatDisplayPrice, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct } from '../utils/priceFormat';
+import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
 
 interface ProductCardProps {
   product: DbProductEnhanced;
@@ -49,6 +50,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
         {hasPromo && (
           <span className="absolute top-1.5 start-1.5 bg-rose-500 text-white text-[11px] font-black px-2 py-0.5 rounded-full leading-tight shadow-sm">
             -{discountPct}%
+          </span>
+        )}
+        {product.has_promotion && (
+          <span className="absolute top-1.5 end-1.5 flex items-center gap-0.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-tight shadow-sm">
+            <Tag className="w-2.5 h-2.5" />
+            {isRTL ? 'במבצע' : 'Promo'}
           </span>
         )}
       </div>
@@ -101,6 +108,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
                 <p className="text-[10px] text-slate-400">{unitPriceLine}</p>
               )}
             </>
+          )}
+          {product.promotion_summary && (
+            <div className="mt-1.5 px-2 py-1.5 rounded-lg bg-amber-50 border border-amber-100">
+              <p className="text-[10px] font-semibold text-amber-700">
+                <Tag className="w-2.5 h-2.5 inline -mt-0.5" />{' '}
+                {isRTL ? 'במבצע ב-' : 'Promo at '}{SUPERMARKET_NAME_MAP[product.promotion_summary.supermarket] || product.promotion_summary.supermarket}
+              </p>
+              <p className="text-[10px] text-amber-600 line-clamp-1">
+                {product.promotion_summary.min_qty != null && product.promotion_summary.min_qty >= 2 && product.promotion_summary.discounted_price != null
+                  ? `${product.promotion_summary.min_qty} ב-₪${product.promotion_summary.discounted_price} (₪${(product.promotion_summary.discounted_price / product.promotion_summary.min_qty).toFixed(2)} ליחידה)`
+                  : product.promotion_summary.discounted_price != null
+                    ? `₪${product.promotion_summary.discounted_price.toFixed(2)}`
+                    : product.promotion_summary.description}
+              </p>
+            </div>
           )}
         </div>
       </div>

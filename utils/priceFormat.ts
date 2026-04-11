@@ -176,10 +176,9 @@ export function normalizeUnitQty(raw?: string | null): string | null {
   const normalized = raw.replace(/\s+/g, ' ').trim();
   if (!normalized) return null;
   // Allow strings starting with a number (e.g., "400 גרם", "1 ליטר")
-  if (/^\d/.test(normalized)) return normalized;
-  // Allow per-unit labels — informative for users
-  const lower = normalized.toLowerCase();
-  if (lower === 'יחידה' || lower === 'יחידות' || lower === 'unit' || lower === 'units') {
+  // But block unit-count labels like "3 יחידות" — not useful package info
+  if (/^\d/.test(normalized)) {
+    if (/יחידה|יחידות|units?$/i.test(normalized)) return null;
     return normalized;
   }
   // Block bare regulatory unit names like "קילוגרמים", "ליטרים"

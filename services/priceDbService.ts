@@ -497,6 +497,8 @@ export async function compareListPrices(
         description: item.promotion.description,
         type: item.promotion.type,
         endsAt: item.promotion.ends_at,
+        discountedPrice: (item.promotion as any).discounted_price ?? undefined,
+        minQty: (item.promotion as any).min_qty ?? undefined,
       };
     }
     return detail;

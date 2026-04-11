@@ -3890,7 +3890,58 @@ Added two new sort options to the sort dropdown:
 
 ---
 
-**Last Updated**: April 9, 2026
-**Version**: 5.7.2
+---
+
+## Session: April 10–12, 2026
+
+### Changes Made
+
+#### 1. Promotion System Overhaul
+- **`has_promotion` field**: Product cards show "במבצע" tag only when API returns `has_promotion === true` (actual promotion records, not price differences)
+- **`promotion_summary` field**: Product cards show promo details (supermarket name + description + bundle deal info) in an amber info box below the price
+- **Promotion types updated**: Added `discounted_price`, `min_qty`, `club_id` to all promotion interfaces
+- **"במבצע" filter fixed**: Now uses `has_promotion` instead of `labels` field (which contains product attributes like "טבעוני", not promo data)
+
+#### 2. Promo Pricing in Detail Modal
+- Store rows now show `discounted_price` from promos as the main price with original price struck through
+- Falls back to parsing price from promo description text when `discounted_price` is null
+- Bundle deals (min_qty >= 2) show per-unit price below promo description (e.g., "₪14.00 ליחידה")
+- "הכי זול" badge only shows when cheapest store is strictly cheaper than most expensive (not when all equal)
+- Sorting accounts for promo `discounted_price` — stores with promo deals rank correctly
+
+#### 3. Detail Modal Cleanup
+- Removed `unit_qty` (e.g., "300 גרם"), per-100g price, and unit price line from individual store rows — keeps rows clean
+- Package size info stays in the price hero area only
+- Price hero uses real cheapest price accounting for promos
+
+#### 4. Hide Unit Count Labels
+- `normalizeUnitQty()` now filters out values like "3 יחידות", "1 יחידה" — these are not useful package info
+- Only actual package sizes like "300 גרם", "1 ליטר" are displayed
+
+#### 5. Default to `store_type=online`
+- `selectedShoppingMode` defaults to `'online'` instead of `null`
+- All API calls (search, browse, detail, groups, shopping-list/compare) now pass `store_type=online`
+- Eliminates price/promo mismatch bugs caused by mixing online and physical store data
+- Physical store mode deferred to future release when data is fully loaded
+
+#### 6. API-Side Fixes (db-api agent, this session)
+- **Promo bug fixed**: Detail endpoint was missing promotions for bundle deals where `effective_price === price`. Condition removed — promos now returned whenever a promotion record exists.
+- **Store data cleanup**: Each chain now has exactly 1 canonical active online store. Stale/duplicate stores deactivated. ETL uses consistent store_id for both prices and promos.
+- **`promotion_summary` added**: Browse/search endpoints return best promo per product (supermarket, description, discounted_price, min_qty).
+- **Promotion detail fields added**: `discounted_price`, `min_qty`, `club_id` on all promotion objects across all endpoints.
+
+### Files Changed
+- `App.tsx` — Default `selectedShoppingMode` to `'online'`
+- `types.ts` — Updated promotion interfaces with `discounted_price`, `min_qty`, `club_id`, `has_promotion`, `promotion_summary`
+- `components/ProductCard.tsx` — Promo tag via `has_promotion`, promo summary box with store name + deal info
+- `components/ProductDetailModal.tsx` — Promo pricing in store rows, cleaned up rows, smart "הכי זול" logic
+- `components/ProductCatalogArea.tsx` — "במבצע" filter uses `has_promotion`
+- `services/priceDbService.ts` — Maps new promo fields in shopping list comparison
+- `utils/priceFormat.ts` — Hide unit count labels ("3 יחידות")
+
+---
+
+**Last Updated**: April 12, 2026
+**Version**: 5.8.0
 **Status**: Production Ready
 

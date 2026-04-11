@@ -686,9 +686,9 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
     }
     let list = deduped;
 
-    // On-sale filter: keep products whose labels contain promo-related text
+    // On-sale filter: keep products with active promotions at any store
     if (filterOnSale) {
-      list = list.filter((p) => p.labels && p.labels.length > 0);
+      list = list.filter((p) => p.has_promotion === true);
     }
 
     // Weight type filter
