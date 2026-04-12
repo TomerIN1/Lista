@@ -210,13 +210,15 @@ export async function browseProducts(params: {
 }
 
 // GET /api/products/{barcode} — returns full detail with prices (10min cache)
-export async function getProductDetail(barcode: string): Promise<DbProductDetail | null> {
-  const cacheKey = `detail:${barcode}`;
+export async function getProductDetail(barcode: string, storeType?: string): Promise<DbProductDetail | null> {
+  const cacheKey = `detail:${barcode}:${storeType || ''}`;
   const cached = cache.get<DbProductDetail | null>(cacheKey);
   if (cached !== null) return cached;
 
   try {
-    const result = await apiFetch<DbProductDetail>(`/api/products/${barcode}`);
+    const params: Record<string, string | number> = {};
+    if (storeType) params.store_type = storeType;
+    const result = await apiFetch<DbProductDetail>(`/api/products/${barcode}`, params);
     result.image_url = proxyImageUrl(result.image_url);
     cache.set(cacheKey, result, PRICES_TTL);
     return result;
@@ -246,12 +248,14 @@ export interface ProductGroupSummary {
   image_url: string | null;
 }
 
-export async function getProductGroups(): Promise<ProductGroupSummary[]> {
-  const cacheKey = 'product-groups';
+export async function getProductGroups(storeType?: string): Promise<ProductGroupSummary[]> {
+  const cacheKey = `product-groups:${storeType || ''}`;
   const cached = cache.get<ProductGroupSummary[]>(cacheKey);
   if (cached) return cached;
 
-  const result = await apiFetch<{ total: number; groups: ProductGroupSummary[] }>('/api/groups/');
+  const params: Record<string, string | number> = {};
+  if (storeType) params.store_type = storeType;
+  const result = await apiFetch<{ total: number; groups: ProductGroupSummary[] }>('/api/groups/', params);
   const groups = result.groups.map(g => ({
     ...g,
     image_url: proxyImageUrl(g.image_url),

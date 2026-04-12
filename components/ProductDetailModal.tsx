@@ -13,9 +13,10 @@ interface ProductDetailModalProps {
   isAdded: boolean;
   fallbackImageUrl?: string | null;
   fallbackProduct?: DbProductEnhanced | null;
+  storeType?: string;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClose, onAdd, isAdded, fallbackImageUrl, fallbackProduct }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClose, onAdd, isAdded, fallbackImageUrl, fallbackProduct, storeType }) => {
   const { t, isRTL } = useLanguage();
   const [product, setProduct] = useState<DbProductDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,11 +26,11 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
   useEffect(() => {
     setIsLoading(true);
     setImgFailed(false);
-    getProductDetail(barcode)
+    getProductDetail(barcode, storeType)
       .then(setProduct)
       .catch(() => setProduct(null))
       .finally(() => setIsLoading(false));
-  }, [barcode]);
+  }, [barcode, storeType]);
 
   // Close on Escape
   useEffect(() => {

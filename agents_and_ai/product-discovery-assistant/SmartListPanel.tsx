@@ -328,6 +328,7 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
           barcode={detailBarcode}
           fallbackImageUrl={detailProduct?.image_url}
           fallbackProduct={detailProduct as DbProductEnhanced | null}
+          storeType="online"
           onClose={() => { setDetailBarcode(null); setDetailProduct(null); }}
           onAdd={(product) => {
             handleAddProduct(product);

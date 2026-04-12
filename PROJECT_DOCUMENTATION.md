@@ -3959,10 +3959,23 @@ Promo labels are now built from structured API fields (`min_qty`, `discounted_pr
 - ETL crons now run daily on Railway via Bright Data proxy for Israeli sources
 - Rami Levy switched from e-commerce API to government-mandated XML
 
+#### 8. Enforce `store_type=online` on ALL API calls
+Fixed price mismatch issue where physical store prices leaked into online mode (e.g., Rami Levy showing ₪12.50 from physical store instead of ₪13.10 from online store).
+
+- `getProductDetail()` — added `storeType` param, passes `store_type` to API
+- `ProductDetailModal` — accepts `storeType` prop from parent, passes to `getProductDetail`
+- `ProductCatalogArea` — passes `storeType` to `ProductDetailModal` and `getProductGroups`
+- `SmartListPanel` — passes `storeType="online"` to `ProductDetailModal`
+- `getProductGroups()` — added `storeType` param for consistency
+- All search, browse, detail, group, and compare calls now consistently pass `store_type=online`
+
 ### Files Changed (this update)
-- `components/ProductDetailModal.tsx` — Structured promo labels, description fallback
-- `components/GroupDetailModal.tsx` — Same promo display + discount badge + promo pricing
+- `services/priceDbService.ts` — `getProductDetail` + `getProductGroups` accept `storeType`
+- `components/ProductDetailModal.tsx` — Structured promo labels + `storeType` prop
+- `components/GroupDetailModal.tsx` — Promo display + discount badge + promo pricing
 - `components/ProductCard.tsx` — Clean structured promo summary
+- `components/ProductCatalogArea.tsx` — Pass `storeType` to detail modal + product groups
+- `agents_and_ai/product-discovery-assistant/SmartListPanel.tsx` — Pass `storeType="online"`
 
 ---
 

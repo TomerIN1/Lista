@@ -435,7 +435,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
       .finally(() => setIsLoadingCategories(false));
 
     // Load product groups for image dedup (47 groups, lightweight)
-    getProductGroups()
+    getProductGroups(storeType)
       .then((groups) => {
         const map = new Map<number, ProductGroupSummary>();
         groups.forEach(g => map.set(g.id, g));
@@ -1190,6 +1190,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           barcode={detailBarcode}
           fallbackImageUrl={detailImageUrl}
           fallbackProduct={detailProduct}
+          storeType={storeType}
           onClose={() => { setDetailBarcode(null); setDetailGroupId(null); }}
           onAdd={(product, amount) => {
             handleAddProduct(product, amount);
