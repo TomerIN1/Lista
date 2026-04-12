@@ -15,9 +15,10 @@ interface GroupDetailModalProps {
   isAdded?: boolean;
   city?: string;
   storeType?: string;
+  availableChains?: string[];
 }
 
-const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackProduct, onClose, onAdd, isAdded, city, storeType }) => {
+const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackProduct, onClose, onAdd, isAdded, city, storeType, availableChains }) => {
   const { t, isRTL } = useLanguage();
   const [detail, setDetail] = useState<ProductGroupDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,7 +43,13 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const prices = detail?.prices ?? [];
+  // Filter prices to only the supermarkets available in the user's area (based on delivery check).
+  // If availableChains is undefined/empty, fall back to showing all prices.
+  const prices = (() => {
+    const raw = detail?.prices ?? [];
+    if (!availableChains || availableChains.length === 0) return raw;
+    return raw.filter(p => availableChains.includes(p.supermarket));
+  })();
   const cheapest = prices[0]?.effective_price ?? null;
   const mostExpensive = prices[prices.length - 1]?.effective_price ?? null;
   const maxSavings = cheapest != null && mostExpensive != null ? mostExpensive - cheapest : 0;

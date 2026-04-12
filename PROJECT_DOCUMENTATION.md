@@ -4010,9 +4010,24 @@ Rework of the three horizontal product rails shown on the category landing view 
 - `components/ProductCatalogArea.tsx` — New `promoProducts` state + fetch branch, stricter common-product scoring via `getProductDetail`, expanded query lists, scroll hints, Hebrew store mapping on promo badge, aligned badge row
 - `constants/translations.ts` — Added `promoProducts` and `scrollForMore` keys (en + he)
 
+#### 11. Detail Modals Respect Delivery-Check Area Availability
+Problem: after picking a city, the user sees a "חנויות זמינות" banner listing only the supermarkets that deliver to / are physically near their address, but when opening a product detail modal, prices from every chain in the DB were rendered — including stores the user can't actually buy from (e.g. H. Cohen and Market Warehouses shown to a user in קריית אונו whose available set is Rami Levy / Shufersal / Victory).
+
+Fix: the `effectiveChains` list already computed in `ShoppingInputArea` (derived from `deliveryCheck.chains`, filtered by `shoppingMode` — deliverable / click-and-collect for online, all nearby for physical) is now plumbed all the way into the detail modals and used to filter the price list before rendering.
+
+- `ProductDetailModal` — new `availableChains?: string[]` prop. Builds `filteredRawPrices = product.prices.filter(p => availableChains.includes(p.supermarket))` before sorting. All downstream calculations (`sortedPrices`, `cheapestPrice`, `mostExpensivePrice`, `maxSavings`, `overallDiscountPct`, "עד ₪X.XX בחנויות אחרות") now operate on the filtered set, so the savings badge reflects only relevant stores.
+- `GroupDetailModal` — same `availableChains?: string[]` prop, same filter applied to `detail.prices` at the top of the render path.
+- `ProductCatalogArea` — passes `availableChains={selectedChains}` to both modals. `selectedChains` here is the already-computed `effectiveChains` from the parent.
+- **Fallback:** if `availableChains` is undefined or empty (e.g. no city selected, no delivery check yet), both modals show every price as before — nothing regresses for users without location data.
+
+**Files Changed**
+- `components/ProductDetailModal.tsx` — `availableChains` prop + `filteredRawPrices` filter
+- `components/GroupDetailModal.tsx` — `availableChains` prop + filtered `prices` derivation
+- `components/ProductCatalogArea.tsx` — Passes `selectedChains` through to both detail modals
+
 ---
 
 **Last Updated**: April 12, 2026
-**Version**: 5.9.0
+**Version**: 5.9.1
 **Status**: Production Ready
 

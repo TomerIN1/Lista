@@ -1328,6 +1328,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           isAdded={selectedProducts.some((p) => p.barcode === detailBarcode)}
           city={city}
           storeType={storeType}
+          availableChains={selectedChains}
         />
       )}
       {detailBarcode && detailGroupId == null && (
@@ -1336,6 +1337,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
           fallbackImageUrl={detailImageUrl}
           fallbackProduct={detailProduct}
           storeType={storeType}
+          availableChains={selectedChains}
           onClose={() => { setDetailBarcode(null); setDetailGroupId(null); }}
           onAdd={(product, amount) => {
             handleAddProduct(product, amount);

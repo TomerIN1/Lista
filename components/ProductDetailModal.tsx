@@ -14,9 +14,10 @@ interface ProductDetailModalProps {
   fallbackImageUrl?: string | null;
   fallbackProduct?: DbProductEnhanced | null;
   storeType?: string;
+  availableChains?: string[];
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClose, onAdd, isAdded, fallbackImageUrl, fallbackProduct, storeType }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClose, onAdd, isAdded, fallbackImageUrl, fallbackProduct, storeType, availableChains }) => {
   const { t, isRTL } = useLanguage();
   const [product, setProduct] = useState<DbProductDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,10 +72,15 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
     return best;
   };
 
-  // Sort prices by real consumer price (cheapest first)
-  const sortedPrices: ProductStorePrice[] = product?.prices
-    ? [...product.prices].sort((a, b) => getRealPrice(a) - getRealPrice(b))
+  // Filter prices to only the supermarkets available in the user's area (based on delivery check).
+  // If availableChains is undefined/empty (e.g. no city selected yet), show every price as a fallback.
+  const filteredRawPrices: ProductStorePrice[] = product?.prices
+    ? (availableChains && availableChains.length > 0
+        ? product.prices.filter(p => availableChains.includes(p.supermarket))
+        : product.prices)
     : [];
+  // Sort prices by real consumer price (cheapest first)
+  const sortedPrices: ProductStorePrice[] = [...filteredRawPrices].sort((a, b) => getRealPrice(a) - getRealPrice(b));
 
   const cheapestPrice = sortedPrices.length > 0 ? getRealPrice(sortedPrices[0]) : null;
   const mostExpensivePrice = sortedPrices.length > 0 ? getRealPrice(sortedPrices[sortedPrices.length - 1]) : null;
