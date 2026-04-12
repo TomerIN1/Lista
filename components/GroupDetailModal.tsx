@@ -4,7 +4,7 @@ import { X, Package, Tag, TrendingDown, Store, Truck, ChevronDown, ChevronUp, Pl
 import { ProductGroupDetail, DbProductEnhanced } from '../types';
 import { getGroupDetail } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
-import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
+import { getStoreDisplayName, isOnlineStore } from '../services/priceDbService';
 import { formatDisplayPrice } from '../utils/priceFormat';
 
 interface GroupDetailModalProps {
@@ -155,7 +155,7 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
                     const isCheapest = i === 0 && cheapest != null && mostExpensive != null && cheapest < mostExpensive - 0.01;
                     const diff = cheapest != null ? realPrice - cheapest : 0;
                     const discountPct = hasDiscount ? Math.round((1 - shownPrice / p.regular_price) * 100) : 0;
-                    const displayName = SUPERMARKET_NAME_MAP[p.supermarket] || p.supermarket;
+                    const displayName = getStoreDisplayName(p.supermarket, p.store?.is_online);
 
                     // Build structured promo label
                     let structuredPromoLabel: string | null = null;
@@ -182,6 +182,11 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
                             <p className={`text-sm font-semibold ${isCheapest ? 'text-emerald-800' : 'text-slate-700'}`}>
                               {displayName}
                             </p>
+                            {isOnlineStore(p.store) && (
+                              <span className="text-[9px] font-medium text-blue-500 border border-blue-200 px-1 py-0.5 rounded flex-shrink-0">
+                                {isRTL ? 'אונליין' : 'Online'}
+                              </span>
+                            )}
                             {isCheapest && (
                               <span className="text-[10px] font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
                                 {isRTL ? 'הכי זול' : 'Best'}

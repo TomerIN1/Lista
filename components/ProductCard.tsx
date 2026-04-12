@@ -3,7 +3,7 @@ import { Package, Weight, Plus, Minus, Tag } from 'lucide-react';
 import { DbProductEnhanced } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { formatDisplayPrice, normalizeUnitQty, formatUnitPriceLine, isWeightedProduct } from '../utils/priceFormat';
-import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
+import { SUPERMARKET_NAME_MAP, getStoreDisplayName } from '../services/priceDbService';
 
 interface ProductCardProps {
   product: DbProductEnhanced;
@@ -113,7 +113,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
             <div className="mt-1.5 px-2 py-1.5 rounded-lg bg-amber-50 border border-amber-100">
               <p className="text-[10px] font-semibold text-amber-700">
                 <Tag className="w-2.5 h-2.5 inline -mt-0.5" />{' '}
-                {isRTL ? 'במבצע ב-' : 'Promo at '}{SUPERMARKET_NAME_MAP[product.promotion_summary.supermarket] || product.promotion_summary.supermarket}
+                {isRTL ? 'במבצע ב-' : 'Promo at '}{SUPERMARKET_NAME_MAP[product.promotion_summary!.supermarket] || product.promotion_summary!.supermarket}
               </p>
               <p className="text-[10px] text-amber-600 line-clamp-1">
                 {(() => {

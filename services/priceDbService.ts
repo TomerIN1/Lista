@@ -33,6 +33,17 @@ export const SUPERMARKET_NAME_MAP: Record<string, string> = {
   'Rami Levy': 'רמי לוי',
 };
 
+/** Hebrew name + online indicator when store is online */
+export function getStoreDisplayName(englishName: string, isOnline?: boolean): string {
+  const hebrew = SUPERMARKET_NAME_MAP[englishName] || englishName;
+  return hebrew;
+}
+
+/** Returns true if this is an online store */
+export function isOnlineStore(store?: { is_online?: boolean }): boolean {
+  return store?.is_online === true;
+}
+
 /** Prefix relative image_url paths with the API proxy base so <img> tags resolve correctly. */
 function proxyImageUrl(url: string | null): string | null {
   if (!url) return null;

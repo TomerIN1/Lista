@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Package, Leaf, Tag, TrendingDown, AlertCircle, Weight, Plus, Minus } from 'lucide-react';
 import { DbProductDetail, DbProductEnhanced, ProductStorePrice } from '../types';
-import { getProductDetail } from '../services/priceDbService';
+import { getProductDetail, getStoreDisplayName, isOnlineStore } from '../services/priceDbService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { normalizeUnitQty, formatUnitPriceLine, isWeightedProduct, formatDisplayPrice } from '../utils/priceFormat';
 
@@ -319,8 +319,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                           <div className="flex-1 min-w-0 pt-0.5">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <p className={`text-sm font-semibold ${isCheapest ? 'text-emerald-800' : 'text-slate-700'}`}>
-                                {p.supermarket}
+                                {getStoreDisplayName(p.supermarket)}
                               </p>
+                              {isOnlineStore(p.store) && (
+                                <span className="text-[9px] font-medium text-blue-500 border border-blue-200 px-1 py-0.5 rounded flex-shrink-0">
+                                  {isRTL ? 'אונליין' : 'Online'}
+                                </span>
+                              )}
                               {isCheapest && (
                                 <span className="text-[10px] font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
                                   {isRTL ? 'הכי זול' : 'Best'}

@@ -3977,9 +3977,15 @@ Fixed price mismatch issue where physical store prices leaked into online mode (
 - `components/ProductCatalogArea.tsx` — Pass `storeType` to detail modal + product groups
 - `agents_and_ai/product-discovery-assistant/SmartListPanel.tsx` — Pass `storeType="online"`
 
+#### 9. Hebrew Store Names + Online Indicator
+- All supermarket names now display in Hebrew across all modals (ProductDetailModal, GroupDetailModal)
+- Added `getStoreDisplayName()` utility that maps English API names to Hebrew
+- Online stores show a small blue "אונליין" tag next to the store name
+- Applied in both ProductDetailModal and GroupDetailModal store rows
+
 ---
 
 **Last Updated**: April 12, 2026
-**Version**: 5.8.1
+**Version**: 5.8.2
 **Status**: Production Ready
 
