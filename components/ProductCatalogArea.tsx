@@ -421,6 +421,16 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   const [commonProducts, setCommonProducts] = useState<DbProductEnhanced[]>([]); // common staples
   const [promoProducts, setPromoProducts] = useState<DbProductEnhanced[]>([]); // active promotions
 
+  // Only show promo cards whose promoting supermarket is in the user's available area.
+  // If availableChains is undefined/empty, show all (no delivery check yet).
+  const visiblePromoProducts = useMemo(() => {
+    if (!selectedChains || selectedChains.length === 0) return promoProducts;
+    return promoProducts.filter(p => {
+      const store = p.promotion_summary?.supermarket;
+      return !!store && selectedChains.includes(store);
+    });
+  }, [promoProducts, selectedChains]);
+
   const fetchId = useRef(0);
 
   const activeFilterCount = (filterVegan ? 1 : 0) + filterAllergenFree.length + (filterOnSale ? 1 : 0) + (filterWeight !== 'all' ? 1 : 0) + (priceMin ? 1 : 0) + (priceMax ? 1 : 0);
@@ -1103,13 +1113,13 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
               )}
 
               {/* Promo Products — products with active promotions / new good prices */}
-              {promoProducts.length > 0 && (
+              {visiblePromoProducts.length > 0 && (
                 <div className="mb-5">
                   <div className="flex items-center justify-between mb-2 px-0.5">
                     <h3 className="text-sm font-semibold text-slate-700">
                       {t('productBrowse.promoProducts')}
                     </h3>
-                    {promoProducts.length > 4 && (
+                    {visiblePromoProducts.length > 4 && (
                       <span className="flex items-center gap-0.5 text-[11px] text-slate-400 font-medium">
                         {t('productBrowse.scrollForMore')}
                         <ChevronLeft className="w-3 h-3" />
@@ -1117,7 +1127,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                     )}
                   </div>
                   <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-                    {promoProducts.map((pp) => {
+                    {visiblePromoProducts.map((pp) => {
                       const disc = pp.promotion_summary?.discounted_price;
                       const pct = disc != null && pp.min_price ? Math.round(((pp.min_price - disc) / pp.min_price) * 100) : 0;
                       const storeEn = pp.promotion_summary?.supermarket || '';

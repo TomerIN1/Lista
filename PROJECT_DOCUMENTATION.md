@@ -4025,9 +4025,19 @@ Fix: the `effectiveChains` list already computed in `ShoppingInputArea` (derived
 - `components/GroupDetailModal.tsx` — `availableChains` prop + filtered `prices` derivation
 - `components/ProductCatalogArea.tsx` — Passes `selectedChains` through to both detail modals
 
+#### 12. Promo Rail Respects Delivery-Check Available Chains
+Follow-up to §10 + §11: the "מחירים חדשים במבצע" rail was still showing promo cards whose `promotion_summary.supermarket` belonged to a chain the user can't buy from (e.g. Market Warehouses showing for a קריית אונו user whose area is Rami Levy / Shufersal / Victory).
+
+Fix: added a `visiblePromoProducts` `useMemo` in `ProductCatalogArea` that filters `promoProducts` by `selectedChains.includes(promotion_summary.supermarket)`. Reactive to chain changes — no refetch needed. Falls back to the unfiltered list when `selectedChains` is empty (no delivery check yet). Both the section's visibility gate and the map over cards now use `visiblePromoProducts`.
+
+**Known limitation:** the "שווה להשוות" and "מוצרים יומיומיים" rails still compute their min/max prices across every chain in the DB, since the landing fetch doesn't pull per-store data. The savings badge on those cards can therefore reference a chain the user can't access. Scoping those sections to in-area prices would require detail-level fetching or a backend filter and is deferred.
+
+**Files Changed**
+- `components/ProductCatalogArea.tsx` — Added `visiblePromoProducts` memo + swapped render usages
+
 ---
 
 **Last Updated**: April 12, 2026
-**Version**: 5.9.1
+**Version**: 5.9.2
 **Status**: Production Ready
 
