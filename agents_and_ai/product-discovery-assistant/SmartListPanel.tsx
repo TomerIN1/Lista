@@ -4,10 +4,11 @@ import {
   Plus, Check, ShoppingCart,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { SmartChatMessage, ShoppingProduct, DbProduct, DbProductEnhanced } from '../../types';
+import { SmartChatMessage, ShoppingProduct, DbProduct, DbProductEnhanced, SmartProductGroup } from '../../types';
 import { processSmartChat } from './smartListService';
 import ProductDetailModal from '../../components/ProductDetailModal';
-import { formatPriceLabel, defaultCartUnit } from '../../utils/priceFormat';
+import { formatPriceLabel, formatPriceRange, defaultCartUnit } from '../../utils/priceFormat';
+import { iconUrl } from './listaCategories';
 
 const IMAGE_FALLBACK = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f1f5f9" width="40" height="40" rx="8"/><text x="20" y="24" text-anchor="middle" font-size="16">📦</text></svg>';
 
@@ -100,6 +101,7 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
         role: 'assistant',
         text: result.message,
         products: result.products.length > 0 ? result.products : undefined,
+        productGroups: result.groups.length > 0 ? result.groups : undefined,
       };
 
       // Replace loading message with real response
@@ -143,6 +145,97 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
       return next;
     });
   };
+
+  const renderProductCard = (product: DbProduct) => {
+    const inCart = isInCart(product.barcode);
+    return (
+      <div
+        key={product.barcode}
+        className={`flex items-center gap-2.5 p-2 rounded-xl border transition-colors ${
+          inCart
+            ? 'border-emerald-200 bg-emerald-50/50'
+            : 'border-slate-150 bg-white hover:border-slate-200'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => { setDetailProduct(product); setDetailBarcode(product.barcode); }}
+          className="flex items-center gap-2.5 flex-1 min-w-0 text-start"
+        >
+          <img
+            src={product.image_url || IMAGE_FALLBACK}
+            alt=""
+            className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-slate-100"
+            onError={(e) => { (e.target as HTMLImageElement).src = IMAGE_FALLBACK; }}
+          />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-slate-800 leading-snug truncate">
+              {product.name}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[11px] text-slate-400">{product.manufacturer}</span>
+              {product.min_price > 0 && (
+                <span className="text-xs font-bold text-emerald-600">
+                  {product.max_price && product.max_price > product.min_price
+                    ? formatPriceRange(product.min_price, product.max_price, product.unit_of_measure, product.is_weighted)
+                    : formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}
+                </span>
+              )}
+            </div>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); handleAddProduct(product); }}
+          disabled={inCart}
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex-shrink-0 ${
+            inCart
+              ? 'bg-emerald-100 text-emerald-600 cursor-default'
+              : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
+          }`}
+        >
+          {inCart ? (
+            <>
+              <Check className="w-3.5 h-3.5" />
+              {t('smartList.alreadyInCart')}
+            </>
+          ) : (
+            <>
+              <Plus className="w-3.5 h-3.5" />
+              {t('smartList.addToCart')}
+            </>
+          )}
+        </button>
+      </div>
+    );
+  };
+
+  const renderCategoryGroup = (group: SmartProductGroup, idx: number) => (
+    <div key={`${group.category}-${idx}`} className={idx > 0 ? 'mt-3 pt-3 border-t border-slate-200' : ''}>
+      <div className="flex items-center gap-2 mb-1.5 px-1">
+        <img
+          src={iconUrl(group.category)}
+          alt=""
+          className="w-5 h-5 flex-shrink-0 opacity-80"
+          onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+        />
+        <span className="text-xs font-bold text-slate-600 tracking-wide">
+          {group.category}
+        </span>
+        <span className="text-[11px] text-slate-400">
+          ({group.products.length})
+        </span>
+        {group.freshFallback && (
+          <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+            {language === 'he' ? 'לא נמצא טרי — מוצג מעובד' : 'No fresh — processed'}
+          </span>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        {group.products.map(renderProductCard)}
+      </div>
+    </div>
+  );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -202,74 +295,33 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
                     </div>
                   )}
 
-                  {/* Product cards */}
-                  {!msg.isLoading && msg.products && msg.products.length > 0 && (
-                    <div className="space-y-1.5">
-                      {msg.products.map((product) => {
-                        const inCart = isInCart(product.barcode);
-                        return (
-                          <div
-                            key={product.barcode}
-                            className={`flex items-center gap-2.5 p-2 rounded-xl border transition-colors ${
-                              inCart
-                                ? 'border-emerald-200 bg-emerald-50/50'
-                                : 'border-slate-150 bg-white hover:border-slate-200'
-                            }`}
-                          >
-                            {/* Clickable product area — opens detail modal */}
-                            <button
-                              type="button"
-                              onClick={() => { setDetailProduct(product); setDetailBarcode(product.barcode); }}
-                              className="flex items-center gap-2.5 flex-1 min-w-0 text-start"
-                            >
-                              <img
-                                src={product.image_url || IMAGE_FALLBACK}
-                                alt=""
-                                className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-slate-100"
-                                onError={(e) => { (e.target as HTMLImageElement).src = IMAGE_FALLBACK; }}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-slate-800 leading-snug truncate">
-                                  {product.name}
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-[11px] text-slate-400">{product.manufacturer}</span>
-                                  {product.min_price > 0 && (
-                                    <span className="text-xs font-bold text-emerald-600">
-                                      {formatPriceLabel(product.min_price, product.unit_of_measure, product.is_weighted)}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-                            {/* Add button */}
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleAddProduct(product); }}
-                              disabled={inCart}
-                              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex-shrink-0 ${
-                                inCart
-                                  ? 'bg-emerald-100 text-emerald-600 cursor-default'
-                                  : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
-                              }`}
-                            >
-                              {inCart ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5" />
-                                  {t('smartList.alreadyInCart')}
-                                </>
-                              ) : (
-                                <>
-                                  <Plus className="w-3.5 h-3.5" />
-                                  {t('smartList.addToCart')}
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        );
-                      })}
+                  {/* Grouped product cards (by Lista category) */}
+                  {!msg.isLoading && msg.productGroups && msg.productGroups.length > 0 && (
+                    <div className="space-y-0">
+                      {msg.productGroups.map((g, i) => renderCategoryGroup(g, i))}
 
-                      {/* Add All button */}
+                      {/* Add All across all groups */}
+                      {(() => {
+                        const allProducts = msg.productGroups!.flatMap((g) => g.products);
+                        const addable = allProducts.filter((p) => !isInCart(p.barcode));
+                        return addable.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleAddAll(allProducts)}
+                            className="mt-3 flex items-center justify-center gap-1.5 w-full py-2 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                          >
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                            {t('smartList.addAllResults').replace('{n}', String(addable.length))}
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Flat product list fallback (legacy / ungrouped) */}
+                  {!msg.isLoading && !msg.productGroups && msg.products && msg.products.length > 0 && (
+                    <div className="space-y-1.5">
+                      {msg.products.map(renderProductCard)}
                       {msg.products.filter((p) => !isInCart(p.barcode)).length > 1 && (
                         <button
                           type="button"

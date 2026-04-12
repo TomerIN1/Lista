@@ -152,6 +152,9 @@ The shopping mode is designed to look and feel like a real online supermarket (i
 - **Add to Cart**: Individual "Add" buttons per product + bulk "Add All" for multi-result responses
 - **Conversation Memory**: Follow-up questions work — AI maintains context within the session
 - **Bilingual**: Full Hebrew + English support with proper RTL layout
+- **Category Grouping (v5.0.0)**: Results are grouped into the 23 fixed Lista categories (פירות וירקות, מוצרי חלב וביצים, ניקיון כביסה וחד פעמי, …), each with an icon header and visual divider. DB-category alignment filter drops cross-category keyword leaks (e.g., cleaning brand "וניש" no longer appears under חטיפים).
+- **Fresh-First Search (v5.0.0)**: For fresh-oriented categories (produce, meat, bread, dairy) the AI generates both plural + singular Hebrew queries and the orchestrator prioritizes `is_weighted === true` products (real fresh produce). Processed variants (חמוץ, כבוש, קפוא, משומר, במלח) are filtered out. Fresh produce also collapses by `product_group_id` to match the catalog's unified-barcode view.
+- **Price Range on Cards**: Cards now display `₪min–₪max` when available, matching the detail modal.
 - **Location**: `agents_and_ai/product-discovery-assistant/` — self-contained module with own README
 
 ### 🤝 Collaboration

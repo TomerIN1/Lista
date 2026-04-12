@@ -11,6 +11,7 @@
 
 import OpenAI from 'openai';
 import { Language, ParsedShoppingItem, SearchIntent } from '../../types';
+import { LISTA_CATEGORIES, FRESH_CATEGORIES } from './listaCategories';
 
 const openai = new OpenAI({
   apiKey: process.env.API_KEY,
@@ -113,6 +114,9 @@ export const smartAssistant = async (
         ? 'Respond in Hebrew. The product database is in Hebrew.'
         : 'Respond in English.';
 
+    const categoriesList = LISTA_CATEGORIES.join(' | ');
+    const freshCategoriesList = Array.from(FRESH_CATEGORIES).join(', ');
+
     const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
       {
         role: 'system',
@@ -125,35 +129,70 @@ Your capabilities:
 - Filter vegan products (use is_vegan: true)
 - Answer questions about products or shopping
 
+LISTA CATEGORIES (you MUST tag every search with exactly one of these Hebrew labels):
+${categoriesList}
+
+For each search you generate, add a "listaCategory" field set to the single most appropriate label above. This is how results are grouped in the UI — pick the category the USER would expect the item under, not the DB's raw category.
+Examples:
+- חלב / יוגורט / גבינה / ביצים → "מוצרי חלב וביצים"
+- עגבניות / מלפפונים / בצל / פלפל / תפוחי אדמה → "פירות וירקות"
+- עוף / בשר / דגים / נקניק / סלמי → "בשר עוף דגים ומעדניה"
+- לחם / לחמנייה / פיתה / קורנפלקס → "לחם מאפים ודגני בוקר"
+- שוקולד / במבה / ביסלי / עוגיות → "חטיפים מתוקים ופיצוחים"
+- קולה / מים / מיץ → "משקאות"
+- פלפל חריף יבש / פפריקה / כמון / מלח → "מזווה בישול ואפייה"
+- אבקת כביסה / מרכך כביסה / סבון כלים / נייר טואלט → "ניקיון כביסה וחד פעמי"
+- שמפו / משחת שיניים / קרם → "פארם טיפוח אישי ובריאות"
+- פיצה קפואה / ירקות קפואים → "קפואים"
+- רסק עגבניות / טחינה / חומוס בקופסה / שימורי טונה → "שימורים רטבים וממרחים"
+If truly uncertain, use "אחר ולא מסווג".
+
+FRESH-FIRST RULE (very important):
+When the user asks for an item that naturally belongs to one of these fresh-oriented categories: ${freshCategoriesList} — you MUST set "preferFresh": true on that search.
+For fresh produce items (fruits, vegetables, herbs), you MUST generate BOTH the plural AND singular Hebrew forms as separate searches tagged with the same listaCategory + preferFresh. Examples:
+- "עגבניות" → two searches: {query:"עגבניות",...} AND {query:"עגבניה",...}
+- "מלפפונים" → {query:"מלפפונים",...} AND {query:"מלפפון",...}
+- "פטריות" → {query:"פטריות",...} AND {query:"פטרייה",...}
+- "תפוחים" → {query:"תפוחים",...} AND {query:"תפוח",...}
+- "גזר" (already singular) → just one search
+Why: the DB stores some fresh produce under their singular (weighted) name. Both variants maximize hits.
+For non-produce fresh items (יוגורט, לחם, חזה עוף) one query is enough.
+Use the plainest Hebrew name as the query — do NOT include words like "חמוץ", "כבוש", "משומר", "קפוא" in these queries.
+
 CRITICAL RULES:
 1. NONSENSE / GIBBERISH INPUT: If the user sends random characters, nonsense, or unintelligible text (e.g., "asdfghjkl", "xxxxx", "123456"), return {"message": "${language === 'he' ? 'לא הבנתי. אפשר לנסח אחרת?' : "I didn't understand. Could you rephrase?"}", "searches": []}. Do NOT re-search items from conversation history when the current message is nonsense.
-2. "CHEAPEST X" / "MOST EXPENSIVE X" QUERIES: Always search BROADLY for the product category. Do NOT carry over specific product variants from conversation history. For example, if the user previously searched for "קוטג' 5%" and now asks "מה הקוטג' הכי זול?", search for "קוטג'" broadly, NOT "קוטג' 5%". Use higher limits (8-10) with sort_by/sort_order.
-3. FRESH PRODUCE NOTE: The product database contains mostly packaged/processed products. Fresh produce (fruits, vegetables, eggs, fresh meat) may return processed versions (e.g., "מלפפונים" may return pickled cucumbers, "תפוחי אדמה" may return chips). This is a DB limitation — still search for them but be aware.
-4. BRAND-SPECIFIC QUERIES: When the user mentions a brand (e.g., "יוגורט של שטראוס", "חלב תנובה"), include the brand name in the search query (e.g., "יוגורט שטראוס").
+2. "CHEAPEST X" / "MOST EXPENSIVE X" QUERIES: Always search BROADLY for the product category. Do NOT carry over specific product variants from conversation history. Use higher limits (8-10) with sort_by/sort_order.
+3. BRAND-SPECIFIC QUERIES: When the user mentions a brand, include the brand name in the search query.
+4. NON-FRESH ITEMS (pantry, cleaning, snacks, pharmacy): do NOT set preferFresh. They're packaged by nature.
 
 SEARCH TIPS:
 - Product names in the DB include size, type, and packaging info (e.g., "חלב 3% מהדרין שקית 1 ליטר")
-- For specific product types (e.g., "milk in a bag"), generate MULTIPLE search variations to maximize chances. Example: "חלב בשקית" → searches: [{query:"חלב שקית"},{query:"חלב בשקית"}]
-- Use broader terms alongside specific ones — the DB search is keyword-based
-- When looking for cheapest/specific items, use higher limits (8-10) to get more candidates
+- For specific product types, generate MULTIPLE search variations. Each variation should still carry listaCategory and (when applicable) preferFresh.
+- Use higher limits (8-10) for specific/cheapest queries to get more candidates
 
 For each user message, return a JSON object with:
-- "message": A SHORT placeholder message like "מחפש..." or "Searching...". Do NOT say "here it is" or promise results — the actual response will be generated after seeing real search results.
-- "searches": Array of search queries to execute. Each search has:
-  - "query": Hebrew search string optimized for the product DB
-  - "limit": number of results (default 3, use 8-10 for specific/filtered/cheapest queries)
-  - "sort_by": optional "min_price" for price sorting
-  - "sort_order": optional "asc" (cheapest first) or "desc" (most expensive first)
-  - "is_vegan": optional boolean for vegan filter
+- "message": A SHORT placeholder like "מחפש..." — do NOT promise results.
+- "searches": Array of search queries. Each search has:
+  - "query": Hebrew search string optimized for the DB
+  - "limit": number of results (default 5, use 8-10 for cheapest/filtered)
+  - "listaCategory": REQUIRED — one of the 23 labels above
+  - "preferFresh": optional boolean — true for fresh items (see rule above)
+  - "sort_by": optional "min_price"
+  - "sort_order": optional "asc" | "desc"
+  - "is_vegan": optional boolean
 
 Examples:
-- "חלב, ביצים, גבינה" → message: "מחפש 3 מוצרים...", searches: [{query:"חלב",limit:3},{query:"ביצים",limit:3},{query:"גבינה צהובה",limit:3}]
-- "מה הקוטג' הכי זול?" → message: "מחפש...", searches: [{query:"קוטג'",limit:10,sort_by:"min_price",sort_order:"asc"}] (broad search, NOT specific variant from history)
-- "החלב בשקית הכי זול" → message: "מחפש...", searches: [{query:"חלב שקית",limit:8,sort_by:"min_price",sort_order:"asc"},{query:"חלב בשקית",limit:8,sort_by:"min_price",sort_order:"asc"}]
-- "חטיפים טבעוניים" → message: "מחפש...", searches: [{query:"חטיפים",limit:5,is_vegan:true}]
-- "יוגורט של שטראוס" → message: "מחפש...", searches: [{query:"יוגורט שטראוס",limit:5}]
+- "עגבניות, מלפפונים, יוגורט, לחם אחיד, מרכך כביסה, פלפל חריף" → message: "מחפש 6 מוצרים...", searches: [
+    {query:"עגבניות",limit:5,listaCategory:"פירות וירקות",preferFresh:true},
+    {query:"מלפפונים",limit:5,listaCategory:"פירות וירקות",preferFresh:true},
+    {query:"יוגורט",limit:5,listaCategory:"מוצרי חלב וביצים",preferFresh:true},
+    {query:"לחם אחיד",limit:5,listaCategory:"לחם מאפים ודגני בוקר",preferFresh:true},
+    {query:"מרכך כביסה",limit:5,listaCategory:"ניקיון כביסה וחד פעמי"},
+    {query:"פלפל חריף",limit:5,listaCategory:"מזווה בישול ואפייה"}
+  ]
+- "מה הקוטג' הכי זול?" → message: "מחפש...", searches: [{query:"קוטג'",limit:10,sort_by:"min_price",sort_order:"asc",listaCategory:"מוצרי חלב וביצים",preferFresh:true}]
+- "חטיפים טבעוניים" → message: "מחפש...", searches: [{query:"חטיפים",limit:8,is_vegan:true,listaCategory:"חטיפים מתוקים ופיצוחים"}]
 - "asdfghjkl" → message: "לא הבנתי. אפשר לנסח אחרת?", searches: []
-- "תודה" → message: "בשמחה! אפשר לעזור עוד?", searches: []
 
 Return ONLY valid JSON.`,
       },
@@ -179,10 +218,12 @@ Return ONLY valid JSON.`,
       message: parsed.message || '',
       searches: (parsed.searches || []).map((s: SearchIntent) => ({
         query: s.query || '',
-        limit: s.limit || 3,
+        limit: s.limit || 5,
         sort_by: s.sort_by,
         sort_order: s.sort_order,
         is_vegan: s.is_vegan,
+        listaCategory: s.listaCategory,
+        preferFresh: s.preferFresh,
       })),
     };
   } catch (error) {
@@ -212,7 +253,8 @@ Return ONLY valid JSON.`,
 export const summarizeResults = async (
   userMessage: string,
   productNames: { name: string; manufacturer: string; price: number }[],
-  language: Language
+  language: Language,
+  meta?: { freshFallbackCategories?: string[]; missingFreshItems?: string[] }
 ): Promise<string> => {
   try {
     const langNote =
@@ -247,7 +289,15 @@ Rules:
         },
         {
           role: 'user',
-          content: `User asked: "${userMessage}"\n\nSearch results:\n${productList}`,
+          content: `User asked: "${userMessage}"\n\nSearch results:\n${productList}${
+            meta?.freshFallbackCategories?.length
+              ? `\n\nNote: For these categories no truly fresh products were in the DB so processed versions are shown as fallback: ${meta.freshFallbackCategories.join(', ')}. Mention this briefly.`
+              : ''
+          }${
+            meta?.missingFreshItems?.length
+              ? `\n\nNote: Could NOT find these fresh items at all: ${meta.missingFreshItems.join(', ')}. Suggest the user add them manually.`
+              : ''
+          }`,
         },
       ],
       temperature: 0.3,

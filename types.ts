@@ -267,13 +267,22 @@ export interface SearchIntent {
   sort_by?: string;
   sort_order?: string;
   is_vegan?: boolean;
+  listaCategory?: string;   // one of LISTA_CATEGORIES — used to group results
+  preferFresh?: boolean;    // fresh-first: filter out pickled/canned/frozen variants, fallback if empty
+}
+
+export interface SmartProductGroup {
+  category: string;         // one of LISTA_CATEGORIES (Hebrew)
+  products: DbProduct[];
+  freshFallback?: boolean;  // true when fresh search returned nothing and we fell back to processed
 }
 
 export interface SmartChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   text: string;
-  products?: DbProduct[];         // search results attached to AI messages
+  products?: DbProduct[];         // flat list (non-grouped responses)
+  productGroups?: SmartProductGroup[]; // grouped by Lista category
   addedBarcodes?: Set<string>;    // which products were added from this message
   isLoading?: boolean;
 }

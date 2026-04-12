@@ -194,6 +194,37 @@ Five fixes implemented based on user simulation testing:
 - All 7 consumer components updated to pass `product.is_weighted` through to price formatting utilities
 - Data coverage: 576 products (true) + 8,789 (false) as of initial migration. Products with `null` fall back safely to old logic.
 
+## Category Grouping + Fresh-First (v5.0.0)
+
+**Problem**: Results were a flat list mixing dairy, cleaning, produce together. Fresh produce searches ("עגבניות") returned pickled/canned variants. Products leaked into the wrong sections when DB keywords collided with brand names (e.g., cleaning brand "וניש" under חטיפים because the user typed "קליה וניש").
+
+**Changes**:
+- New `listaCategories.ts` — the 23 fixed Lista categories (mirrored from `/public/category-icons/`), `PROCESSED_TOKENS` list (חמוץ, כבוש, קפוא, משומר, במלח, …), and `FRESH_CATEGORIES` set (פירות וירקות, מוצרי חלב וביצים, בשר עוף דגים ומעדניה, לחם מאפים ודגני בוקר).
+- `SearchIntent` extended with `listaCategory` and `preferFresh`. `SmartChatMessage` gained `productGroups: SmartProductGroup[]`.
+- `smartAssistant` prompt now REQUIRES every search to be tagged with one of the 23 categories and marks fresh categories with `preferFresh: true`. For fresh produce the AI generates BOTH plural and singular Hebrew forms (עגבניות + עגבניה) to maximize matches against weighted DB entries.
+- `processSmartChat` pipeline per-search:
+  1. **Category alignment** — drops any product whose DB `category/subcategory` has zero token overlap with the tagged Lista category. No fallback: if alignment empties the outcome, that's the correct answer. Kills cross-category keyword leaks.
+  2. **Product-group dedup** — collapses barcodes sharing a `product_group_id` (matches how the catalog unifies fresh produce like "עגבניה • 5 ברקודים מאוחדים").
+  3. **Fresh-first selection** — `pickFreshBest()`: if any `is_weighted === true` product exists, show ONLY those (no packaged alternatives). Otherwise filter out `PROCESSED_TOKENS`. If nothing survives, flag the outcome for the summary.
+  4. **Per-group brand filter** — applied within the grouped outcomes so brands don't collapse across categories.
+  5. **Near-duplicate suppression** — collapses rows sharing `manufacturer + rounded price + first 3 name tokens`.
+- Groups sorted by the canonical `LISTA_CATEGORIES` order for stable layout.
+- Missing-fresh reports are resolved post-merge: a query is only reported missing if its *category* ended up empty (prevents false "no פטריות" when the singular variant matched).
+- `summarizeResults` accepts `freshFallbackCategories` + `missingFreshItems` metadata so the AI response is honest about fallbacks and missing items.
+
+**UI changes** (`SmartListPanel.tsx`):
+- Grouped rendering: each group has a header row with icon (from `/public/category-icons/`), Hebrew category name, and count. A `mt-3 pt-3 border-t border-slate-200` divider separates groups.
+- Amber "לא נמצא טרי — מוצג מעובד" badge on groups where fresh search fell back to processed.
+- Card price now renders `₪min–₪max` via `formatPriceRange()` when `max_price > min_price`; falls back to `formatPriceLabel()` otherwise.
+- Flat-list renderer retained as a legacy fallback for messages without `productGroups`.
+
+**Files touched**:
+- `agents_and_ai/product-discovery-assistant/listaCategories.ts` (new)
+- `agents_and_ai/product-discovery-assistant/aiService.ts` (prompt + summarizer)
+- `agents_and_ai/product-discovery-assistant/smartListService.ts` (orchestration rewrite)
+- `agents_and_ai/product-discovery-assistant/SmartListPanel.tsx` (grouped rendering)
+- `types.ts` (SearchIntent fields + SmartProductGroup + SmartChatMessage.productGroups)
+
 ## Area-Aware Store Filtering (v4.8.2)
 
 **Problem**: AI assistant returned products from stores not available in the user's area (e.g., h-cohen products when searching in Jerusalem where only רמי לוי, שופרסל, ויקטורי are available).
