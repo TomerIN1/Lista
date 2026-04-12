@@ -3983,9 +3983,36 @@ Fixed price mismatch issue where physical store prices leaked into online mode (
 - Online stores show a small blue "אונליין" tag next to the store name
 - Applied in both ProductDetailModal and GroupDetailModal store rows
 
+#### 10. Landing Page Product Sections — Multi-Store Enforcement + Promo Row
+Rework of the three horizontal product rails shown on the category landing view in `ProductCatalogArea.tsx`.
+
+**"שווה להשוות" (Worth Comparing)**
+- Expanded `popularQueries` from 16 → 24 staples
+- Takes top 2 candidates per query (instead of 1), increasing max display from 8 → 16
+- Still filters by `max_price > min_price` so every item is implicitly carried in 2+ stores with price variance
+
+**"מוצרים יומיומיים" (Everyday Essentials)**
+- Stricter multi-supermarket guarantee: for each staple query, fetch candidates then call `getProductDetail` to count unique chains in `prices[]`, keep only products with `≥3` chains, pick the variant with the highest chain count
+- This fixes the "3% cottage cheese only in 2 stores" regression — the 5% variant (in more stores) now wins
+- Expanded staple list from 8 → 16 queries; cap raised from 8 → 16 items
+- Trade-off: adds ~8×6 detail API calls on first landing load; results are cached per-session
+
+**"מחירים חדשים במבצע" (Hot Deals — Fresh Price Drops) — NEW**
+- Reuses the same `popularQueries` fetch as the worth-comparing row (no extra API calls)
+- Filters for products where `has_promotion === true`, takes top 2 per query, ranks globally by discount depth `(min_price − discounted_price) / min_price`
+- Amber-themed card with store name + `-X%` pill. Badge row always renders (`min-h-[28px]`) so cards stay vertically aligned even when a percentage can't be computed
+- Store name goes through `SUPERMARKET_NAME_MAP` → Hebrew (Rami Levy → רמי לוי, Victory → ויקטורי, Market Warehouses → מחסני השוק, etc.)
+
+**Scroll affordance**
+- Each of the three rails now shows a "החלק לעוד ←" hint with a `ChevronLeft` icon next to the heading when `items.length > 4`, signaling the row is horizontally scrollable
+
+**Files Changed**
+- `components/ProductCatalogArea.tsx` — New `promoProducts` state + fetch branch, stricter common-product scoring via `getProductDetail`, expanded query lists, scroll hints, Hebrew store mapping on promo badge, aligned badge row
+- `constants/translations.ts` — Added `promoProducts` and `scrollForMore` keys (en + he)
+
 ---
 
 **Last Updated**: April 12, 2026
-**Version**: 5.8.2
+**Version**: 5.9.0
 **Status**: Production Ready
 

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Search, X, Loader2, Leaf, ChevronRight, SlidersHorizontal, Check, ArrowUpDown, Tag, DollarSign, Weight, Package } from 'lucide-react';
+import { Search, X, Loader2, Leaf, ChevronRight, ChevronLeft, SlidersHorizontal, Check, ArrowUpDown, Tag, DollarSign, Weight, Package } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DbProductEnhanced, ShoppingProduct, Unit, CategoryNode, ProductSortOption } from '../types';
-import { getCategories, browseProducts, searchProducts, getProductGroups, ProductGroupSummary } from '../services/priceDbService';
+import { getCategories, browseProducts, searchProducts, getProductGroups, getProductDetail, ProductGroupSummary, SUPERMARKET_NAME_MAP } from '../services/priceDbService';
 import { useDebounce } from '../hooks/useDebounce';
 import ProductCard from './ProductCard';
 import ProductDetailModal from './ProductDetailModal';
@@ -419,6 +419,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   // Landing page product sections
   const [featuredProducts, setFeaturedProducts] = useState<DbProductEnhanced[]>([]); // worth comparing
   const [commonProducts, setCommonProducts] = useState<DbProductEnhanced[]>([]); // common staples
+  const [promoProducts, setPromoProducts] = useState<DbProductEnhanced[]>([]); // active promotions
 
   const fetchId = useRef(0);
 
@@ -443,46 +444,89 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
       })
       .catch(() => {});
 
-    // Load "worth comparing" products — popular items with biggest price gaps
-    // Search for well-known Israeli grocery staples, pick those with highest savings
-    const popularQueries = ['חלב', 'ביצים', 'לחם', 'גבינה צהובה', 'שמן זית', 'קוטג', 'חמאה', 'קורנפלקס', 'אורז', 'שוקולד', 'קפה', 'סוכר', 'מים מינרליים', 'טונה', 'קטשופ', 'חלב סויה'];
+    // Load "worth comparing" + "promo" products — shared popularQueries fetch.
+    const popularQueries = [
+      'חלב', 'ביצים', 'לחם', 'גבינה צהובה', 'שמן זית', 'קוטג', 'חמאה', 'קורנפלקס',
+      'אורז', 'שוקולד', 'קפה', 'סוכר', 'מים מינרליים', 'טונה', 'קטשופ', 'חלב סויה',
+      'פסטה', 'עוגיות', 'יוגורט', 'שמן', 'קמח', 'ממרח שוקולד', 'חטיפים', 'מיץ',
+    ];
     Promise.allSettled(
-      popularQueries.map(q => searchProducts(q, 5, 0, city, storeType).catch(() => null))
+      popularQueries.map(q => searchProducts(q, 8, 0, city, storeType).catch(() => null))
     ).then((results) => {
-      const candidates: DbProductEnhanced[] = [];
+      const savingsCandidates: DbProductEnhanced[] = [];
+      const promoCandidates: DbProductEnhanced[] = [];
+      const seenSavings = new Set<string>();
+      const seenPromo = new Set<string>();
       for (const r of results) {
         if (r.status !== 'fulfilled' || !r.value) continue;
         const products = (r.value as any).products as DbProductEnhanced[];
         if (!products?.length) continue;
-        // Pick the product with the biggest savings from each search
+        // Worth comparing: biggest gap per query (top 2)
         const withSavings = products
-          .filter(p => p.max_price && p.min_price && p.max_price > p.min_price && p.image_url)
-          .sort((a, b) => ((b.max_price || 0) - b.min_price) - ((a.max_price || 0) - a.min_price));
-        if (withSavings.length > 0) candidates.push(withSavings[0]);
+          .filter(p => p.max_price && p.min_price && p.max_price > p.min_price && p.image_url && !seenSavings.has(p.barcode))
+          .sort((a, b) => ((b.max_price || 0) - b.min_price) - ((a.max_price || 0) - a.min_price))
+          .slice(0, 2);
+        for (const p of withSavings) { savingsCandidates.push(p); seenSavings.add(p.barcode); }
+        // Promo: products with active promotions (top 2 per query, sorted by discounted vs regular)
+        const withPromo = products
+          .filter(p => p.has_promotion && p.image_url && !seenPromo.has(p.barcode))
+          .slice(0, 2);
+        for (const p of withPromo) { promoCandidates.push(p); seenPromo.add(p.barcode); }
       }
-      // Sort all candidates by savings descending, take top 8
-      const sorted = candidates
-        .sort((a, b) => ((b.max_price || 0) - b.min_price) - ((a.max_price || 0) - a.min_price))
-        .slice(0, 8);
-      setFeaturedProducts(sorted);
+      // Featured: top 16 by savings
+      setFeaturedProducts(
+        savingsCandidates
+          .sort((a, b) => ((b.max_price || 0) - b.min_price) - ((a.max_price || 0) - a.min_price))
+          .slice(0, 16)
+      );
+      // Promo: rank by discount depth (discounted_price vs min_price), top 16
+      const promoScore = (p: DbProductEnhanced) => {
+        const disc = p.promotion_summary?.discounted_price;
+        if (disc != null && p.min_price) return (p.min_price - disc) / p.min_price;
+        return 0;
+      };
+      setPromoProducts(
+        promoCandidates
+          .sort((a, b) => promoScore(b) - promoScore(a))
+          .slice(0, 16)
+      );
     }).catch(() => {});
 
-    // Load common staple products
-    const stapleQueries = ['לחם אחיד', 'חלב תנובה', 'ביצים', 'גבינה לבנה', 'שמנת חמוצה', 'במבה', 'קולה', 'מלפפונים'];
+    // Load common staple products — must be carried by the widest set of supermarkets.
+    // For each query, fetch candidates, then call getProductDetail to count unique chains,
+    // and pick the variant present in the most stores (≥3 minimum).
+    const MIN_CHAINS = 3;
+    const stapleQueries = [
+      'לחם אחיד', 'חלב תנובה', 'ביצים', 'גבינה לבנה', 'שמנת חמוצה', 'במבה', 'קולה', 'מלפפונים',
+      'עגבניות', 'תפוחי אדמה', 'בצל', 'גזר', 'שמן קנולה', 'סוכר לבן', 'קמח', 'אורז לבן',
+    ];
     Promise.allSettled(
-      stapleQueries.map(q => searchProducts(q, 3, 0, city, storeType).catch(() => null))
+      stapleQueries.map(async (q) => {
+        const res = await searchProducts(q, 8, 0, city, storeType).catch(() => null);
+        const candidates = ((res as any)?.products as DbProductEnhanced[] | undefined)?.filter(p => p.image_url) ?? [];
+        if (!candidates.length) return null;
+        const scored = await Promise.all(
+          candidates.slice(0, 6).map(async (p) => {
+            const detail = await getProductDetail(p.barcode, storeType).catch(() => null);
+            const chains = detail ? new Set(detail.prices.map(pr => pr.supermarket)).size : 0;
+            return { product: p, chains };
+          })
+        );
+        const best = scored
+          .filter(s => s.chains >= MIN_CHAINS)
+          .sort((a, b) => b.chains - a.chains)[0];
+        return best?.product ?? null;
+      })
     ).then((results) => {
       const items: DbProductEnhanced[] = [];
       const seen = new Set<string>();
       for (const r of results) {
         if (r.status !== 'fulfilled' || !r.value) continue;
-        const products = (r.value as any).products as DbProductEnhanced[];
-        if (!products?.length) continue;
-        // Pick the first product with an image that we haven't seen
-        const pick = products.find(p => p.image_url && !seen.has(p.barcode));
-        if (pick) { items.push(pick); seen.add(pick.barcode); }
+        if (seen.has(r.value.barcode)) continue;
+        items.push(r.value);
+        seen.add(r.value.barcode);
       }
-      setCommonProducts(items.slice(0, 8));
+      setCommonProducts(items.slice(0, 16));
     }).catch(() => {});
   }, []);
 
@@ -970,9 +1014,17 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
               {/* "Worth Comparing" — popular products with biggest price gaps */}
               {featuredProducts.length > 0 && (
                 <div className="mb-5">
-                  <h3 className="text-sm font-semibold text-slate-700 mb-2 px-0.5">
-                    {t('productBrowse.worthComparing')}
-                  </h3>
+                  <div className="flex items-center justify-between mb-2 px-0.5">
+                    <h3 className="text-sm font-semibold text-slate-700">
+                      {t('productBrowse.worthComparing')}
+                    </h3>
+                    {featuredProducts.length > 4 && (
+                      <span className="flex items-center gap-0.5 text-[11px] text-slate-400 font-medium">
+                        {t('productBrowse.scrollForMore')}
+                        <ChevronLeft className="w-3 h-3" />
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
                     {featuredProducts.map((fp) => {
                       const savings = (fp.max_price || 0) - fp.min_price;
@@ -1050,12 +1102,105 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                 </div>
               )}
 
+              {/* Promo Products — products with active promotions / new good prices */}
+              {promoProducts.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-center justify-between mb-2 px-0.5">
+                    <h3 className="text-sm font-semibold text-slate-700">
+                      {t('productBrowse.promoProducts')}
+                    </h3>
+                    {promoProducts.length > 4 && (
+                      <span className="flex items-center gap-0.5 text-[11px] text-slate-400 font-medium">
+                        {t('productBrowse.scrollForMore')}
+                        <ChevronLeft className="w-3 h-3" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+                    {promoProducts.map((pp) => {
+                      const disc = pp.promotion_summary?.discounted_price;
+                      const pct = disc != null && pp.min_price ? Math.round(((pp.min_price - disc) / pp.min_price) * 100) : 0;
+                      const storeEn = pp.promotion_summary?.supermarket || '';
+                      const storeHe = SUPERMARKET_NAME_MAP[storeEn] || storeEn || 'מבצע';
+                      return (
+                        <div key={pp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-all relative">
+                          <div className="flex items-center justify-center gap-2 bg-amber-50 border-b border-amber-100 px-2 py-1.5 min-h-[28px]">
+                            <span className="text-amber-700 text-[11px] font-bold truncate">{storeHe}</span>
+                            {pct > 0 && (
+                              <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">-{pct}%</span>
+                            )}
+                          </div>
+                          <div className="flex-1 flex flex-col p-2.5">
+                            <div className="h-24 flex items-center justify-center mb-2">
+                              {pp.image_url ? (
+                                <img src={pp.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
+                              ) : (
+                                <div className="w-12 h-12 text-slate-200 flex items-center justify-center">
+                                  <Search className="w-8 h-8" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs font-semibold text-slate-800 leading-snug line-clamp-2 text-center min-h-[2.5rem]">{pp.name}</div>
+                            {pp.manufacturer && (
+                              <div className="text-[10px] text-slate-400 text-center truncate mt-0.5">{pp.manufacturer}</div>
+                            )}
+                            <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                              <span className="text-sm font-bold text-amber-600">₪{(disc ?? pp.min_price).toFixed(2)}</span>
+                              {disc != null && pp.min_price > disc && (
+                                <span className="text-[11px] text-slate-400 line-through">₪{pp.min_price.toFixed(2)}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="px-2.5 pb-2.5">
+                            {selectedProducts.some((p) => p.barcode === pp.barcode) ? (
+                              <button
+                                onClick={() => onRemoveProduct(pp.barcode)}
+                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500"
+                              >
+                                ✓ {t('productBrowse.added')}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  onSelectProduct({ ...pp, amount: 1, unit: defaultCartUnit(pp.unit_of_measure, pp.is_weighted) });
+                                }}
+                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                              >
+                                + {t('productBrowse.addToList')}
+                              </button>
+                            )}
+                          </div>
+                          <div
+                            className="absolute inset-0 cursor-pointer"
+                            style={{ bottom: '40px' }}
+                            onClick={() => {
+                              setDetailBarcode(pp.barcode);
+                              setDetailImageUrl(pp.image_url);
+                              setDetailProduct(pp);
+                              setDetailGroupId((pp as any).product_group_id ?? null);
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Common Products — everyday staples */}
               {commonProducts.length > 0 && (
                 <div className="mb-5">
-                  <h3 className="text-sm font-semibold text-slate-700 mb-2 px-0.5">
-                    {t('productBrowse.commonProducts')}
-                  </h3>
+                  <div className="flex items-center justify-between mb-2 px-0.5">
+                    <h3 className="text-sm font-semibold text-slate-700">
+                      {t('productBrowse.commonProducts')}
+                    </h3>
+                    {commonProducts.length > 4 && (
+                      <span className="flex items-center gap-0.5 text-[11px] text-slate-400 font-medium">
+                        {t('productBrowse.scrollForMore')}
+                        <ChevronLeft className="w-3 h-3" />
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
                     {commonProducts.map((cp) => (
                       <div key={cp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-all relative">

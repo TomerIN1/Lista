@@ -234,6 +234,8 @@ export const TRANSLATIONS = {
       worthComparing: "Worth Comparing — Biggest Price Gaps",
       saveUpTo: "Save",
       commonProducts: "Everyday Essentials",
+      promoProducts: "Hot Deals — Fresh Price Drops",
+      scrollForMore: "Swipe for more",
       searchProducts: "Search products..."
     },
     smartList: {
@@ -496,6 +498,8 @@ export const TRANSLATIONS = {
       worthComparing: "שווה להשוות — הפרשי מחירים גדולים",
       saveUpTo: "חסכו",
       commonProducts: "מוצרים יומיומיים",
+      promoProducts: "מחירים חדשים במבצע",
+      scrollForMore: "החלק לעוד",
       searchProducts: "חפש מוצרים..."
     },
     smartList: {
