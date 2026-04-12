@@ -291,8 +291,21 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                       const discountPct = hasDiscount
                         ? Math.round((1 - shownPrice / p.price) * 100)
                         : 0;
-                      const promoLabel = p.promotion?.description
-                        || (hasDiscount ? (isRTL ? 'מחיר מבצע' : 'Sale price') : null);
+                      // Build structured promo label from min_qty + discounted_price
+                      let structuredPromoLabel: string | null = null;
+                      if (p.promotion) {
+                        const mq = p.promotion.min_qty;
+                        const dp = p.promotion.discounted_price;
+                        if (mq != null && mq >= 2 && dp != null) {
+                          structuredPromoLabel = `${mq} ב-₪${dp % 1 === 0 ? dp : dp.toFixed(2)} (₪${(dp / mq).toFixed(2)} ליחידה)`;
+                        } else if (dp != null) {
+                          structuredPromoLabel = `₪${dp % 1 === 0 ? dp : dp.toFixed(2)}`;
+                        }
+                      }
+                      const promoFallbackLabel = !structuredPromoLabel && hasDiscount
+                        ? (isRTL ? 'מחיר מבצע' : 'Sale price')
+                        : null;
+                      const hasPromoInfo = p.promotion != null;
 
                       return (
                         <div
@@ -323,18 +336,24 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                                 </span>
                               )}
                             </div>
-                            {promoLabel && (
+                            {hasPromoInfo && structuredPromoLabel && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <Tag className="w-3 h-3 text-rose-500 flex-shrink-0" />
-                                <p className="text-[11px] text-rose-600 font-medium">
-                                  {isRTL ? 'במבצע: ' : 'Sale: '}{promoLabel}
+                                <p className="text-[11px] text-rose-600 font-semibold">
+                                  {isRTL ? 'במבצע: ' : 'Sale: '}{structuredPromoLabel}
                                 </p>
                               </div>
                             )}
-                            {p.promotion?.min_qty != null && p.promotion.min_qty >= 2 && p.promotion.discounted_price != null && (
-                              <p className="text-[10px] text-rose-500 mt-0.5">
-                                ₪{(p.promotion.discounted_price / p.promotion.min_qty).toFixed(2)} ליחידה
-                              </p>
+                            {hasPromoInfo && !structuredPromoLabel && p.promotion?.description && (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <Tag className="w-3 h-3 text-rose-500 flex-shrink-0" />
+                                <p className="text-[11px] text-rose-600 font-medium">
+                                  {isRTL ? 'במבצע: ' : 'Sale: '}{p.promotion.description}
+                                </p>
+                              </div>
+                            )}
+                            {promoFallbackLabel && (
+                              <p className="text-[10px] text-rose-500 mt-0.5">{promoFallbackLabel}</p>
                             )}
                           </div>
 

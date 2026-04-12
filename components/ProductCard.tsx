@@ -116,11 +116,18 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isSelected, onAdd, o
                 {isRTL ? 'במבצע ב-' : 'Promo at '}{SUPERMARKET_NAME_MAP[product.promotion_summary.supermarket] || product.promotion_summary.supermarket}
               </p>
               <p className="text-[10px] text-amber-600 line-clamp-1">
-                {product.promotion_summary.min_qty != null && product.promotion_summary.min_qty >= 2 && product.promotion_summary.discounted_price != null
-                  ? `${product.promotion_summary.min_qty} ב-₪${product.promotion_summary.discounted_price} (₪${(product.promotion_summary.discounted_price / product.promotion_summary.min_qty).toFixed(2)} ליחידה)`
-                  : product.promotion_summary.discounted_price != null
-                    ? `₪${product.promotion_summary.discounted_price.toFixed(2)}`
-                    : product.promotion_summary.description}
+                {(() => {
+                  const ps = product.promotion_summary!;
+                  const mq = ps.min_qty;
+                  const dp = ps.discounted_price;
+                  if (mq != null && mq >= 2 && dp != null) {
+                    return `${mq} ב-₪${dp % 1 === 0 ? dp : dp.toFixed(2)} (₪${(dp / mq).toFixed(2)} ליחידה)`;
+                  }
+                  if (dp != null) {
+                    return `₪${dp % 1 === 0 ? dp : dp.toFixed(2)}`;
+                  }
+                  return ps.description;
+                })()}
               </p>
             </div>
           )}

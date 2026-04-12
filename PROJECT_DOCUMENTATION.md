@@ -3939,9 +3939,34 @@ Added two new sort options to the sort dropdown:
 - `services/priceDbService.ts` — Maps new promo fields in shopping list comparison
 - `utils/priceFormat.ts` — Hide unit count labels ("3 יחידות")
 
+#### 7. Structured Promo Display (replaces raw XML descriptions)
+Promo labels are now built from structured API fields (`min_qty`, `discounted_price`) instead of raw chain-specific description text. Applied across all modals:
+
+**ProductDetailModal + GroupDetailModal:**
+- Bundle deal (min_qty >= 2): "במבצע: 3 ב-₪20 (₪6.67 ליחידה)"
+- Single item deal: "במבצע: ₪19.90"
+- Fallback: raw description when structured fields are null
+- Discount % badge on promo rows
+- Price column shows promo price with strikethrough original
+- "הכי זול" badge respects promo prices in GroupDetailModal too
+
+**ProductCard promo summary:**
+- Same structured logic — clean display from `min_qty` + `discounted_price`
+
+**API-side (db-api agent):**
+- `min_qty` and `discounted_price` now 100% populated across all 5 chains
+- Rami Levy coupons (personal/wallet deals) filtered from all endpoints
+- ETL crons now run daily on Railway via Bright Data proxy for Israeli sources
+- Rami Levy switched from e-commerce API to government-mandated XML
+
+### Files Changed (this update)
+- `components/ProductDetailModal.tsx` — Structured promo labels, description fallback
+- `components/GroupDetailModal.tsx` — Same promo display + discount badge + promo pricing
+- `components/ProductCard.tsx` — Clean structured promo summary
+
 ---
 
 **Last Updated**: April 12, 2026
-**Version**: 5.8.0
+**Version**: 5.8.1
 **Status**: Production Ready
 

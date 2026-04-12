@@ -142,10 +142,32 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
                 </p>
                 <div className="rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
                   {prices.map((p, i) => {
-                    const isCheapest = i === 0;
-                    const diff = cheapest != null ? p.effective_price - cheapest : 0;
-                    const hasDiscount = p.effective_price < p.regular_price - 0.01;
+                    // Compute real price accounting for promo discounted_price
+                    let promoPrice = p.promotion?.discounted_price ?? null;
+                    if (promoPrice == null && p.promotion?.description) {
+                      const m = p.promotion.description.match(/([\d]+\.[\d]+)/);
+                      if (m) { const parsed = parseFloat(m[1]); if (!isNaN(parsed) && parsed < p.regular_price) promoPrice = parsed; }
+                    }
+                    const hasPromoDiscount = promoPrice != null && promoPrice < p.regular_price - 0.01;
+                    const hasDiscount = p.effective_price < p.regular_price - 0.01 || hasPromoDiscount;
+                    const shownPrice = hasPromoDiscount ? promoPrice! : p.effective_price;
+                    const realPrice = Math.min(p.effective_price, promoPrice ?? Infinity);
+                    const isCheapest = i === 0 && cheapest != null && mostExpensive != null && cheapest < mostExpensive - 0.01;
+                    const diff = cheapest != null ? realPrice - cheapest : 0;
+                    const discountPct = hasDiscount ? Math.round((1 - shownPrice / p.regular_price) * 100) : 0;
                     const displayName = SUPERMARKET_NAME_MAP[p.supermarket] || p.supermarket;
+
+                    // Build structured promo label
+                    let structuredPromoLabel: string | null = null;
+                    if (p.promotion) {
+                      const mq = p.promotion.min_qty;
+                      const dp = p.promotion.discounted_price;
+                      if (mq != null && mq >= 2 && dp != null) {
+                        structuredPromoLabel = `${mq} ב-₪${dp % 1 === 0 ? dp : dp.toFixed(2)} (₪${(dp / mq).toFixed(2)} ליחידה)`;
+                      } else if (dp != null) {
+                        structuredPromoLabel = `₪${dp % 1 === 0 ? dp : dp.toFixed(2)}`;
+                      }
+                    }
 
                     return (
                       <div
@@ -165,12 +187,27 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
                                 {isRTL ? 'הכי זול' : 'Best'}
                               </span>
                             )}
+                            {hasDiscount && (
+                              <span className="text-[10px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                -{discountPct}%{p.promotion ? (isRTL ? ' מבצע' : ' sale') : ''}
+                              </span>
+                            )}
                           </div>
                           <p className="text-[11px] text-slate-400 mt-0.5 truncate">{p.product_name}</p>
-                          {p.promotion && (
+                          {p.promotion && structuredPromoLabel && (
                             <div className="flex items-center gap-1 mt-0.5">
                               <Tag className="w-3 h-3 text-rose-500 flex-shrink-0" />
-                              <p className="text-[11px] text-rose-600 font-medium truncate">{p.promotion.description}</p>
+                              <p className="text-[11px] text-rose-600 font-semibold">
+                                {isRTL ? 'במבצע: ' : 'Sale: '}{structuredPromoLabel}
+                              </p>
+                            </div>
+                          )}
+                          {p.promotion && !structuredPromoLabel && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <Tag className="w-3 h-3 text-rose-500 flex-shrink-0" />
+                              <p className="text-[11px] text-rose-600 font-medium truncate">
+                                {isRTL ? 'במבצע: ' : 'Sale: '}{p.promotion.description}
+                              </p>
                             </div>
                           )}
                           {p.store.is_online && p.store.delivery_fee != null && (
@@ -184,15 +221,12 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
                         </div>
                         <div className="text-end flex-shrink-0">
                           <p className={`text-sm font-black ${isCheapest ? 'text-emerald-700' : hasDiscount ? 'text-rose-600' : 'text-slate-700'}`}>
-                            {formatDisplayPrice(p.display_effective_price ?? p.effective_price, p.display_unit || displayUnit)}
+                            {formatDisplayPrice(shownPrice, p.display_unit || displayUnit)}
                           </p>
                           {hasDiscount && (
                             <p className="text-[11px] text-slate-400 line-through">
                               {formatDisplayPrice(p.display_price ?? p.regular_price, p.display_unit || displayUnit)}
                             </p>
-                          )}
-                          {p.effective_price_per_100g != null && (
-                            <p className="text-[10px] text-slate-400">₪{p.effective_price_per_100g.toFixed(2)} / 100 גרם</p>
                           )}
                           {!isCheapest && diff > 0.01 && (
                             <p className="text-[11px] text-slate-400 font-medium">+₪{diff.toFixed(2)}</p>
