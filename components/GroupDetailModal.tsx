@@ -13,12 +13,11 @@ interface GroupDetailModalProps {
   onClose: () => void;
   onAdd?: (product: DbProductEnhanced, amount: number) => void;
   isAdded?: boolean;
-  city?: string;
   storeType?: string;
   availableChains?: string[];
 }
 
-const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackProduct, onClose, onAdd, isAdded, city, storeType, availableChains }) => {
+const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackProduct, onClose, onAdd, isAdded, storeType, availableChains }) => {
   const { t, isRTL } = useLanguage();
   const [detail, setDetail] = useState<ProductGroupDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,11 +30,13 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
   useEffect(() => {
     setIsLoading(true);
     setImgFailed(false);
-    getGroupDetail(groupId, city, storeType)
+    // Skip the backend `city` filter: it drops chains that actually deliver (delivery-check
+    // and group detail disagree for some cities). Availability is enforced via availableChains below.
+    getGroupDetail(groupId, undefined, storeType)
       .then(setDetail)
       .catch(() => setDetail(null))
       .finally(() => setIsLoading(false));
-  }, [groupId, city, storeType]);
+  }, [groupId, storeType]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };

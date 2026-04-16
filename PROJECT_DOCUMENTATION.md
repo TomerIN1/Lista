@@ -4038,9 +4038,25 @@ Fix: added a `visiblePromoProducts` `useMemo` in `ProductCatalogArea` that filte
 **Files Changed**
 - `components/ProductCatalogArea.tsx` — Added `visiblePromoProducts` memo + swapped render usages
 
+#### 13. GroupDetailModal — Drop Backend `city` Filter to Fix Missing Chains
+Problem: opening a product group (e.g. עגבניה / VEG-001) showed only **1 chain** in the "השוואת מחירים בין רשתות" list and "1 רשתות" in the header, even for users whose available-stores banner listed 3 chains delivering to their city. Expectation was that all deliverable chains with a price in the group show up.
+
+Root cause (NOT a rendering bug — the map loop was already correct): `/api/delivery/check` and `/api/groups/{id}?city=...` disagreed about chain availability. For a Petah Tikva user, delivery-check confirmed Rami Levy + Shufersal + Victory all deliver (`eligible_store_ref_ids=[26, 22, 23]`), but `GET /api/groups/142?city=פתח תקווה&store_type=online` returned **only Rami Levy** — the backend's `city` filter appears to require a physical store in the city even for online-only prices, dropping Victory's online price from the response. By the time the frontend's `availableChains` filter ran, the row was already gone.
+
+Fix: stop passing `city` to `getGroupDetail`. The modal now fetches all chains and relies on the existing `availableChains` filter (derived from delivery-check) as the single source of truth for which chains to show. Matches the pattern `ProductDetailModal` already uses. For the Petah Tikva tomato this now correctly renders both Rami Levy and Victory.
+
+- `components/GroupDetailModal.tsx` — `getGroupDetail(groupId, undefined, storeType)` in the effect; `city` prop removed from interface + destructure; `useEffect` deps updated. Frontend filter at lines 47-52 unchanged — already handles delivery-aware chain filtering correctly.
+- `components/ProductCatalogArea.tsx` — Stopped passing `city={city}` to `<GroupDetailModal>`; now only passes `storeType` + `availableChains={selectedChains}`.
+
+**Backend follow-up (deferred, non-blocking):** filed task with db-api agent to align `/api/groups/{id}?city=...` with delivery-check's availability model, or to accept `eligible_store_ref_ids` explicitly so callers can opt in. Agent confirmed the frontend workaround is correct and stable — no backend change needed right now. Same underlying inconsistency likely affects `/api/groups/?city=...` list aggregations (`chain_count`, `min_price`, `max_price`) when a city is supplied.
+
+**Files Changed**
+- `components/GroupDetailModal.tsx` — Drop `city` from API call + interface
+- `components/ProductCatalogArea.tsx` — Stop passing `city` to `<GroupDetailModal>`
+
 ---
 
-**Last Updated**: April 12, 2026
-**Version**: 5.9.2
+**Last Updated**: April 17, 2026
+**Version**: 5.9.3
 **Status**: Production Ready
 

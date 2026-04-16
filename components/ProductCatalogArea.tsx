@@ -1336,7 +1336,6 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
             setDetailGroupId(null);
           }}
           isAdded={selectedProducts.some((p) => p.barcode === detailBarcode)}
-          city={city}
           storeType={storeType}
           availableChains={selectedChains}
         />
