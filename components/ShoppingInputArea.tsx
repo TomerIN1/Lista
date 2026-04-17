@@ -125,7 +125,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   const estimatedTotal = useMemo(() => {
     return products.reduce((sum, p) => {
       if (!p.min_price) return sum;
-      const wt = computeWeightedTotal(p.min_price, p.amount, p.unit, p.unit_of_measure, p.is_weighted);
+      const wt = computeWeightedTotal(p.min_price, p.amount, p.unit, p.unit_of_measure, p.is_weighted, p.name);
       return sum + (wt ?? p.min_price * p.amount);
     }, 0);
   }, [products]);
@@ -184,7 +184,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
                   </div>
                 )}
                 {product.min_price > 0 && isWeightedProduct(product.unit_of_measure, product.is_weighted) && (() => {
-                  const est = computeWeightedTotal(product.min_price, product.amount, product.unit, product.unit_of_measure, product.is_weighted);
+                  const est = computeWeightedTotal(product.min_price, product.amount, product.unit, product.unit_of_measure, product.is_weighted, product.name);
                   return est != null ? (
                     <div className="text-[10px] text-amber-600 mt-0.5">≈ ₪{est.toFixed(2)}</div>
                   ) : null;

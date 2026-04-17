@@ -124,7 +124,7 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
     const shoppingProduct: ShoppingProduct = {
       ...product,
       amount: 1,
-      unit: defaultCartUnit(product.unit_of_measure, product.is_weighted),
+      unit: defaultCartUnit(product.unit_of_measure, product.is_weighted, product.name),
     };
     onConfirm([shoppingProduct]);
     setAddedInSession((prev) => new Set(prev).add(product.barcode));
@@ -136,7 +136,7 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
     const shoppingProducts: ShoppingProduct[] = toAdd.map((p) => ({
       ...p,
       amount: 1,
-      unit: defaultCartUnit(p.unit_of_measure, p.is_weighted),
+      unit: defaultCartUnit(p.unit_of_measure, p.is_weighted, p.name),
     }));
     onConfirm(shoppingProducts);
     setAddedInSession((prev) => {

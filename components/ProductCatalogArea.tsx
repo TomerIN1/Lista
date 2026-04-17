@@ -700,7 +700,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
 
   const handleAddProduct = (product: DbProductEnhanced, amount?: number) => {
     if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
-    const unit = defaultCartUnit(product.unit_of_measure, product.is_weighted);
+    const unit = defaultCartUnit(product.unit_of_measure, product.is_weighted, product.name);
     onSelectProduct({ ...product, amount: amount ?? 1, unit });
   };
 
@@ -1085,7 +1085,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                                   onSelectProduct({
                                     ...fp,
                                     amount: 1,
-                                    unit: defaultCartUnit(fp.unit_of_measure, fp.is_weighted),
+                                    unit: defaultCartUnit(fp.unit_of_measure, fp.is_weighted, fp.name),
                                   });
                                 }}
                                 className="w-full py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
@@ -1172,7 +1172,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                             ) : (
                               <button
                                 onClick={() => {
-                                  onSelectProduct({ ...pp, amount: 1, unit: defaultCartUnit(pp.unit_of_measure, pp.is_weighted) });
+                                  onSelectProduct({ ...pp, amount: 1, unit: defaultCartUnit(pp.unit_of_measure, pp.is_weighted, pp.name) });
                                 }}
                                 className="w-full py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
                               >
@@ -1246,7 +1246,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                           ) : (
                             <button
                               onClick={() => {
-                                onSelectProduct({ ...cp, amount: 1, unit: defaultCartUnit(cp.unit_of_measure, cp.is_weighted) });
+                                onSelectProduct({ ...cp, amount: 1, unit: defaultCartUnit(cp.unit_of_measure, cp.is_weighted, cp.name) });
                               }}
                               className="w-full py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
                             >

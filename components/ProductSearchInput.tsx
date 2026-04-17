@@ -85,7 +85,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   const handleSelect = (product: DbProduct) => {
     // Don't add duplicates
     if (selectedProducts.some((p) => p.barcode === product.barcode)) return;
-    onSelectProduct({ ...product, amount: 1, unit: defaultCartUnit(product.unit_of_measure, product.is_weighted) });
+    onSelectProduct({ ...product, amount: 1, unit: defaultCartUnit(product.unit_of_measure, product.is_weighted, product.name) });
     clearResults();
     setIsDropdownOpen(false);
   };

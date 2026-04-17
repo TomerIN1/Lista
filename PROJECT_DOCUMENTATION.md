@@ -835,14 +835,31 @@ Shared price formatting utilities used across all product-facing components. Cen
 | `formatPriceRange` | `(min, max?, unitOfMeasure?, isWeighted?) → string` | Price range: `"₪8.90 – ₪12.00 / ק״ג"` |
 | `isWeightedProduct` | `(unitOfMeasure?, isWeighted?) → boolean` | Check if product is sold by weight |
 | `unitBadgeLabel` | `(unitOfMeasure?, isWeighted?) → string \| null` | Badge text: `"ק״ג"`, `"100ג׳"`, `"ליטר"`, or null |
-| `defaultCartUnit` | `(unitOfMeasure?, isWeighted?) → 'kg' \| 'pcs'` | Default cart unit (kg for weighted, pcs otherwise) |
+| `defaultCartUnit` | `(unitOfMeasure?, isWeighted?, name?) → 'kg' \| 'pcs'` | Default cart unit (kg for weighted, pcs otherwise). When `name` matches a unit-override pattern (see `utils/unitOverrides.ts`), forces `'pcs'` — used for whole produce sold by weight but purchased per unit (cabbage, cauliflower, watermelon, pineapple). |
 | `formatWeightedSubprice` | `(price, unitOfMeasure?, isWeighted?) → string \| null` | Per-100g/100ml subprice for weighted products: `"≈ ₪9.99 / 100 ג׳"` (per-kg), `"≈ ₪1.50 / 100 מ״ל"` (per-liter). Returns null for packaged or per-100g products. |
-| `computeWeightedTotal` | `(price, amount, cartUnit, unitOfMeasure?, isWeighted?) → number \| null` | Estimated total for weighted cart items based on amount/unit. Supports kg↔g, 100g↔g, liter↔ml conversions. |
+| `computeWeightedTotal` | `(price, amount, cartUnit, unitOfMeasure?, isWeighted?, name?) → number \| null` | Estimated total for weighted cart items based on amount/unit. Supports kg↔g, 100g↔g, liter↔ml conversions. When a unit-override matches `name` and cart unit is `'pcs'`, computes `price × typicalKgPerUnit × amount`. |
 | `normalizeUnitQty` | `(raw?) → string \| null` | Normalize whitespace and validate `unit_qty`. Allows: strings with leading number (`"400 גרם"` → `"400 גרם"`), per-unit labels (`"יחידה"`). Filters: bare regulatory units (`"קילוגרמים"` → `null`). |
 | `parseUnitQty` | `(raw?) → ParsedUnitQty \| null` | Parse `unit_qty` into `{ value, unit, unitLabel }` (supports גרם, ק"ג, ליטר, מ"ל) |
 | `formatUnitPriceLine` | `(price, unitQty?, isWeighted?) → string \| null` | Computed unit price: `"₪9.23 ל-100 גרם"` (400g @ ₪29.90), `"₪8.60 לליטר"` (500ml @ ₪4.30). Returns null for weighted products or missing data. |
 
 **Used by**: `ProductCard`, `ProductDetailModal`, `SmartListPanel`, `ShoppingInputArea`, `ProductSearchInput`, `ShoppingListBreakdownModal`, `ProductCatalogArea`
+
+---
+
+### utils/unitOverrides.ts
+**Location**: `utils/unitOverrides.ts`
+
+Per-product unit overrides for items sold by weight at the supermarket but purchased as whole units by shoppers (cabbage, cauliflower, watermelon, pineapple). Inspired by Rami Levy's UX: "1 יחידה ≈ 1.2 ק״ג".
+
+**How it works**: `getUnitOverride(name)` matches the product name against a regex list and returns `{ estimatedKgPerUnit }` when there's a match. `utils/priceFormat.ts` consults this in `defaultCartUnit()` (forces `'pcs'`) and `computeWeightedTotal()` (multiplies `price × estimatedKgPerUnit × amount`).
+
+**Current overrides** (Hebrew pattern → kg):
+- `כרוב לבן` / `כרוב אדום` → 1.2
+- `כרובית` → 0.8
+- `אבטיח` → 5.0
+- `אננס` → 1.3
+
+**Adding more items**: append a `{ pattern, kg }` entry. Regex matches anywhere in the name, so compound SKUs (e.g. `קוביות אבטיח`) will also match — tighten the pattern if that's undesired.
 
 ---
 

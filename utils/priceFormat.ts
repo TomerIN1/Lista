@@ -13,6 +13,8 @@
  *   null                                 → regular packaged product
  */
 
+import { getUnitOverride } from './unitOverrides';
+
 type NormalizedUnit = 'kg' | '100g' | 'liter' | null;
 
 /**
@@ -116,8 +118,10 @@ export function unitBadgeLabel(unitOfMeasure?: string | null, isWeighted?: boole
 /**
  * Returns the default shopping cart unit for a product.
  * Per-kg products default to 'kg', others to 'pcs'.
+ * Products with a unit override (e.g., cabbage heads) are forced to 'pcs'.
  */
-export function defaultCartUnit(unitOfMeasure?: string | null, isWeighted?: boolean | null): 'kg' | 'pcs' {
+export function defaultCartUnit(unitOfMeasure?: string | null, isWeighted?: boolean | null, name?: string | null): 'kg' | 'pcs' {
+  if (getUnitOverride(name)) return 'pcs';
   return effectiveUnit(unitOfMeasure, isWeighted) === 'kg' ? 'kg' : 'pcs';
 }
 
@@ -143,9 +147,16 @@ export function formatWeightedSubprice(price: number, unitOfMeasure?: string | n
  * Computes estimated total for a weighted product in the cart.
  * amount is in the cart unit (kg, g, etc.), pricePerUnit is per the selling unit.
  */
-export function computeWeightedTotal(price: number, amount: number, cartUnit: string, unitOfMeasure?: string | null, isWeighted?: boolean | null): number | null {
+export function computeWeightedTotal(price: number, amount: number, cartUnit: string, unitOfMeasure?: string | null, isWeighted?: boolean | null, name?: string | null): number | null {
   const unit = effectiveUnit(unitOfMeasure, isWeighted);
   if (!unit) return null;
+  // Unit-override products (e.g., cabbage heads): cart unit is 'pcs' but the
+  // supermarket charges per kg. Multiply price × typical-weight × quantity.
+  if (cartUnit === 'pcs') {
+    const override = getUnitOverride(name);
+    if (override && unit === 'kg') return price * override.estimatedKgPerUnit * amount;
+    if (override && unit === '100g') return price * 10 * override.estimatedKgPerUnit * amount;
+  }
   if (unit === 'kg' && cartUnit === 'kg') return price * amount;
   if (unit === 'kg' && cartUnit === 'g') return (price / 1000) * amount;
   if (unit === '100g' && cartUnit === 'g') return (price / 100) * amount;
