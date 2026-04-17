@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lista-cache-v5';
+const CACHE_NAME = 'lista-cache-v6';
 
 // Assets to cache immediately
 const PRECACHE_ASSETS = [
