@@ -410,9 +410,10 @@ Horizontal scrollable category navigation strip with hover mega-menu, rendered b
 - Fetches categories via `getCategories()` from `priceDbService.ts`
 - Sorts using `sortCategories()` from `ProductCatalogArea.tsx`
 - Each button: SVG icon (w-14/w-16) + category name, vertical layout
-- Active category: emerald-600 bg with white text and inverted icon
+- Active category: emerald-600 bg with white text and inverted icon (strokes flip to white via `brightness-0 invert` — clean because icons are stroke-only)
 - Hovered category: emerald-50 bg with emerald text
-- "All" button with 🏪 emoji resets to landing view
+- "All" button uses `הכל.svg` illustration icon (matches the rest of the rail)
+- Row uses `.slim-scrollbar` (thin slate-colored scrollbar in `index.html`) so users see at a glance that the rail is horizontally scrollable
 - **Mega-Menu Dropdown**: On hover, shows a full-width dropdown with:
   - Category icon + name header + "View all" link
   - Grid of subcategories (bold headers) with their sub-subcategories listed underneath

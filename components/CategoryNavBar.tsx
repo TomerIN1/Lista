@@ -47,7 +47,7 @@ const CategoryNavBar: React.FC<CategoryNavBarProps> = ({ activeCategory, onSelec
 
   return (
     <nav className="bg-white border-b border-slate-100 overflow-visible -mx-3 sm:-mx-4 px-2 sm:px-4 relative z-30">
-      <div className="flex items-center gap-1.5 sm:gap-2 py-2 sm:py-3 max-w-7xl mx-auto overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-1.5 sm:gap-2 pt-2 sm:pt-3 pb-1 sm:pb-1.5 max-w-7xl mx-auto overflow-x-auto slim-scrollbar">
         {/* "All" pill */}
         <button
           type="button"
@@ -59,7 +59,12 @@ const CategoryNavBar: React.FC<CategoryNavBarProps> = ({ activeCategory, onSelec
               : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:shadow-sm'
           }`}
         >
-          <span className="text-3xl sm:text-4xl">🏪</span>
+          <img
+            src={getCategoryIconSrc('הכל')}
+            alt=""
+            className={`w-14 h-14 sm:w-16 sm:h-16 object-contain ${activeCategory === null ? 'brightness-0 invert' : ''}`}
+            loading="lazy"
+          />
           <span>{isRTL ? 'הכל' : 'All'}</span>
         </button>
 

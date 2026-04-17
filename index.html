@@ -63,6 +63,25 @@
         scrollbar-width: none;
       }
 
+      /* Thin, subtle scrollbar — used where we want the user to see that the row is scrollable. */
+      .slim-scrollbar::-webkit-scrollbar {
+        height: 6px;
+      }
+      .slim-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .slim-scrollbar::-webkit-scrollbar-thumb {
+        background: rgb(203 213 225); /* slate-300 */
+        border-radius: 9999px;
+      }
+      .slim-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgb(148 163 184); /* slate-400 */
+      }
+      .slim-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: rgb(203 213 225) transparent;
+      }
+
       /* --- Accessibility Modes --- */
 
       /* Reduce Motion */
