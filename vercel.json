@@ -9,10 +9,6 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    },
-    {
       "source": "/price-api/:path*",
       "destination": "https://israeli-food-prices-database-and-ap-one.vercel.app/:path*"
     },

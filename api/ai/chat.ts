@@ -11,10 +11,41 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Content } from '@google/generative-ai';
-import {
-  LISTA_CATEGORIES,
-  FRESH_CATEGORIES,
-} from '../../agents_and_ai/product-discovery-assistant/listaCategories';
+
+// Inlined from agents_and_ai/product-discovery-assistant/listaCategories.ts —
+// Vercel's serverless function bundler can be picky about TS imports that
+// reach outside the /api tree, so we keep the function self-contained.
+const LISTA_CATEGORIES = [
+  'פירות וירקות',
+  'מוצרי חלב וביצים',
+  'בשר עוף דגים ומעדניה',
+  'לחם מאפים ודגני בוקר',
+  'קפואים',
+  'שימורים רטבים וממרחים',
+  'מזווה בישול ואפייה',
+  'חטיפים מתוקים ופיצוחים',
+  'משקאות',
+  'יין בירה ואלכוהול',
+  'ניקיון כביסה וחד פעמי',
+  'פארם טיפוח אישי ובריאות',
+  'בית מטבח ואירוח',
+  'תינוקות',
+  'חיות מחמד',
+  'בריאות טבע וללא גלוטן',
+  'חשמל אלקטרוניקה וסוללות',
+  'טקסטיל והלבשה בסיסית',
+  'פנאי נסיעות ועונתי',
+  'פרחים גינה וחוץ',
+  'טבק ועישון',
+  'מבצעים',
+  'אחר ולא מסווג',
+];
+const FRESH_CATEGORIES = new Set<string>([
+  'פירות וירקות',
+  'בשר עוף דגים ומעדניה',
+  'לחם מאפים ודגני בוקר',
+  'מוצרי חלב וביצים',
+]);
 
 type Language = 'he' | 'en';
 type HistoryMsg = { role: 'user' | 'assistant'; content: string };
