@@ -143,19 +143,21 @@ The shopping mode is designed to look and feel like a real online supermarket (i
 
 ### 🤖 Product Discovery Assistant (AI Chat)
 - **Conversational Product Search**: Chat-based AI assistant inside Shopping Mode that helps users find products via natural language — paste a list, ask questions, or search by criteria
-- **Smart Intent Detection**: AI interprets user input as shopping list, product search, price query, or general question
-- **Two-Pass AI Architecture**: First AI call generates search queries → products searched → second AI call sees actual product names/prices → generates honest, context-aware response
-- **Multi-Query Search**: For tricky queries (e.g., "milk in a bag"), AI generates multiple search variations to maximize match chances
-- **Price & Filter Support**: "cheapest milk" → sorts by price; "vegan snacks" → applies vegan filter
-- **Inline Product Cards**: Results shown as cards in the chat feed with product image, name, manufacturer, price
-- **Click for Detail**: Tap a product card to open the full `ProductDetailModal` with store-by-store price comparison
-- **Add to Cart**: Individual "Add" buttons per product + bulk "Add All" for multi-result responses
-- **Conversation Memory**: Follow-up questions work — AI maintains context within the session
-- **Bilingual**: Full Hebrew + English support with proper RTL layout
-- **Category Grouping (v5.0.0)**: Results are grouped into the 23 fixed Lista categories (פירות וירקות, מוצרי חלב וביצים, ניקיון כביסה וחד פעמי, …), each with an icon header and visual divider. DB-category alignment filter drops cross-category keyword leaks (e.g., cleaning brand "וניש" no longer appears under חטיפים).
-- **Fresh-First Search (v5.0.0)**: For fresh-oriented categories (produce, meat, bread, dairy) the AI generates both plural + singular Hebrew queries and the orchestrator prioritizes `is_weighted === true` products (real fresh produce). Processed variants (חמוץ, כבוש, קפוא, משומר, במלח) are filtered out. Fresh produce also collapses by `product_group_id` to match the catalog's unified-barcode view.
-- **Price Range on Cards**: Cards now display `₪min–₪max` when available, matching the detail modal.
-- **Location**: `agents_and_ai/product-discovery-assistant/` — self-contained module with own README
+- **Server-side Gemini (v6.0.0)**: All AI calls for this feature run through a Vercel serverless function at `/api/ai/chat` using Gemini 2.5 Flash. No API key in the browser bundle for this flow. Dev environment uses a small Vite middleware plugin so `npm run dev` still serves `/api/*` locally.
+- **Smart Intent Detection**: AI interprets user input as shopping list, product search, price query, or general question. Handles quantities ("2 קרטוני חלב", "תריסר ביצים", "חצי קילו").
+- **Two-Pass AI Architecture**: One Gemini call generates search queries + category tags → products searched in parallel → second Gemini call sees actual product names/prices → generates honest, context-aware summary.
+- **Per-Item Selection UI (v6.0.0)**: Results render as one section per user item under canonical Lista category headers. Each item has a checkbox, radio-selected "recommended" product, expandable alternatives list, quantity stepper, and "refine" + "load more" controls. Running total footer updates live; "Add selected" bulk-adds with correct weighted/pcs unit.
+- **Refine Sub-conversation (v6.0.0)**: On any item — matched or missing — the user can open an inline refine panel that shows AI-generated alternative queries ("אולי תנסה: חמאה דנית / חמאה 82%…") as clickable chips, plus a free-text input. Selecting an option swaps the item in place without scrolling or creating a new chat bubble.
+- **Load More Alternatives (v6.0.0)**: Matched items expose "+ עוד אפשרויות" that fetches additional products via a broader search and appends the deduped new ones to the alternatives list.
+- **In-place Retry**: When alternatives are accepted, the target item is replaced preserving its stable id, category slot, and quantity — the user's scroll position doesn't jump.
+- **Multi-Query Search**: For tricky queries, AI generates multiple search variations to maximize match chances. Server-side retry fallback: if all searches for an item return zero results, retry with just the first word of the query and apply category alignment.
+- **Cross-chain Detail Modal**: Weighted / grouped produce opens `GroupDetailModal` (cross-chain pricing via `/api/groups/{id}`) instead of the per-barcode detail, so you always see prices from every chain in your area.
+- **Price & Filter Support**: "cheapest milk" → sorts by price; "vegan snacks" → applies vegan filter.
+- **Inline Product Cards**: Results shown as cards in the chat feed with product image, name, manufacturer, price range, and `/ק"ג` badge for weighted items.
+- **Conversation Memory**: Follow-up questions work — last 6 messages sent to Gemini as context.
+- **Bilingual**: Full Hebrew + English support with proper RTL layout.
+- **Category Grouping + Fresh-First (v5.0.0 → v6.0.0)**: Results grouped into 23 canonical Lista categories. DB-category alignment filter drops cross-category keyword leaks. Weighted / `product_group_id` products auto-trust the AI's category tag (they're frequently null-categorised in the DB). Fresh-prevails merge rule ensures processed drinks can't win ranking against real fresh produce surfaced by a sibling query variant.
+- **Location**: `agents_and_ai/product-discovery-assistant/` — self-contained module with own README. Serverless function lives at `api/ai/chat.ts` (project root, Vercel-hosted).
 
 ### 🤝 Collaboration
 - **Shareable Links**: Copy and share lists with a single link that includes full list content + join URL
@@ -193,10 +195,8 @@ The shopping mode is designed to look and feel like a real online supermarket (i
 - **Tailwind CSS** (via CDN) - Utility-first styling
 
 ### AI Services
-- **OpenAI API**
-  - **GPT-4o-mini** - Text categorization and list organization
-  - **DALL-E 3** - Category icon generation (1024x1024 images)
-- **Client-side AI calls** (dangerouslyAllowBrowser enabled for development)
+- **Google Gemini 2.5 Flash** — Product Discovery Assistant (`api/ai/chat.ts` serverless function). Hebrew-optimised, fast, low cost. Handles intent parsing, result summarisation, and alternative-query suggestions. Key never leaves the server.
+- **OpenAI API** — List organization + recipe flows (`services/geminiService.ts`, misleading file name). GPT-4o-mini for categorisation, DALL-E 3 for icons. Still runs client-side; migration to the serverless gateway is a tracked follow-up.
 
 ### Backend Services
 - **Firebase 12.6.0**
@@ -1618,15 +1618,16 @@ service cloud.firestore {
 1. Go to **Project Settings** → **"Environment Variables"**
 2. Add each variable:
 
-| Variable Name | Value | Environment |
-|--------------|-------|-------------|
-| `OPENAI_API_KEY` | sk-proj-... | Production, Preview, Development |
-| `FIREBASE_API_KEY` | AIzaSy... | Production, Preview, Development |
-| `FIREBASE_AUTH_DOMAIN` | your-project.firebaseapp.com | All |
-| `FIREBASE_PROJECT_ID` | your-project-id | All |
-| `FIREBASE_STORAGE_BUCKET` | your-project.firebasestorage.app | All |
-| `FIREBASE_MESSAGING_SENDER_ID` | 123456789 | All |
-| `FIREBASE_APP_ID` | 1:123456789:web:abc | All |
+| Variable Name | Value | Environment | Scope |
+|--------------|-------|-------------|-------|
+| `GEMINI_API_KEY` | AIzaSy... | Production, Preview, Development | Server-only — used by `api/ai/chat.ts`, NEVER exposed to the client |
+| `OPENAI_API_KEY` | sk-proj-... | Production, Preview, Development | Legacy — still bundled client-side for recipe flows (`services/geminiService.ts`) |
+| `FIREBASE_API_KEY` | AIzaSy... | Production, Preview, Development | Client bundle |
+| `FIREBASE_AUTH_DOMAIN` | your-project.firebaseapp.com | All | Client bundle |
+| `FIREBASE_PROJECT_ID` | your-project-id | All | Client bundle |
+| `FIREBASE_STORAGE_BUCKET` | your-project.firebasestorage.app | All | Client bundle |
+| `FIREBASE_MESSAGING_SENDER_ID` | 123456789 | All | Client bundle |
+| `FIREBASE_APP_ID` | 1:123456789:web:abc | All | Client bundle |
 
 **Important**: Select all three environments (Production, Preview, Development) for each variable.
 

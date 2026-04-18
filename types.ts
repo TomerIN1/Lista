@@ -269,6 +269,8 @@ export interface SearchIntent {
   is_vegan?: boolean;
   listaCategory?: string;   // one of LISTA_CATEGORIES — used to group results
   preferFresh?: boolean;    // fresh-first: filter out pickled/canned/frozen variants, fallback if empty
+  quantity?: number;        // user-specified quantity (default 1)
+  originalText?: string;    // the user's exact phrase for this item (e.g. "2 קרטוני חלב")
 }
 
 export interface SmartProductGroup {
@@ -277,12 +279,31 @@ export interface SmartProductGroup {
   freshFallback?: boolean;  // true when fresh search returned nothing and we fell back to processed
 }
 
+/**
+ * Per-item search outcome: one section in the new SmartResultsList UI.
+ * Each SmartItemGroup corresponds to one thing the user asked for (e.g. "חלב").
+ * If the AI generated multiple query variants for the same user item (e.g.
+ * plural + singular for fresh produce), the variants are merged into one group.
+ */
+export interface SmartItemGroup {
+  id: string;                   // stable id (originalText or fallback)
+  originalText: string;         // the user's phrase — header label
+  listaCategory: string;        // one of LISTA_CATEGORIES — for icon + grouping metadata
+  quantity: number;             // user-specified quantity (default 1)
+  recommended: DbProduct | null; // top-ranked product (null if no_match)
+  alternatives: DbProduct[];    // remaining ranked options (excluding recommended)
+  freshFallback?: boolean;      // fresh-first fell back to processed
+  status: 'matched' | 'no_match';
+}
+
 export interface SmartChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   text: string;
   products?: DbProduct[];         // flat list (non-grouped responses)
-  productGroups?: SmartProductGroup[]; // grouped by Lista category
+  productGroups?: SmartProductGroup[]; // grouped by Lista category (legacy)
+  itemGroups?: SmartItemGroup[];  // grouped per user item (new selection UI)
+  notFound?: string[];            // items the user asked for but weren't found
   addedBarcodes?: Set<string>;    // which products were added from this message
   isLoading?: boolean;
 }

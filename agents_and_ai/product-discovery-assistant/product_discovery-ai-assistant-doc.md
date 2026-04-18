@@ -4,33 +4,62 @@ AI-powered conversational assistant that helps users find grocery products faste
 
 ## How It Works
 
+As of **v6.0.0** the AI calls run server-side on Gemini 2.5 Flash. See the v6.0.0 section below for the full rewrite notes.
+
 ```
 User input (text/list/question)
        │
        ▼
-┌─────────────────────────┐
-│  smartAssistant() [AI]  │  ← Interprets intent, generates search queries
-│  gpt-4o-mini            │     Multiple query variations for tricky searches
-└───────────┬─────────────┘
-            │  SearchIntent[]
-            ▼
-┌─────────────────────────┐
-│  searchProducts() [API] │  ← Parallel execution (max 5 concurrent)
-│  /price-api/search      │     Supports sort, vegan filter, chain filter
-└───────────┬─────────────┘
-            │  DbProduct[]
-            ▼
-┌─────────────────────────┐
-│  summarizeResults() [AI]│  ← Sees ACTUAL product names/prices
-│  gpt-4o-mini            │     Generates honest, context-aware response
-└───────────┬─────────────┘
-            │  { message, products }
-            ▼
-┌─────────────────────────┐
-│  SmartListPanel [UI]    │  ← Chat feed with inline product cards
-│  React component        │     Click to see detail, button to add to cart
-└─────────────────────────┘
+┌───────────────────────────────────┐
+│  aiService.smartAssistant()       │
+│  → POST /api/ai/chat (mode=intent)│  ← Vercel serverless function
+│  → Gemini 2.5 Flash               │     Interprets intent, tags each query
+└────────────┬──────────────────────┘        with one of 23 Lista categories
+             │  SearchIntent[] (with quantity, listaCategory, preferFresh)
+             ▼
+┌───────────────────────────────────┐
+│  searchProducts() [API]           │  ← Parallel execution (max 5 concurrent)
+│  /price-api/search                │     Chain filter applied up-front
+└────────────┬──────────────────────┘
+             │  DbProduct[]
+             ▼
+┌───────────────────────────────────┐
+│  smartListService filter pipeline │  ← Category alignment (weighted/grouped
+│  + retry fallback                 │     trusted), fresh-first, dedup.
+│                                   │     Empty items retry with base noun.
+└────────────┬──────────────────────┘
+             │
+             ▼
+┌───────────────────────────────────┐
+│  per-item ranking + cross-item    │  ← Relevance tier (bidirectional incl.
+│  dedup + fresh-prevails merge     │     singular/plural) → cheapest within
+└────────────┬──────────────────────┘     tier. No two items share a barcode.
+             │  SmartItemGroup[]
+             ▼
+┌───────────────────────────────────┐
+│  aiService.summarizeResults()     │
+│  → POST /api/ai/chat (mode=       │  ← Gemini sees actual results and
+│     summarize)                    │     produces a faithful Hebrew summary
+└────────────┬──────────────────────┘
+             │  { message, groups, itemGroups, notFound }
+             ▼
+┌───────────────────────────────────┐
+│  SmartListPanel + SmartResultsList│  ← Per-item sections under category
+│                                   │     headers. Checkbox + radio + qty
+│                                   │     stepper. Refine / load-more.
+└───────────────────────────────────┘
 ```
+
+### Security model (v6.0.0)
+
+All Gemini traffic for this feature is server-only. The browser calls
+`/api/ai/chat` via `fetch`; the Vercel serverless function reads
+`GEMINI_API_KEY` from the Vercel environment. The OpenAI key that used to
+power this flow has been removed from the client for this feature.
+
+> ⚠️ `services/geminiService.ts` (recipe organisation + DALL-E) still runs
+> OpenAI client-side. Migrating those to the same gateway is tracked as a
+> follow-up — the key stays in the Vite bundle until then.
 
 ### Two-Pass AI Architecture
 
@@ -53,9 +82,12 @@ This prevents the trust-damaging pattern of "Here's what I found!" followed by e
 
 | File | Description |
 |------|-------------|
-| `SmartListPanel.tsx` | Chat UI component — messages feed, product cards, input area |
-| `smartListService.ts` | Orchestration — coordinates AI + search API, concurrency control |
-| `aiService.ts` | All AI/LLM functions — parsing, intent detection, result summarization |
+| `SmartListPanel.tsx` | Chat UI — message feed, input area, detail modal routing (incl. `GroupDetailModal` for weighted produce), in-place retry + load-more handlers |
+| `SmartResultsList.tsx` | Per-item selection UI — category-grouped item cards with checkbox, radio-selected recommended, expandable alternatives, quantity stepper, refine panel, load-more, running-total footer |
+| `smartListService.ts` | Orchestration — AI gateway client + parallel search + filter pipeline + per-item ranking + fresh-prevails merge + retry fallback + `loadMoreAlternatives()` |
+| `aiService.ts` | Thin client for `/api/ai/chat` — `smartAssistant()`, `summarizeResults()`, `suggestAlternatives()` |
+| `listaCategories.ts` | 23 canonical Lista categories, `FRESH_CATEGORIES`, `PROCESSED_TOKENS` |
+| `api/ai/chat.ts` (project root) | Vercel serverless function — Gemini 2.5 Flash gateway with three modes: `intent`, `summarize`, `suggest_alternatives` |
 | `product_discovery-ai-assistant-doc.md` | This documentation |
 
 ### External Dependencies
@@ -82,16 +114,19 @@ This prevents the trust-damaging pattern of "Here's what I found!" followed by e
 | Click product for detail | Tap product name/image | Opens `ProductDetailModal` with store prices |
 | Add to cart | Tap "Add" button | Product added to shopping list with barcode |
 
-## AI Configuration
+## AI Configuration (v6.0.0)
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
-| Model | `gpt-4o-mini` | Fast (~300ms), cheap (~$0.0002/call), sufficient for intent detection |
-| Temperature (intent) | 0.3 | Low for consistent query generation |
-| Temperature (summary) | 0.3 | Low for factual, reliable responses |
-| Response format | `json_object` | Structured output for reliable parsing |
-| Max tokens (summary) | 250 | Keeps responses concise (2-3 sentences for large results, 1-2 for small) |
+| Model | `gemini-2.5-flash` | Fast, low cost, strong Hebrew. Runs server-side only |
+| Temperature (intent) | 0.3 | Consistent query generation |
+| Temperature (summary) | 0.3 | Factual responses |
+| Temperature (alternatives) | 0.4 | A little more creative — producing synonyms/rephrasings |
+| Response format | `application/json` | Structured output for reliable parsing |
+| Max tokens (summary) | 800 | Gemini 2.5's built-in thinking consumes part of the budget |
+| Max tokens (alternatives) | 2000 | Same reason — room for thinking + 2-3 JSON entries |
 | Search concurrency | 5 | Balances speed vs API load |
+| Search limit (default) | 10 | Server bumps AI's default 5 → 10 so broad queries have enough candidates to survive category alignment |
 
 ## Performance
 
@@ -232,3 +267,106 @@ Five fixes implemented based on user simulation testing:
 **Root cause**: `selectedChains` defaulted to `[]` (empty), which meant no chain filter was sent to the search API — so all chains were included.
 
 **Fix**: `ShoppingInputArea` now computes `effectiveChains` — when no chains are explicitly selected, it uses all available chains from `deliveryCheck` (the user's area). This applies to both the AI assistant and the regular product catalog.
+
+---
+
+## v6.0.0 — Server-side Gemini + Phase 2 Selection UI
+
+A two-phase rewrite driven by the spec in `upgrade_the_lista_ai_shopping_assistant.md`. Ships as one deployment.
+
+### Phase 1 — Security fix + Gemini migration
+
+**Why**: the previous flow called OpenAI directly from the browser (`dangerouslyAllowBrowser: true`), which meant the API key was embedded in the Vite bundle and harvestable by any visitor.
+
+**What changed**:
+- New Vercel serverless function `api/ai/chat.ts` — Gemini 2.5 Flash, three modes (`intent`, `summarize`, `suggest_alternatives`). Reads `GEMINI_API_KEY` from Vercel env.
+- `aiService.ts` became a thin client over `fetch('/api/ai/chat')` — no SDK, no key in the browser.
+- `vite.config.ts` gained a small dev-mode plugin that loads the serverless handler via `server.ssrLoadModule` so `npm run dev` serves `/api/*` locally without requiring `vercel dev`.
+- `vercel.json` preserves `/api/*` from the SPA catch-all rewrite.
+- `package.json` added `@google/generative-ai` + `@vercel/node`.
+- Quantity parsing added to the intent prompt: "2 קרטוני חלב" / "תריסר ביצים" / "חצי קילו" extract a `quantity` field.
+- `SearchIntent` gained `quantity` + `originalText` (used by Phase 2).
+
+> Known gap: `services/geminiService.ts` (recipe flows + DALL-E) still runs OpenAI client-side. Until migrated, `OPENAI_API_KEY` stays in the Vite bundle.
+
+### Phase 2 — Per-item selection UI with ranking
+
+**Why**: the previous UI rendered a flat list of products grouped by Lista category. When a user pasted `חלב, ביצים, לחם` they'd see a mix of dairy products with no way to know which was the match for which item, no recommendation, no running total.
+
+**Data shape — `SmartItemGroup`** (`types.ts`):
+```ts
+{
+  id: string;
+  originalText: string;        // the user's phrase — header label
+  listaCategory: string;       // for icon + category bucket
+  quantity: number;            // from AI quantity parser
+  recommended: DbProduct|null; // top-ranked
+  alternatives: DbProduct[];   // up to 4 more (extensible via load-more)
+  freshFallback?: boolean;     // amber badge when we showed processed
+  status: 'matched'|'no_match';
+}
+```
+
+One per user item — plural/singular variants for the same item merge via shared `originalText`.
+
+**Server-side ranking** (`smartListService.ts`):
+- `relevanceTier(name, query)` — 3=exact, 2=startsWith OR name-is-substring-of-query (≥3 chars; fixes "לימון" vs "לימונים"), 1=contains / all tokens present, 0=none.
+- `rankProducts()` — tier desc, then cheapest within tier.
+- Cross-item dedup: if item N's top candidate is already claimed by item N-k, walk down the alternatives list for a non-collision pick (prevents "גבינת לבנה" and "גבינה לבנה" from recommending the same product).
+
+**Fresh-prevails merge** (v6.0.0):
+After all search variants of an item merge, if ANY variant surfaced weighted produce (`is_weighted=true`), drop any non-weighted entries that only arrived via a `freshFallback` outcome, and clear the amber badge. Without this the merge can still contain processed drinks that technically match the query (e.g. "משקה קל לימונים" for "לימונים") and then win ranking.
+
+**Category-alignment trust**:
+Products with `is_weighted=true` or non-null `product_group_id` auto-pass the category filter. The DB aggregates fresh produce across chains with null category fields, so literal token overlap would incorrectly drop them.
+
+**Retry fallback**:
+If all of an item's searches return zero products AND the primary query is multi-word, the server fires one more search with just the first word of the query and re-applies the full pipeline. Catches catalog-phrasing mismatches without hardcoding every case in the prompt.
+
+### Phase 2 — UI (`SmartResultsList.tsx`)
+
+New component rendered by `SmartListPanel` whenever an assistant message has `itemGroups`. Design:
+
+```
+┌─ 🧀 מוצרי חלב וביצים (3) ─────────┐
+│ ☑ חלב           [+] 1 [−]         │
+│ ⦿ חלב 3% מהדרין 1 ל׳      ₪6.35  │
+│ ▾ 3 אפשרויות נוספות               │
+│ 🪄 חיפוש אחר    + עוד אפשרויות   │
+├───────────────────────────────────┤
+│ ☑ ביצים                           │
+│ ...                               │
+├───────────────────────────────────┤
+│ ⚠️ עגבניות  לא נמצא בקטלוג        │
+│ ✨ אולי תנסה:                     │
+│ [עגבניות שרי] [רסק עגבניות]      │
+└───────────────────────────────────┘
+│ סה״כ: ₪37.05 (3)  [הוסף נבחרים]  │
+└───────────────────────────────────┘
+```
+
+Features:
+- **Category bucketing** — items grouped under canonical Lista category headers (icon + name + count) in canonical order. Refine-replaced items keep their original category slot so the user stays anchored.
+- **Checkbox + radio + quantity stepper** per item. Stable id preserves state across re-renders.
+- **Running total** footer — updates as checkboxes / radios change. "Add selected" bulk-adds with correct `amount` + unit (weighted → kg, else → pcs).
+- **Missing items** render as amber cards. On render they lazy-fetch 2-3 alternative queries from `suggest_alternatives` ("maybe try…" chips with reasons).
+- **Refine panel** (matched items): `🪄 חיפוש אחר` → reveals the same chip helper + a free-text input ("describe the product better"). Either pathway triggers in-place replacement — no scroll, no new chat bubble.
+- **Load more** (matched items): `+ עוד אפשרויות` → fetches additional products via `loadMoreAlternatives()` and appends the deduped new ones to the alternatives list.
+- **In-place retry**: `handleRetryItem` runs a scoped `processSmartChat` and swaps the new `SmartItemGroup` into the message's `itemGroups` array, preserving `id`, `quantity`, and the original `listaCategory` (so the card doesn't teleport to a different bucket).
+- **Scroll behaviour**: `SmartListPanel` auto-scrolls only when `messages.length` grows — edits in place keep the user's scroll position.
+- **Detail modal routing**: weighted / grouped products open `GroupDetailModal` (cross-chain pricing via `/api/groups/{id}`), everything else opens `ProductDetailModal`.
+
+### Prompt mappings worth knowing about
+
+Baked into the Gemini system prompt:
+- `גמבה` / `גמבות` → fans out to `פלפל אדום` + `פלפל` (`פירות וירקות`, preferFresh).
+- `גבינת לבנה` (with ת) → Labne (`query: "לבנה"`). `גבינה לבנה` (no ת) → white cream cheese. Rule: never collapse two distinct user items even if queries look similar.
+- `מלפפון חמוץ` → fans out to `מלפפון בחומץ` + `מלפפון במלח` (catalog uses the ב-prefix phrasings).
+- `תירס בשימורים` → two queries `תירס` + `גרעיני תירס`.
+- Gibberish → returns `{message: "לא הבנתי...", searches: []}` and does NOT rehydrate from history.
+
+### Files touched
+
+- New: `api/ai/chat.ts`, `agents_and_ai/product-discovery-assistant/SmartResultsList.tsx`
+- Rewritten: `aiService.ts`, `smartListService.ts`, `SmartListPanel.tsx`
+- Updated: `types.ts`, `constants/translations.ts`, `vite.config.ts`, `vercel.json`, `package.json`, `.env.example`

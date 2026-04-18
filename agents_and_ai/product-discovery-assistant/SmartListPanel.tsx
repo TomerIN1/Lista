@@ -4,11 +4,13 @@ import {
   Plus, Check, ShoppingCart,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { SmartChatMessage, ShoppingProduct, DbProduct, DbProductEnhanced, SmartProductGroup } from '../../types';
-import { processSmartChat } from './smartListService';
+import { SmartChatMessage, ShoppingProduct, DbProduct, DbProductEnhanced, SmartProductGroup, SmartItemGroup } from '../../types';
+import { processSmartChat, loadMoreAlternatives } from './smartListService';
 import ProductDetailModal from '../../components/ProductDetailModal';
+import GroupDetailModal from '../../components/GroupDetailModal';
 import { formatPriceLabel, formatPriceRange, defaultCartUnit } from '../../utils/priceFormat';
 import { iconUrl } from './listaCategories';
+import SmartResultsList from './SmartResultsList';
 
 const IMAGE_FALLBACK = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f1f5f9" width="40" height="40" rx="8"/><text x="20" y="24" text-anchor="middle" font-size="16">📦</text></svg>';
 
@@ -42,7 +44,19 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
   // Track barcodes added via this panel so we can show "Added" immediately
   const [addedInSession, setAddedInSession] = useState<Set<string>>(new Set());
   const [detailBarcode, setDetailBarcode] = useState<string | null>(null);
+  const [detailGroupId, setDetailGroupId] = useState<number | null>(null);
   const [detailProduct, setDetailProduct] = useState<DbProduct | null>(null);
+
+  const openDetail = (product: DbProduct) => {
+    setDetailProduct(product);
+    setDetailBarcode(product.barcode);
+    setDetailGroupId(product.product_group_id ?? null);
+  };
+  const closeDetail = () => {
+    setDetailBarcode(null);
+    setDetailGroupId(null);
+    setDetailProduct(null);
+  };
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -52,15 +66,29 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Only auto-scroll when a new message is APPENDED (conversation grew),
+  // not when an existing message is edited in place — e.g. when a "maybe
+  // try..." chip replaces a missing item inline, we want to keep the user
+  // parked where they are so they can continue scanning other items.
+  const prevMessageCountRef = useRef(messages.length);
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > prevMessageCountRef.current) {
+      scrollToBottom();
+    }
+    prevMessageCountRef.current = messages.length;
   }, [messages]);
 
   const isInCart = (barcode: string) =>
     existingBarcodes.has(barcode) || addedInSession.has(barcode);
 
-  const handleSend = async () => {
-    const text = input.trim();
+  /**
+   * Core send: appends a user message, fires processSmartChat, replaces the
+   * transient loading bubble with the real assistant response. Used both by
+   * the input-area send button and by the "maybe try..." chips on missing
+   * items (which submit pre-formed queries).
+   */
+  const sendMessage = async (text: string) => {
+    text = text.trim();
     if (!text || isProcessing) return;
 
     const userMsg: SmartChatMessage = {
@@ -77,7 +105,6 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
     };
 
     setMessages((prev) => [...prev, userMsg, loadingMsg]);
-    setInput('');
     setIsProcessing(true);
 
     // Build conversation history for context (exclude welcome + loading, limit to last 6 messages)
@@ -102,6 +129,8 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
         text: result.message,
         products: result.products.length > 0 ? result.products : undefined,
         productGroups: result.groups.length > 0 ? result.groups : undefined,
+        itemGroups: result.itemGroups.length > 0 ? result.itemGroups : undefined,
+        notFound: result.notFound.length > 0 ? result.notFound : undefined,
       };
 
       // Replace loading message with real response
@@ -117,6 +146,121 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
       setIsProcessing(false);
       inputRef.current?.focus();
     }
+  };
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    await sendMessage(text);
+  };
+
+  /**
+   * Load more alternatives for an already-matched item. Re-runs the search
+   * pipeline with a wider limit, excludes barcodes already shown, and
+   * appends the fresh ones to the item's alternatives list. Returns the
+   * number of new products added so the UI can show "no more results" when
+   * the pool is exhausted.
+   */
+  const handleLoadMore = async (messageId: string, itemId: string): Promise<number> => {
+    let addedCount = 0;
+    // Snapshot the target item so we can run the fetch outside of setState
+    let target: SmartItemGroup | null = null;
+    setMessages((prev) => {
+      for (const m of prev) {
+        if (m.id !== messageId || !m.itemGroups) continue;
+        const g = m.itemGroups.find((x) => x.id === itemId);
+        if (g) target = g;
+      }
+      return prev;
+    });
+    if (!target) return 0;
+    const found: SmartItemGroup = target;
+
+    try {
+      const excluded = new Set<string>([
+        ...(found.recommended ? [found.recommended.barcode] : []),
+        ...found.alternatives.map((a) => a.barcode),
+      ]);
+      const query = found.originalText || (found.recommended?.name ?? '');
+      if (!query) return 0;
+      const more = await loadMoreAlternatives(
+        query,
+        found.listaCategory,
+        excluded,
+        city,
+        storeType,
+        selectedChains
+      );
+      addedCount = more.length;
+      if (more.length === 0) return 0;
+
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== messageId || !msg.itemGroups) return msg;
+          return {
+            ...msg,
+            itemGroups: msg.itemGroups.map((g) =>
+              g.id === itemId
+                ? { ...g, alternatives: [...g.alternatives, ...more] }
+                : g
+            ),
+          };
+        })
+      );
+      return addedCount;
+    } catch {
+      return 0;
+    }
+  };
+
+  /**
+   * Retry a missing item in place. Runs processSmartChat scoped to a single
+   * query, takes the first produced item-group, and swaps it into the target
+   * message's itemGroups — keeping the original id and originalText so the
+   * layout stays stable. If the new query ALSO finds nothing, the card stays
+   * in its "not found" state (but gets refreshed alternatives next render).
+   */
+  const handleRetryItem = async (messageId: string, itemId: string, query: string) => {
+    let newGroup: SmartItemGroup | null = null;
+    try {
+      const result = await processSmartChat(
+        query,
+        language,
+        [],
+        city,
+        storeType,
+        selectedChains
+      );
+      newGroup = result.itemGroups[0] ?? null;
+    } catch {
+      // fall through to no-op update below
+    }
+
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId || !msg.itemGroups) return msg;
+        return {
+          ...msg,
+          itemGroups: msg.itemGroups.map((g) => {
+            if (g.id !== itemId) return g;
+            if (!newGroup) return g; // retry failed — leave the missing card as-is
+            return {
+              ...newGroup,
+              id: g.id, // preserve stable id so React key + retry state don't churn
+              originalText: query, // show the new query as the section label
+              quantity: g.quantity, // keep any quantity the user had set
+              // Keep the ORIGINAL category bucket so the card stays in the
+              // same visual slot; retries are meant to replace-in-place, not
+              // reorganize the list. Without this, a chip whose query got
+              // tagged with a different listaCategory would cause the item
+              // to teleport to a different section and look like it vanished.
+              listaCategory: g.listaCategory,
+            };
+          }),
+        };
+      })
+    );
   };
 
   const handleAddProduct = (product: DbProduct) => {
@@ -159,7 +303,7 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
       >
         <button
           type="button"
-          onClick={() => { setDetailProduct(product); setDetailBarcode(product.barcode); }}
+          onClick={() => openDetail(product)}
           className="flex items-center gap-2.5 flex-1 min-w-0 text-start"
         >
           <img
@@ -295,8 +439,30 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
                     </div>
                   )}
 
-                  {/* Grouped product cards (by Lista category) */}
-                  {!msg.isLoading && msg.productGroups && msg.productGroups.length > 0 && (
+                  {/* Per-item selection UI (Phase 2 — preferred renderer) */}
+                  {!msg.isLoading && msg.itemGroups && msg.itemGroups.length > 0 && (
+                    <SmartResultsList
+                      itemGroups={msg.itemGroups}
+                      existingBarcodes={existingBarcodes}
+                      addedInSession={addedInSession}
+                      onRetryItem={(itemId, q) => handleRetryItem(msg.id, itemId, q)}
+                      onLoadMore={(itemId) => handleLoadMore(msg.id, itemId)}
+                      onAdd={(products) => {
+                        onConfirm(products);
+                        setAddedInSession((prev) => {
+                          const next = new Set(prev);
+                          products.forEach((p) => next.add(p.barcode));
+                          return next;
+                        });
+                      }}
+                      onOpenDetail={openDetail}
+                    />
+                  )}
+
+                  {/* Legacy grouped product cards (by Lista category) — only
+                      used when the response has no itemGroups (shouldn't happen
+                      in normal flows after Phase 2, kept for resilience). */}
+                  {!msg.isLoading && !msg.itemGroups && msg.productGroups && msg.productGroups.length > 0 && (
                     <div className="space-y-0">
                       {msg.productGroups.map((g, i) => renderCategoryGroup(g, i))}
 
@@ -319,7 +485,7 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
                   )}
 
                   {/* Flat product list fallback (legacy / ungrouped) */}
-                  {!msg.isLoading && !msg.productGroups && msg.products && msg.products.length > 0 && (
+                  {!msg.isLoading && !msg.itemGroups && !msg.productGroups && msg.products && msg.products.length > 0 && (
                     <div className="space-y-1.5">
                       {msg.products.map(renderProductCard)}
                       {msg.products.filter((p) => !isInCart(p.barcode)).length > 1 && (
@@ -374,19 +540,28 @@ const SmartListPanel: React.FC<SmartListPanelProps> = ({
         </div>
       </div>
 
-      {/* Product detail modal */}
-      {detailBarcode && (
+      {/* Detail modal — use GroupDetailModal for grouped products (cross-chain
+          pricing) and ProductDetailModal otherwise. Mirrors ProductCatalogArea. */}
+      {detailBarcode && detailGroupId != null && (
+        <GroupDetailModal
+          groupId={detailGroupId}
+          fallbackProduct={detailProduct as DbProductEnhanced | null}
+          storeType="online"
+          availableChains={selectedChains}
+          onClose={closeDetail}
+          onAdd={(product) => { handleAddProduct(product); closeDetail(); }}
+          isAdded={isInCart(detailBarcode)}
+        />
+      )}
+      {detailBarcode && detailGroupId == null && (
         <ProductDetailModal
           barcode={detailBarcode}
           fallbackImageUrl={detailProduct?.image_url}
           fallbackProduct={detailProduct as DbProductEnhanced | null}
           storeType="online"
-          onClose={() => { setDetailBarcode(null); setDetailProduct(null); }}
-          onAdd={(product) => {
-            handleAddProduct(product);
-            setDetailBarcode(null);
-            setDetailProduct(null);
-          }}
+          availableChains={selectedChains}
+          onClose={closeDetail}
+          onAdd={(product) => { handleAddProduct(product); closeDetail(); }}
           isAdded={isInCart(detailBarcode)}
         />
       )}
