@@ -9,7 +9,8 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenerativeAI, Content } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import type { Content } from '@google/generative-ai';
 import {
   LISTA_CATEGORIES,
   FRESH_CATEGORIES,
