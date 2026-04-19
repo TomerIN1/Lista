@@ -428,6 +428,22 @@ export interface UserLocation {
 }
 
 // ============================================
+// Persisted user settings (Firestore: users/{uid})
+// ============================================
+export interface UserSettings {
+  uid: string;
+  displayName?: string | null;
+  email?: string | null;
+  photoURL?: string | null;
+  city?: string;
+  location?: UserLocation | null;
+  shoppingMode?: ShoppingMode;
+  language?: 'he' | 'en';
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+// ============================================
 // Delivery Check (POST /api/delivery/check)
 // ============================================
 

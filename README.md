@@ -18,3 +18,9 @@ View your app in AI Studio: https://ai.studio/apps/temp/2
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Docs
+
+- [`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md) — Paper design system: tokens, typography, component patterns, RTL rules, mobile-parity standing rule.
+- [`PROJECT_DOCUMENTATION.md`](./PROJECT_DOCUMENTATION.md) — full product + engineering log.
+- [`CLAUDE.md`](./CLAUDE.md) — agent operating instructions (mirrored as `AGENTS.md` / `GEMINI.md`).

@@ -11,6 +11,12 @@ service cloud.firestore {
          request.auth.token.email in resource.data.memberEmails);
     }
 
+    // User profile document — each user can only read/write their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null &&
+        request.auth.uid == userId;
+    }
+
     // Saved recipes collection - users can only access their own saved recipes
     match /users/{userId}/saved_recipes/{recipeId} {
       // Only the owner can read, write, update, or delete their saved recipes

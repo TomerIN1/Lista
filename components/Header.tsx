@@ -20,13 +20,14 @@ interface HeaderProps {
   onSearchChange?: (query: string) => void;
   disabled?: boolean;
   onMenuClick?: () => void;
+  onOpenAI?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
   user, onLogin, onLogout, sidebarOpen = false,
   appMode = 'organize', onModeSwitch, shoppingCity, cartItemCount = 0,
   onLocationClick, onCartClick, searchQuery = '', onSearchChange, disabled = false,
-  onMenuClick,
+  onMenuClick, onOpenAI,
 }) => {
   const { language, setLanguage, t, isRTL } = useLanguage();
 
@@ -34,16 +35,15 @@ const Header: React.FC<HeaderProps> = ({
 
   // Compact mode toggle (used in both modes)
   const ModeToggle = () => (
-    <div className="inline-flex items-center bg-slate-100 rounded-xl p-1 gap-0.5">
+    <div className="inline-flex items-center rounded-full p-1 gap-0.5" style={{ background: 'var(--paper-surface-alt)' }}>
       <button
         type="button"
         onClick={() => onModeSwitch?.('organize')}
         disabled={disabled}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-          appMode === 'organize'
-            ? 'bg-white text-indigo-700 shadow-sm'
-            : 'text-slate-400 hover:text-slate-600'
-        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        style={appMode === 'organize'
+          ? { background: 'var(--paper-surface)', color: 'var(--accent)', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }
+          : { color: 'var(--ink-soft)' }}
       >
         <Sparkles className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">{t('appMode.organize')}</span>
@@ -52,11 +52,10 @@ const Header: React.FC<HeaderProps> = ({
         type="button"
         onClick={() => onModeSwitch?.('shopping')}
         disabled={disabled}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-          appMode === 'shopping'
-            ? 'bg-white text-emerald-700 shadow-sm'
-            : 'text-slate-400 hover:text-slate-600'
-        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        style={appMode === 'shopping'
+          ? { background: 'var(--paper-surface)', color: 'var(--save)', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }
+          : { color: 'var(--ink-soft)' }}
       >
         <ShoppingCart className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">{t('appMode.shopping')}</span>
@@ -68,22 +67,29 @@ const Header: React.FC<HeaderProps> = ({
   const AuthSection = ({ compact = false }: { compact?: boolean }) => (
     <>
       {user ? (
-        <div className={`flex items-center gap-1.5 ${compact ? 'px-1 py-0.5 pr-2 rtl:pl-2 rtl:pr-1' : 'px-1 py-1 pr-3 rtl:pl-3 rtl:pr-1'} bg-white border border-slate-200 rounded-full shadow-sm`}>
+        <div
+          className={`flex items-center gap-1.5 ${compact ? 'px-1 py-0.5 pr-2 rtl:pl-2 rtl:pr-1' : 'px-1 py-1 pr-3 rtl:pl-3 rtl:pr-1'} border rounded-full shadow-sm`}
+          style={{ background: 'var(--paper-surface)', borderColor: 'var(--line)' }}
+        >
           {user.photoURL ? (
             <img src={user.photoURL} alt={user.displayName || 'User'} className={`${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-full`} />
           ) : (
-            <div className={`${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600`}>
+            <div
+              className={`${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-full flex items-center justify-center`}
+              style={{ background: 'var(--paper-surface-alt)', color: 'var(--accent)' }}
+            >
               <UserIcon className="w-3.5 h-3.5" />
             </div>
           )}
           {!compact && (
-            <span className="text-xs font-medium text-slate-700 max-w-[80px] truncate hidden sm:block">
+            <span className="text-xs font-medium max-w-[80px] truncate hidden sm:block" style={{ color: 'var(--ink)' }}>
               {user.displayName}
             </span>
           )}
           <button
             onClick={onLogout}
-            className="ml-0.5 rtl:mr-0.5 rtl:ml-0 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+            className="ml-0.5 rtl:mr-0.5 rtl:ml-0 p-1 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+            style={{ color: 'var(--ink-soft)' }}
             title={t('header.logout')}
           >
             <LogOut className="w-3 h-3" />
@@ -92,7 +98,8 @@ const Header: React.FC<HeaderProps> = ({
       ) : (
         <button
           onClick={onLogin}
-          className={`flex items-center gap-1.5 ${compact ? 'px-3 py-1.5 text-xs' : 'px-4 py-1.5 text-sm'} rounded-full bg-slate-900 text-white hover:bg-slate-800 transition-all font-medium shadow-sm`}
+          className={`flex items-center gap-1.5 ${compact ? 'px-3 py-1.5 text-xs' : 'px-4 py-1.5 text-sm'} rounded-full transition-all font-medium shadow-sm`}
+          style={{ background: 'var(--ink)', color: 'var(--paper-bg)' }}
         >
           <LogIn className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">{t('header.login')}</span>
@@ -104,93 +111,65 @@ const Header: React.FC<HeaderProps> = ({
   // ── Shopping Mode Header (supermarket style) ──
   if (isShopping) {
     return (
-      <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-slate-200 shadow-sm -mx-3 sm:-mx-4 mb-3">
-        {/* Main header row */}
+      <header
+        className="sticky top-0 z-20 backdrop-blur-md border-b shadow-sm -mx-3 sm:-mx-4 mb-3"
+        style={{ background: 'rgba(245,241,232,0.88)', borderColor: 'var(--line)' }}
+      >
+        {/* Main header row — slimmed down: search + profile only */}
         <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 max-w-7xl mx-auto">
-          {/* Sidebar / My Lists button */}
+          {/* Mobile menu button — opens the right rail drawer */}
           <button
             onClick={onMenuClick}
-            className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
-            title={isRTL ? 'הרשימות שלי' : 'My Lists'}
+            className="lg:hidden p-1.5 rounded-full flex-shrink-0"
+            style={{ color: 'var(--ink-muted)' }}
+            title={isRTL ? 'תפריט' : 'Menu'}
+            aria-label="Open menu"
           >
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Mode toggle */}
-          <ModeToggle />
-
-          {/* Logo (compact) — click to go home */}
-          <button
-            onClick={() => onModeSwitch?.('shopping')}
-            className="hidden sm:block flex-shrink-0 hover:opacity-80 transition-opacity"
-            title={isRTL ? 'חזרה לדף הבית' : 'Back to home'}
-          >
-            <img
-              src="/lista-05.svg"
-              alt="Lista"
-              className="h-7 w-auto"
-            />
-          </button>
+          {/* Smart Assistant — prominent AI CTA (positioned before search so it lands on the RTL start/right) */}
+          {onOpenAI && (
+            <button
+              type="button"
+              onClick={onOpenAI}
+              disabled={disabled}
+              className="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap flex-shrink-0 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 disabled:opacity-60 disabled:pointer-events-none"
+              style={{
+                background: 'linear-gradient(135deg, #D7352D, #E88B3C)',
+                color: '#FFFFFF',
+              }}
+              title={isRTL ? 'עוזר חכם' : 'Smart Assistant'}
+            >
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+              <span className="hidden xs:inline sm:inline">{isRTL ? 'עוזר חכם' : 'Smart AI'}</span>
+            </button>
+          )}
 
           {/* Search bar */}
-          <div className="flex-1 flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100 transition-all min-w-0">
-            <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <div
+            className="flex-1 flex items-center gap-2 rounded-full px-3 py-2 border transition-all min-w-0"
+            style={{ background: 'var(--paper-surface-alt)', borderColor: 'var(--line)' }}
+          >
+            <Search className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--ink-soft)' }} />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchChange?.(e.target.value)}
               placeholder={t('productBrowse.searchProducts')}
-              className="flex-1 bg-transparent text-sm placeholder:text-slate-400 focus:outline-none min-w-0"
-              dir="auto"
+              className="flex-1 bg-transparent text-sm focus:outline-none min-w-0"
+              style={{ color: 'var(--ink)', textAlign: isRTL ? 'right' : 'left' }}
+              dir={isRTL ? 'rtl' : 'ltr'}
             />
             {searchQuery && (
-              <button onClick={() => onSearchChange?.('')} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => onSearchChange?.('')} style={{ color: 'var(--ink-soft)' }}>
                 <span className="sr-only">Clear</span>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             )}
           </div>
 
-          {/* Location badge */}
-          {shoppingCity && (
-            <button
-              onClick={onLocationClick}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors whitespace-nowrap flex-shrink-0"
-              title={isRTL ? 'שנה מיקום' : 'Change location'}
-            >
-              <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="max-w-[80px] truncate">{shoppingCity}</span>
-            </button>
-          )}
-
-          {/* Cart badge */}
-          <button
-            onClick={onCartClick}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors flex-shrink-0 ${
-              cartItemCount > 0
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'bg-slate-100 text-slate-400'
-            }`}
-          >
-            <ShoppingCart className="w-3.5 h-3.5" />
-            <span>{cartItemCount}</span>
-          </button>
-
-          {/* Auth */}
-          <AuthSection compact />
         </div>
-
-        {/* Mobile-only location bar */}
-        {shoppingCity && (
-          <button
-            onClick={onLocationClick}
-            className="sm:hidden flex items-center gap-1.5 w-full px-4 py-1.5 bg-emerald-50/50 border-t border-emerald-100/50 text-emerald-700 text-xs"
-          >
-            <MapPin className="w-3 h-3" />
-            <span className="truncate">{shoppingCity}</span>
-            <span className="text-emerald-500 ms-auto">{isRTL ? 'שנה' : 'Change'}</span>
-          </button>
-        )}
       </header>
     );
   }
@@ -217,7 +196,8 @@ const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center flex-wrap justify-center gap-3">
           <button
             onClick={() => setLanguage(language === 'en' ? 'he' : 'en')}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all text-sm font-medium shadow-sm"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-sm font-medium shadow-sm"
+            style={{ background: 'var(--paper-surface)', borderColor: 'var(--line)', color: 'var(--ink-muted)' }}
           >
             <Globe className="w-4 h-4" />
             <span>{language === 'en' ? 'English' : 'עברית'}</span>
@@ -230,9 +210,9 @@ const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="text-center sm:text-start">
-        <p className="text-slate-500 max-w-lg mx-auto sm:mx-0 leading-relaxed text-base font-light">
+        <p className="max-w-lg mx-auto sm:mx-0 leading-relaxed text-base font-light" style={{ color: 'var(--ink-muted)' }}>
           {t('header.subtitle').split(t('header.highlight'))[0]}
-          <span className="text-indigo-600 font-medium">{t('header.highlight')}</span>
+          <span className="font-medium" style={{ color: 'var(--accent)' }}>{t('header.highlight')}</span>
           {t('header.subtitle').split(t('header.highlight'))[1]}
         </p>
       </div>

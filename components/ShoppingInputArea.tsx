@@ -29,6 +29,8 @@ interface ShoppingInputAreaProps {
   externalSubcategory?: string | null;
   externalSubSubcategory?: string | null;
   onCategoryChange?: (cat: string | null) => void;
+  showSmartList?: boolean;
+  onShowSmartListChange?: (v: boolean) => void;
 }
 
 const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
@@ -48,13 +50,21 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   externalSubcategory,
   externalSubSubcategory,
   onCategoryChange,
+  showSmartList: externalShowSmartList,
+  onShowSmartListChange,
 }) => {
   const { t, isRTL, tUnit } = useLanguage();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(title || '');
   const [isCartExpanded, setIsCartExpanded] = useState(false);
   const [selectedChains, setSelectedChains] = useState<string[]>([]);
-  const [showSmartList, setShowSmartList] = useState(false);
+  const [internalShowSmartList, setInternalShowSmartList] = useState(false);
+  // Controlled or uncontrolled — prefer external state if provided
+  const showSmartList = externalShowSmartList !== undefined ? externalShowSmartList : internalShowSmartList;
+  const setShowSmartList = (v: boolean) => {
+    if (onShowSmartListChange) onShowSmartListChange(v);
+    else setInternalShowSmartList(v);
+  };
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Effective chains: if user hasn't explicitly filtered, use all available chains from their area
@@ -315,7 +325,12 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
                   >
                     {SUPERMARKET_NAME_MAP[c.chain] || c.chain}
                     {isOnline && c.delivers && c.delivery_fee != null && (
-                      <span className={isSelected ? 'text-emerald-200' : 'text-emerald-500'}>₪{c.delivery_fee}</span>
+                      <span
+                        className={`ms-1 px-1.5 py-0.5 rounded-full text-[10px] ${isSelected ? 'bg-white/20 text-white' : 'bg-[var(--paper-surface)] text-[var(--ink-muted)] border border-[var(--line)]'}`}
+                        title={t('priceComparison.deliveryFee')}
+                      >
+                        🚚 {t('priceComparison.deliveryFee')} ₪{c.delivery_fee}
+                      </span>
                     )}
                     {isOnline && !c.delivers && c.click_and_collect && (
                       <span className={isSelected ? 'text-amber-200' : 'text-amber-600'}>{t('productBrowse.collectAvailable')}</span>
@@ -340,18 +355,6 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         />
       ) : (
         <>
-          {/* AI Assistant button */}
-          <div className="px-4 pt-2 pb-1">
-            <button
-              type="button"
-              onClick={() => setShowSmartList(true)}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors border border-indigo-100"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              {t('smartList.pasteList')}
-            </button>
-          </div>
 
           {/* Catalog (browse + search) */}
           <ProductCatalogArea

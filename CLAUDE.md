@@ -39,3 +39,17 @@ Before writing a script, check `execution/` per your directive. Only create new 
 ## Update logs rules
 -- update /Users/tomer_itzhakov_nevo/Documents/Projects/Lista/PROJECT_DOCUMENTATION.md before every commit and push to github. 
 
+Add a new top-level section '## Deployment Awareness' near the top of CLAUDE.md\n\n## Deployment Awareness
+- After making API/backend changes, ALWAYS deploy (to Vercel/Railway) and verify the change is live in production before declaring success.
+- Never assume database or code changes alone are sufficient - the user expects changes to be visible in the running API.
+Add under a '## Workflow Order' section; place near top of CLAUDE.md\n\n## Workflow Order
+- Update relevant docs BEFORE committing, not after. User has interrupted multiple times to enforce this.
+- Do not rewrite or replace existing implementations (ETLs, parsers, data sources) without explicit user approval - ask first.
+Add as '## Debugging Discipline' section in CLAUDE.md\n\n## Debugging Discipline
+- When fixing bugs in data/ETL code, work systematically: enumerate all affected rows/files first, then fix in one pass. Avoid piecemeal edits.
+- Account for browser/service-worker caching when users report UI not reflecting changes - suggest hard refresh before assuming the fix failed.
+- Known image source: use the S3 bucket for product images, don't try public URLs.
+Add under '## Product Data Model' section\n\n## Product Data Model
+- The chain_barcode concept should be scoped ONLY to the mapping table - do not split all barcodes by chain_id, as this breaks cross-chain matching.
+- has_promotion must reflect an actual promo, not just a price difference between stores.
+- is_weighted must be set/updated on both INSERT and UPDATE paths in ETLs.

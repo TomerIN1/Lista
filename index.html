@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#6366F1" />
+    <meta name="theme-color" content="#F5F1E8" />
     <meta name="description" content="Intelligently organize your unorganized lists into logical categories using AI." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -34,24 +34,44 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/lista-05.svg" />
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@500;600;700&family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&family=Rubik:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Heebo:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+      /* --- Paper design tokens (Lista 2.0 visual language) --- */
+      :root {
+        --paper-bg: #F5F1E8;
+        --paper-surface: #FFFEFB;
+        --paper-surface-alt: #EFEADD;
+        --ink: #1A1A17;
+        --ink-muted: #6B655A;
+        --ink-soft: #9E978A;
+        --accent: #D7352D;
+        --accent-ink: #FFFFFF;
+        --save: #2F6B3C;
+        --save-bg: #E3EEE1;
+        --line: rgba(26,26,23,0.09);
+        --font-serif: 'Instrument Serif', Georgia, serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+      }
+
       body {
         font-family: 'Inter', sans-serif;
+        background-color: var(--paper-bg);
+        color: var(--ink);
       }
       /* Hebrew font override when dir="rtl" */
       html[dir="rtl"] body {
-        font-family: 'Rubik', sans-serif;
+        font-family: 'Heebo', 'Rubik', sans-serif;
       }
       h1, h2, h3, h4, .font-display {
-        font-family: 'Outfit', sans-serif;
+        font-family: var(--font-serif);
+        letter-spacing: -0.01em;
       }
-      html[dir="rtl"] h1, 
-      html[dir="rtl"] h2, 
-      html[dir="rtl"] h3, 
-      html[dir="rtl"] h4, 
+      html[dir="rtl"] h1,
+      html[dir="rtl"] h2,
+      html[dir="rtl"] h3,
+      html[dir="rtl"] h4,
       html[dir="rtl"] .font-display {
-        font-family: 'Rubik', sans-serif;
+        font-family: 'Heebo', 'Rubik', sans-serif;
       }
       
       /* Hide scrollbar for clean inputs */
@@ -192,7 +212,7 @@
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-slate-50 text-slate-900 antialiased selection:bg-indigo-100 selection:text-indigo-900 transition-all duration-300">
+  <body class="antialiased transition-all duration-300" style="background-color: var(--paper-bg); color: var(--ink);">
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
   <script type="module" src="/index.tsx"></script>

@@ -131,14 +131,14 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         onClick={() => setOpen((v) => !v)}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
           activeCount > 0
-            ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+            ? 'bg-[var(--save-bg)] text-[var(--save)] border-[var(--save)]'
+            : 'bg-[var(--paper-surface)] text-[var(--ink-muted)] border-[var(--line)] hover:border-[var(--line)]'
         }`}
       >
         <SlidersHorizontal className="w-3.5 h-3.5" />
         {t('productBrowse.filters')}
         {activeCount > 0 && (
-          <span className="bg-emerald-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
+          <span className="bg-[var(--accent)] text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
             {activeCount}
           </span>
         )}
@@ -150,20 +150,20 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)} />
 
           {/* Dropdown panel — anchored to end-0 so it grows inward in both LTR & RTL */}
-          <div className="absolute top-full end-0 mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-2xl w-64 max-h-[70vh] overflow-y-auto">
+          <div className="absolute top-full end-0 mt-2 z-50 bg-[var(--paper-surface)] rounded-2xl border border-[var(--line)] shadow-2xl w-64 max-h-[70vh] overflow-y-auto">
             <div className="p-3">
               {/* Vegan toggle */}
               <button
                 type="button"
                 onClick={onToggleVegan}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-[var(--paper-surface-alt)] transition-colors"
               >
-                <span className="flex items-center gap-2 text-sm text-slate-700 font-medium">
+                <span className="flex items-center gap-2 text-sm text-[var(--ink)] font-medium">
                   <Leaf className="w-4 h-4 text-green-500" />
                   {t('productBrowse.veganOnly')}
                 </span>
                 <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                  filterVegan ? 'bg-green-500 border-green-500' : 'border-slate-300'
+                  filterVegan ? 'bg-green-500 border-green-500' : 'border-[var(--line)]'
                 }`}>
                   {filterVegan && <Check className="w-3 h-3 text-white" />}
                 </span>
@@ -173,35 +173,35 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
               <button
                 type="button"
                 onClick={onToggleOnSale}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-[var(--paper-surface-alt)] transition-colors"
               >
-                <span className="flex items-center gap-2 text-sm text-slate-700 font-medium">
+                <span className="flex items-center gap-2 text-sm text-[var(--ink)] font-medium">
                   <Tag className="w-4 h-4 text-red-500" />
                   {t('productBrowse.onSale')}
                 </span>
                 <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                  filterOnSale ? 'bg-red-500 border-red-500' : 'border-slate-300'
+                  filterOnSale ? 'bg-red-500 border-red-500' : 'border-[var(--line)]'
                 }`}>
                   {filterOnSale && <Check className="w-3 h-3 text-white" />}
                 </span>
               </button>
 
               {/* Weight type filter */}
-              <div className="h-px bg-slate-100 my-2" />
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">
+              <div className="h-px bg-[var(--paper-surface-alt)] my-2" />
+              <p className="text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wider px-3 mb-1.5">
                 סוג מוצר
               </p>
               <button
                 type="button"
                 onClick={() => onWeightChange(filterWeight === 'weighted' ? 'all' : 'weighted')}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-[var(--paper-surface-alt)] transition-colors"
               >
-                <span className="flex items-center gap-2 text-sm text-slate-700">
+                <span className="flex items-center gap-2 text-sm text-[var(--ink)]">
                   <Weight className="w-4 h-4 text-amber-500" />
                   נמכר במשקל
                 </span>
                 <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                  filterWeight === 'weighted' ? 'bg-amber-500 border-amber-500' : 'border-slate-300'
+                  filterWeight === 'weighted' ? 'bg-amber-500 border-amber-500' : 'border-[var(--line)]'
                 }`}>
                   {filterWeight === 'weighted' && <Check className="w-3 h-3 text-white" />}
                 </span>
@@ -209,22 +209,22 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
               <button
                 type="button"
                 onClick={() => onWeightChange(filterWeight === 'unit' ? 'all' : 'unit')}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-[var(--paper-surface-alt)] transition-colors"
               >
-                <span className="flex items-center gap-2 text-sm text-slate-700">
+                <span className="flex items-center gap-2 text-sm text-[var(--ink)]">
                   <Package className="w-4 h-4 text-blue-500" />
                   יחידה
                 </span>
                 <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                  filterWeight === 'unit' ? 'bg-blue-500 border-blue-500' : 'border-slate-300'
+                  filterWeight === 'unit' ? 'bg-blue-500 border-blue-500' : 'border-[var(--line)]'
                 }`}>
                   {filterWeight === 'unit' && <Check className="w-3 h-3 text-white" />}
                 </span>
               </button>
 
               {/* Price range */}
-              <div className="h-px bg-slate-100 my-2" />
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">
+              <div className="h-px bg-[var(--paper-surface-alt)] my-2" />
+              <p className="text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wider px-3 mb-1.5">
                 {t('productBrowse.priceRange')}
               </p>
               <div className="flex items-center gap-2 px-3 pb-1">
@@ -235,9 +235,9 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   placeholder={t('productBrowse.minPrice')}
                   value={priceMin}
                   onChange={(e) => onPriceMinChange(e.target.value)}
-                  className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-400 text-center"
+                  className="w-full px-2 py-1.5 text-sm border border-[var(--line)] rounded-lg focus:outline-none focus:border-[var(--accent)] text-center"
                 />
-                <span className="text-slate-400 text-xs">–</span>
+                <span className="text-[var(--ink-soft)] text-xs">–</span>
                 <input
                   type="number"
                   min="0"
@@ -245,13 +245,13 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   placeholder={t('productBrowse.maxPrice')}
                   value={priceMax}
                   onChange={(e) => onPriceMaxChange(e.target.value)}
-                  className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-400 text-center"
+                  className="w-full px-2 py-1.5 text-sm border border-[var(--line)] rounded-lg focus:outline-none focus:border-[var(--accent)] text-center"
                 />
               </div>
 
               {/* Allergen list */}
-              <div className="h-px bg-slate-100 my-2" />
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">
+              <div className="h-px bg-[var(--paper-surface-alt)] my-2" />
+              <p className="text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wider px-3 mb-1.5">
                 {t('productBrowse.allergenFree')}
               </p>
               <div className="space-y-0.5">
@@ -260,11 +260,11 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                     key={allergen}
                     type="button"
                     onClick={() => onToggleAllergen(allergen)}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-[var(--paper-surface-alt)] transition-colors"
                   >
-                    <span className="text-sm text-slate-700">ללא {allergen}</span>
+                    <span className="text-sm text-[var(--ink)]">ללא {allergen}</span>
                     <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                      filterAllergenFree.includes(allergen) ? 'bg-amber-500 border-amber-500' : 'border-slate-300'
+                      filterAllergenFree.includes(allergen) ? 'bg-amber-500 border-amber-500' : 'border-[var(--line)]'
                     }`}>
                       {filterAllergenFree.includes(allergen) && <Check className="w-3 h-3 text-white" />}
                     </span>
@@ -275,7 +275,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
               {/* Clear */}
               {activeCount > 0 && (
                 <>
-                  <div className="h-px bg-slate-100 mt-2 mb-1" />
+                  <div className="h-px bg-[var(--paper-surface-alt)] mt-2 mb-1" />
                   <button
                     type="button"
                     onClick={() => { onClearFilters(); setOpen(false); }}
@@ -332,7 +332,7 @@ const SortDropdown: React.FC<SortDropdownProps> = ({ sortBy, onSortChange }) => 
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
           sortBy !== 'default'
             ? 'bg-blue-100 text-blue-700 border-blue-300'
-            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+            : 'bg-[var(--paper-surface)] text-[var(--ink-muted)] border-[var(--line)] hover:border-[var(--line)]'
         }`}
       >
         <ArrowUpDown className="w-3.5 h-3.5" />
@@ -342,7 +342,7 @@ const SortDropdown: React.FC<SortDropdownProps> = ({ sortBy, onSortChange }) => 
       {open && (
         <>
           <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)} />
-          <div className="absolute top-full end-0 mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-2xl w-56 overflow-hidden">
+          <div className="absolute top-full end-0 mt-2 z-50 bg-[var(--paper-surface)] rounded-2xl border border-[var(--line)] shadow-2xl w-56 overflow-hidden">
             <div className="p-2">
               {SORT_OPTIONS.map((option) => (
                 <button
@@ -352,7 +352,7 @@ const SortDropdown: React.FC<SortDropdownProps> = ({ sortBy, onSortChange }) => 
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-colors ${
                     sortBy === option
                       ? 'bg-blue-50 text-blue-700 font-semibold'
-                      : 'text-slate-700 hover:bg-slate-50'
+                      : 'text-[var(--ink)] hover:bg-[var(--paper-surface-alt)]'
                   }`}
                 >
                   {t(SORT_LABEL_KEYS[option])}
@@ -813,32 +813,11 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col">
-      {/* ── Search bar + filter button ────────────────────── */}
-      <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-100 bg-emerald-50/40">
-        {isLoadingProducts && view === 'search' ? (
-          <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500 animate-spin flex-shrink-0" />
-        ) : (
-          <Search className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500 flex-shrink-0" />
+      {/* ── Filter + sort row (search lives in the main header) ─ */}
+      <div className="flex items-center justify-end gap-2 px-3 sm:px-4 py-2 border-b border-[var(--line)]">
+        {isLoadingProducts && view === 'search' && (
+          <Loader2 className="w-4 h-4 text-[var(--ink-soft)] animate-spin me-auto" />
         )}
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={t('productBrowse.searchPlaceholder')}
-          disabled={disabled}
-          className="flex-1 min-w-0 bg-transparent text-slate-700 placeholder:text-slate-400 focus:outline-none text-sm sm:text-base font-medium"
-        />
-        {searchQuery && (
-          <button
-            type="button"
-            onClick={() => setSearchQuery('')}
-            className="p-0.5 text-slate-400 hover:text-slate-600 flex-shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-
-        {/* Sort dropdown */}
         <SortDropdown sortBy={sortBy} onSortChange={setSortBy} />
 
         {/* Filter dropdown — lives at the end of the search bar */}
@@ -866,7 +845,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
 
       {/* Active filter chips (summary row, only when filters active) */}
       {activeFilterCount > 0 && (
-        <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-slate-100 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-[var(--line)] overflow-x-auto scrollbar-none">
           {filterVegan && (
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold border border-green-200">
               <Leaf className="w-3 h-3" />
@@ -928,11 +907,11 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
       {selectedCategory && (
         <div className="px-4 pt-2 pb-1 space-y-2">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-1 text-xs text-slate-500 flex-wrap">
+          <div className="flex items-center gap-1 text-xs text-[var(--ink-muted)] flex-wrap">
             <button
               type="button"
               onClick={handleResetToCategories}
-              className="hover:text-emerald-600 transition-colors font-medium"
+              className="hover:text-[var(--save)] transition-colors font-medium"
             >
               {t('productBrowse.backToCategories')}
             </button>
@@ -940,7 +919,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
             <button
               type="button"
               onClick={() => { setSelectedSubcategory(null); setSelectedSubSubcategory(null); }}
-              className={`hover:text-emerald-600 transition-colors ${!selectedSubcategory ? 'font-semibold text-slate-800' : ''}`}
+              className={`hover:text-[var(--save)] transition-colors ${!selectedSubcategory ? 'font-semibold text-[var(--ink)]' : ''}`}
             >
               {selectedCategory}
             </button>
@@ -950,7 +929,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                 <button
                   type="button"
                   onClick={() => setSelectedSubSubcategory(null)}
-                  className={`hover:text-emerald-600 transition-colors ${!selectedSubSubcategory ? 'font-semibold text-slate-800' : ''}`}
+                  className={`hover:text-[var(--save)] transition-colors ${!selectedSubSubcategory ? 'font-semibold text-[var(--ink)]' : ''}`}
                 >
                   {selectedSubcategory}
                 </button>
@@ -959,7 +938,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
             {selectedSubSubcategory && (
               <>
                 <ChevronRight className="w-3 h-3 flex-shrink-0 rtl:rotate-180" />
-                <span className="font-semibold text-slate-800">{selectedSubSubcategory}</span>
+                <span className="font-semibold text-[var(--ink)]">{selectedSubSubcategory}</span>
               </>
             )}
           </div>
@@ -972,10 +951,10 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                   key={sub.name}
                   type="button"
                   onClick={() => handleSubcategoryClick(sub.name)}
-                  className="px-3 py-1 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-600 hover:border-emerald-400 hover:text-emerald-700 transition-all whitespace-nowrap flex-shrink-0"
+                  className="px-3 py-1 rounded-full text-xs font-medium bg-[var(--paper-surface)] border border-[var(--line)] text-[var(--ink-muted)] hover:border-[var(--accent)] hover:text-[var(--save)] transition-all whitespace-nowrap flex-shrink-0"
                 >
                   {sub.name}
-                  <span className="ms-1 text-slate-400">({sub.count})</span>
+                  <span className="ms-1 text-[var(--ink-soft)]">({sub.count})</span>
                 </button>
               ))}
             </div>
@@ -989,10 +968,10 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                   key={subsub.name}
                   type="button"
                   onClick={() => handleSubSubcategoryClick(subsub.name)}
-                  className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-all whitespace-nowrap flex-shrink-0"
+                  className="px-3 py-1 rounded-full text-xs font-medium bg-[var(--save-bg)] border border-[var(--save)] text-[var(--save)] hover:bg-[var(--save-bg)] transition-all whitespace-nowrap flex-shrink-0"
                 >
                   {subsub.name}
-                  <span className="ms-1 text-emerald-400">({subsub.count})</span>
+                  <span className="ms-1 text-[var(--save)]">({subsub.count})</span>
                 </button>
               ))}
             </div>
@@ -1006,17 +985,32 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
         {view === 'categories' && (
           isLoadingCategories ? (
             <div className="flex items-center justify-center h-48">
-              <div className="w-7 h-7 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin" />
+              <div className="w-7 h-7 border-2 border-[var(--line)] border-t-emerald-500 rounded-full animate-spin" />
             </div>
           ) : categories.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
+            <div className="flex items-center justify-center h-48 text-[var(--ink-soft)] text-sm">
               {t('productBrowse.noProducts')}
             </div>
           ) : (
             <>
-              {/* Promo banner */}
-              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 sm:p-5 text-white mb-4">
-                <p className="text-sm sm:text-base font-semibold">
+              {/* Editorial slogan — Paper aesthetic */}
+              <div className="text-center py-3 mb-4">
+                <div
+                  className="text-[10px] uppercase tracking-[0.2em] font-bold"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  Lista · PricePilot
+                </div>
+                <p
+                  className="mt-2 px-4"
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    fontSize: 22,
+                    lineHeight: 1.25,
+                    letterSpacing: '-0.01em',
+                    color: 'var(--ink)',
+                  }}
+                >
                   {t('productBrowse.promoBanner')}
                 </p>
               </div>
@@ -1025,11 +1019,11 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
               {featuredProducts.length > 0 && (
                 <div className="mb-5">
                   <div className="flex items-center justify-between mb-2 px-0.5">
-                    <h3 className="text-sm font-semibold text-slate-700">
+                    <h3 className="text-sm font-semibold text-[var(--ink)]">
                       {t('productBrowse.worthComparing')}
                     </h3>
                     {featuredProducts.length > 4 && (
-                      <span className="flex items-center gap-0.5 text-[11px] text-slate-400 font-medium">
+                      <span className="flex items-center gap-0.5 text-[11px] text-[var(--ink-soft)] font-medium">
                         {t('productBrowse.scrollForMore')}
                         <ChevronLeft className="w-3 h-3" />
                       </span>
@@ -1040,7 +1034,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                       const savings = (fp.max_price || 0) - fp.min_price;
                       const pct = fp.max_price ? Math.round((savings / fp.max_price) * 100) : 0;
                       return (
-                        <div key={fp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-all relative">
+                        <div key={fp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-[var(--paper-surface)] rounded-xl border border-[var(--line)] overflow-hidden hover:shadow-md transition-all relative">
                           {/* Savings badge */}
                           {savings > 0 && (
                             <div className="flex items-center justify-center gap-2 bg-rose-50 border-b border-rose-100 px-2 py-1.5">
@@ -1054,19 +1048,19 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                               {fp.image_url ? (
                                 <img src={fp.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
                               ) : (
-                                <div className="w-12 h-12 text-slate-200 flex items-center justify-center">
+                                <div className="w-12 h-12 text-[var(--line)] flex items-center justify-center">
                                   <Search className="w-8 h-8" />
                                 </div>
                               )}
                             </div>
-                            <div className="text-xs font-semibold text-slate-800 leading-snug line-clamp-2 text-center min-h-[2.5rem]">{fp.name}</div>
+                            <div className="text-xs font-semibold text-[var(--ink)] leading-snug line-clamp-2 text-center min-h-[2.5rem]">{fp.name}</div>
                             {fp.manufacturer && (
-                              <div className="text-[10px] text-slate-400 text-center truncate mt-0.5">{fp.manufacturer}</div>
+                              <div className="text-[10px] text-[var(--ink-soft)] text-center truncate mt-0.5">{fp.manufacturer}</div>
                             )}
                             <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                              <span className="text-sm font-bold text-emerald-600">₪{fp.min_price.toFixed(2)}</span>
+                              <span className="text-sm font-bold text-[var(--save)]">₪{fp.min_price.toFixed(2)}</span>
                               {fp.max_price && fp.max_price > fp.min_price && (
-                                <span className="text-[11px] text-slate-400 line-through">₪{fp.max_price.toFixed(2)}</span>
+                                <span className="text-[11px] text-[var(--ink-soft)] line-through">₪{fp.max_price.toFixed(2)}</span>
                               )}
                             </div>
                           </div>
@@ -1075,7 +1069,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                             {selectedProducts.some((p) => p.barcode === fp.barcode) ? (
                               <button
                                 onClick={() => onRemoveProduct(fp.barcode)}
-                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500"
+                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-[var(--paper-surface-alt)] text-[var(--ink-muted)]"
                               >
                                 ✓ {t('productBrowse.added')}
                               </button>
@@ -1088,7 +1082,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                                     unit: defaultCartUnit(fp.unit_of_measure, fp.is_weighted, fp.name),
                                   });
                                 }}
-                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent)] text-white hover:bg-[#B82A24] transition-colors"
                               >
                                 + {t('productBrowse.addToList')}
                               </button>
@@ -1116,11 +1110,11 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
               {visiblePromoProducts.length > 0 && (
                 <div className="mb-5">
                   <div className="flex items-center justify-between mb-2 px-0.5">
-                    <h3 className="text-sm font-semibold text-slate-700">
+                    <h3 className="text-sm font-semibold text-[var(--ink)]">
                       {t('productBrowse.promoProducts')}
                     </h3>
                     {visiblePromoProducts.length > 4 && (
-                      <span className="flex items-center gap-0.5 text-[11px] text-slate-400 font-medium">
+                      <span className="flex items-center gap-0.5 text-[11px] text-[var(--ink-soft)] font-medium">
                         {t('productBrowse.scrollForMore')}
                         <ChevronLeft className="w-3 h-3" />
                       </span>
@@ -1133,7 +1127,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                       const storeEn = pp.promotion_summary?.supermarket || '';
                       const storeHe = SUPERMARKET_NAME_MAP[storeEn] || storeEn || 'מבצע';
                       return (
-                        <div key={pp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-all relative">
+                        <div key={pp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-[var(--paper-surface)] rounded-xl border border-[var(--line)] overflow-hidden hover:shadow-md transition-all relative">
                           <div className="flex items-center justify-center gap-2 bg-amber-50 border-b border-amber-100 px-2 py-1.5 min-h-[28px]">
                             <span className="text-amber-700 text-[11px] font-bold truncate">{storeHe}</span>
                             {pct > 0 && (
@@ -1145,19 +1139,19 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                               {pp.image_url ? (
                                 <img src={pp.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
                               ) : (
-                                <div className="w-12 h-12 text-slate-200 flex items-center justify-center">
+                                <div className="w-12 h-12 text-[var(--line)] flex items-center justify-center">
                                   <Search className="w-8 h-8" />
                                 </div>
                               )}
                             </div>
-                            <div className="text-xs font-semibold text-slate-800 leading-snug line-clamp-2 text-center min-h-[2.5rem]">{pp.name}</div>
+                            <div className="text-xs font-semibold text-[var(--ink)] leading-snug line-clamp-2 text-center min-h-[2.5rem]">{pp.name}</div>
                             {pp.manufacturer && (
-                              <div className="text-[10px] text-slate-400 text-center truncate mt-0.5">{pp.manufacturer}</div>
+                              <div className="text-[10px] text-[var(--ink-soft)] text-center truncate mt-0.5">{pp.manufacturer}</div>
                             )}
                             <div className="flex items-center justify-center gap-1.5 mt-1.5">
                               <span className="text-sm font-bold text-amber-600">₪{(disc ?? pp.min_price).toFixed(2)}</span>
                               {disc != null && pp.min_price > disc && (
-                                <span className="text-[11px] text-slate-400 line-through">₪{pp.min_price.toFixed(2)}</span>
+                                <span className="text-[11px] text-[var(--ink-soft)] line-through">₪{pp.min_price.toFixed(2)}</span>
                               )}
                             </div>
                           </div>
@@ -1165,7 +1159,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                             {selectedProducts.some((p) => p.barcode === pp.barcode) ? (
                               <button
                                 onClick={() => onRemoveProduct(pp.barcode)}
-                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500"
+                                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-[var(--paper-surface-alt)] text-[var(--ink-muted)]"
                               >
                                 ✓ {t('productBrowse.added')}
                               </button>
@@ -1201,11 +1195,11 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
               {commonProducts.length > 0 && (
                 <div className="mb-5">
                   <div className="flex items-center justify-between mb-2 px-0.5">
-                    <h3 className="text-sm font-semibold text-slate-700">
+                    <h3 className="text-sm font-semibold text-[var(--ink)]">
                       {t('productBrowse.commonProducts')}
                     </h3>
                     {commonProducts.length > 4 && (
-                      <span className="flex items-center gap-0.5 text-[11px] text-slate-400 font-medium">
+                      <span className="flex items-center gap-0.5 text-[11px] text-[var(--ink-soft)] font-medium">
                         {t('productBrowse.scrollForMore')}
                         <ChevronLeft className="w-3 h-3" />
                       </span>
@@ -1213,25 +1207,25 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                   </div>
                   <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
                     {commonProducts.map((cp) => (
-                      <div key={cp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-all relative">
+                      <div key={cp.barcode} className="w-[180px] flex-shrink-0 flex flex-col bg-[var(--paper-surface)] rounded-xl border border-[var(--line)] overflow-hidden hover:shadow-md transition-all relative">
                         <div className="flex-1 flex flex-col p-2.5">
                           <div className="h-24 flex items-center justify-center mb-2">
                             {cp.image_url ? (
                               <img src={cp.image_url} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
                             ) : (
-                              <div className="w-12 h-12 text-slate-200 flex items-center justify-center">
+                              <div className="w-12 h-12 text-[var(--line)] flex items-center justify-center">
                                 <Search className="w-8 h-8" />
                               </div>
                             )}
                           </div>
-                          <div className="text-xs font-semibold text-slate-800 leading-snug line-clamp-2 text-center min-h-[2.5rem]">{cp.name}</div>
+                          <div className="text-xs font-semibold text-[var(--ink)] leading-snug line-clamp-2 text-center min-h-[2.5rem]">{cp.name}</div>
                           {cp.manufacturer && (
-                            <div className="text-[10px] text-slate-400 text-center truncate mt-0.5">{cp.manufacturer}</div>
+                            <div className="text-[10px] text-[var(--ink-soft)] text-center truncate mt-0.5">{cp.manufacturer}</div>
                           )}
                           <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                            <span className="text-sm font-bold text-emerald-600">₪{cp.min_price.toFixed(2)}</span>
+                            <span className="text-sm font-bold text-[var(--save)]">₪{cp.min_price.toFixed(2)}</span>
                             {cp.max_price && cp.max_price > cp.min_price && (
-                              <span className="text-[11px] text-slate-400 line-through">₪{cp.max_price.toFixed(2)}</span>
+                              <span className="text-[11px] text-[var(--ink-soft)] line-through">₪{cp.max_price.toFixed(2)}</span>
                             )}
                           </div>
                         </div>
@@ -1239,7 +1233,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                           {selectedProducts.some((p) => p.barcode === cp.barcode) ? (
                             <button
                               onClick={() => onRemoveProduct(cp.barcode)}
-                              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500"
+                              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-[var(--paper-surface-alt)] text-[var(--ink-muted)]"
                             >
                               ✓ {t('productBrowse.added')}
                             </button>
@@ -1248,7 +1242,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                               onClick={() => {
                                 onSelectProduct({ ...cp, amount: 1, unit: defaultCartUnit(cp.unit_of_measure, cp.is_weighted, cp.name) });
                               }}
-                              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                              className="w-full py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent)] text-white hover:bg-[#B82A24] transition-colors"
                             >
                               + {t('productBrowse.addToList')}
                             </button>
@@ -1272,17 +1266,17 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
         {(view === 'browse' || view === 'search') && (
           isLoadingProducts && products.length === 0 ? (
             <div className="flex items-center justify-center h-48">
-              <div className="w-7 h-7 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin" />
+              <div className="w-7 h-7 border-2 border-[var(--line)] border-t-emerald-500 rounded-full animate-spin" />
             </div>
           ) : displayProducts.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
+            <div className="flex items-center justify-center h-48 text-[var(--ink-soft)] text-sm">
               {t('productBrowse.noProducts')}
             </div>
           ) : (
             <>
               {totalProducts > 0 && (
                 <div className="flex items-center gap-2 mb-2">
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-[var(--ink-soft)]">
                     {hasClientSideFilters
                       ? `${displayProducts.length} / ${totalProducts} ${t('productBrowse.results')}`
                       : `${totalProducts} ${t('productBrowse.results')}`}
@@ -1312,7 +1306,7 @@ const ProductCatalogArea: React.FC<ProductCatalogAreaProps> = ({
                     type="button"
                     onClick={handleLoadMore}
                     disabled={isLoadingProducts}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-semibold border border-slate-200 text-slate-600 hover:border-emerald-400 hover:text-emerald-700 transition-all disabled:opacity-50"
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-semibold border border-[var(--line)] text-[var(--ink-muted)] hover:border-[var(--accent)] hover:text-[var(--save)] transition-all disabled:opacity-50"
                   >
                     {isLoadingProducts && <Loader2 className="w-4 h-4 animate-spin" />}
                     {t('productBrowse.loadMore')}

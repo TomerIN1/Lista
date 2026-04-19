@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { OrganizeStatus, CategoryGroup, UserProfile, ListDocument, Recipe, InputMode, SavedRecipe, DbProduct, ShoppingProduct, AppMode, ShoppingFlowStep, ShoppingMode, ListPriceComparison, UserLocation, DeliveryCheckResult } from './types';
 import { organizeList, organizeRecipes, generateCategoryImage } from './services/geminiService';
-import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe, createShoppingList, updateShoppingListProducts } from './services/firestoreService';
+import { createList, createListWithRecipes, subscribeToLists, updateListGroups, updateListGroupsAndRecipes, updateListTitle, shareList, deleteList, joinSharedList, saveRecipeToLibrary, updateSavedRecipe, createShoppingList, updateShoppingListProducts, subscribeToUserProfile, saveUserProfile } from './services/firestoreService';
 import { auth, signInWithGoogle, logout } from './firebase';
 
 import Header from './components/Header';
@@ -16,6 +16,8 @@ import ShoppingInputArea from './components/ShoppingInputArea';
 import ShoppingPriceStep from './components/ShoppingPriceStep';
 import ShoppingSetupStep from './components/ShoppingSetupStep';
 import CategoryNavBar from './components/CategoryNavBar';
+import RightRail, { ShoppingView } from './components/RightRail';
+import ProfileModal from './components/ProfileModal';
 import { LEGAL_TEXT, LegalDocType } from './constants/legalText';
 import { useLanguage } from './contexts/LanguageContext';
 import { groupsToShoppingItems } from './types';
@@ -67,6 +69,12 @@ const App: React.FC = () => {
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
   const [deliveryCheck, setDeliveryCheck] = useState<DeliveryCheckResult | null>(null);
+
+  // Right rail nav (shopping view)
+  const [shoppingView, setShoppingView] = useState<ShoppingView>('catalog');
+  const [railMobileOpen, setRailMobileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [smartListOpen, setSmartListOpen] = useState(false);
 
   // Supermarket UI state
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -703,6 +711,22 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Subscribe to Firestore user profile — cross-device persistence for the delivery address
+  useEffect(() => {
+    if (!user) return;
+    const unsub = subscribeToUserProfile(user.uid, (profile) => {
+      if (!profile) return;
+      if (profile.city) setShoppingCity(profile.city);
+      if (profile.location) setShoppingLocation(profile.location);
+      if (profile.shoppingMode) setSelectedShoppingMode(profile.shoppingMode);
+      // If profile is complete, skip setup
+      if (profile.city && profile.shoppingMode && shoppingStep === 'setup') {
+        setShoppingStep('build_list');
+      }
+    });
+    return () => unsub();
+  }, [user]);
+
   const handleSetupProceed = async () => {
     // Run the delivery check in the background while transitioning (both modes)
     if (shoppingCity) {
@@ -711,22 +735,32 @@ const App: React.FC = () => {
         .then((result) => setDeliveryCheck(result))
         .catch((err) => console.error('Delivery check failed:', err));
     }
+    // Persist to Firestore profile (cross-device) — logged-in users only
+    if (user) {
+      saveUserProfile(user.uid, {
+        displayName: user.displayName,
+        email: user.email,
+        photoURL: user.photoURL,
+        city: shoppingCity,
+        location: shoppingLocation,
+        shoppingMode: selectedShoppingMode || undefined,
+      }).catch((e) => console.error('[saveUserProfile]', e));
+    }
     setShoppingStep('build_list');
   };
 
   const handleCreateShoppingList = () => {
-    // Switch to shopping mode with empty state (no Firestore doc until first product added)
+    // Switch to shopping mode with empty basket (no Firestore doc until first product added).
+    // Profile (city, location, shopping mode) persists — user set it once, don't re-ask.
     setAppMode('shopping');
     setActiveListId(null);
     setShoppingProducts([]);
     shoppingProductsRef.current = [];
-    setShoppingStep('setup');
     setPriceComparison(null);
-    setSelectedShoppingMode('online');
     setStoreRecommendation(null);
-    setShoppingCity('');
-    setShoppingLocation(null);
-    setDeliveryCheck(null);
+    // If profile is already set, go straight to catalog; otherwise show setup as first-run.
+    const hasProfile = Boolean(shoppingCity && shoppingLocation);
+    setShoppingStep(hasProfile ? 'build_list' : 'setup');
   };
 
   const handleShoppingCompare = async () => {
@@ -855,7 +889,52 @@ const App: React.FC = () => {
         alwaysOverlay={appMode === 'shopping'}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative scroll-smooth">
+      {appMode === 'shopping' && (
+        <RightRail
+          user={user}
+          lists={lists}
+          activeListId={activeListId}
+          shoppingView={shoppingView}
+          onViewChange={setShoppingView}
+          onOrganizeClick={() => handleAppModeSwitch('organize')}
+          onSelectList={(l) => {
+            setActiveListId(l.id);
+            const listMode = l.appMode || 'organize';
+            if (listMode !== appMode) setAppMode(listMode);
+          }}
+          onDeleteList={handleDeleteList}
+          onCreateShoppingList={handleCreateShoppingList}
+          onCreateOrganizeList={handleCreateList}
+          onCreateRecipe={handleCreateRecipe}
+          onLoadRecipe={handleLoadRecipe}
+          onLogin={handleLogin}
+          onLogout={handleLogout}
+          onOpenProfile={() => setProfileOpen(true)}
+          cartItemCount={shoppingProducts.length}
+          mobileOpen={railMobileOpen}
+          onMobileClose={() => setRailMobileOpen(false)}
+        />
+      )}
+
+      {user && profileOpen && (
+        <ProfileModal
+          isOpen={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          user={user}
+          city={shoppingCity}
+          location={shoppingLocation}
+          shoppingMode={selectedShoppingMode}
+          onProfileSaved={({ city, location, shoppingMode }) => {
+            setShoppingCity(city);
+            setShoppingLocation(location);
+            setSelectedShoppingMode(shoppingMode);
+          }}
+        />
+      )}
+
+      <div className={`flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative scroll-smooth ${
+        appMode === 'shopping' ? 'lg:ps-[280px]' : ''
+      }`}>
         {appMode !== 'shopping' && (
           <div className="lg:hidden absolute top-6 start-4 z-30">
             <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 text-slate-600">
@@ -881,7 +960,8 @@ const App: React.FC = () => {
             searchQuery={headerSearchQuery}
             onSearchChange={setHeaderSearchQuery}
             disabled={status === 'loading' || isAdding || isShoppingComparing}
-            onMenuClick={() => setSidebarOpen(true)}
+            onMenuClick={() => appMode === 'shopping' ? setRailMobileOpen(true) : setSidebarOpen(true)}
+            onOpenAI={appMode === 'shopping' ? () => setSmartListOpen(true) : undefined}
           />
 
           <div className="flex-1">
@@ -1030,6 +1110,8 @@ const App: React.FC = () => {
                         externalSubcategory={selectedNavSubcategory}
                         externalSubSubcategory={selectedNavSubSubcategory}
                         onCategoryChange={(cat) => { setSelectedNavCategory(cat); setSelectedNavSubcategory(null); setSelectedNavSubSubcategory(null); }}
+                        showSmartList={smartListOpen}
+                        onShowSmartListChange={setSmartListOpen}
                         onBack={() => {
                           setShoppingStep('setup');
                         }}

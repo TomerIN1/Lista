@@ -11,8 +11,8 @@ const Footer: React.FC<FooterProps> = ({ onOpenDoc }) => {
   const { t } = useLanguage();
 
   return (
-    <footer className="mt-auto py-8 border-t border-slate-100/50">
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400 font-medium">
+    <footer className="mt-auto py-8 border-t" style={{ borderColor: 'var(--line)' }}>
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-medium" style={{ color: 'var(--ink-soft)' }}>
         
         <div className="order-2 md:order-1">
           &copy; {currentYear} {t('footer.rights')}
@@ -21,19 +21,19 @@ const Footer: React.FC<FooterProps> = ({ onOpenDoc }) => {
         <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 order-1 md:order-2">
           <button 
             onClick={() => onOpenDoc('privacy')} 
-            className="hover:text-indigo-600 transition-colors"
+            className="transition-colors hover:text-[var(--accent)]"
           >
             {t('footer.privacy')}
           </button>
           <button 
             onClick={() => onOpenDoc('terms')} 
-            className="hover:text-indigo-600 transition-colors"
+            className="transition-colors hover:text-[var(--accent)]"
           >
             {t('footer.terms')}
           </button>
           <button 
             onClick={() => onOpenDoc('accessibility')} 
-            className="hover:text-indigo-600 transition-colors"
+            className="transition-colors hover:text-[var(--accent)]"
           >
             {t('footer.accessibility')}
           </button>

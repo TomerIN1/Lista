@@ -4075,7 +4075,106 @@ Fix: stop passing `city` to `getGroupDetail`. The modal now fetches all chains a
 
 ---
 
-**Last Updated**: April 17, 2026
-**Version**: 5.9.3
+## Session: April 17–20, 2026 — "Paper" Design Language v2.0
+
+### Overview
+Full visual overhaul of the shopping experience based on the Claude Design "Lista 2.0" handoff. Introduces the **Paper** design system (warm butcher-paper canvas, editorial serif pricing, tomato accent, signal-green for savings), a persistent right-side navigation rail with colored list sections, a cross-device user profile persisted to Firestore, and a slimmed header built around a prominent "Smart AI" CTA. See `DESIGN_SYSTEM.md` for tokens + component rules.
+
+### Changes Made
+
+#### 1. Paper Design Tokens + Typography
+- Added CSS custom properties in `index.html` under `:root`: `--paper-bg`, `--paper-surface`, `--paper-surface-alt`, `--ink`, `--ink-muted`, `--ink-soft`, `--accent` (#D7352D tomato), `--save` (#2F6B3C signal green), `--save-bg`, `--line`, `--font-serif` (Instrument Serif), `--font-mono` (JetBrains Mono).
+- Loaded Google Fonts: Instrument Serif, Heebo, JetBrains Mono (Rubik stays as Heebo fallback).
+- Body bg switched to `var(--paper-bg)`; `theme-color` meta set to `#F5F1E8`.
+- Hebrew-first font stack: `html[dir="rtl"] body { font-family: 'Heebo', 'Rubik', sans-serif }`.
+- Headings `h1–h4` + `.font-display` default to `var(--font-serif)` in LTR, auto-fallback to Heebo in RTL.
+
+#### 2. Slimmed Shopping Header — `components/Header.tsx`
+- Shopping header reduced to: mobile hamburger + **Smart AI button** + search bar.
+- Smart AI button: tomato→amber gradient (`#D7352D → #E88B3C`), white bold text, Sparkles icon, placed on the RTL start (right side in Hebrew) for a naturally inviting CTA.
+- Dropped from the header: user avatar/name, location badge, cart counter, mode toggle. All relocated to the RightRail or ProfileModal.
+- Organize-mode header keeps its original structure + mode toggle + language + accessibility.
+
+#### 3. Right Rail — `components/RightRail.tsx` (NEW)
+- Fixed 280px rail on the inline-start edge (RTL: right, LTR: left). Mobile: slide-in drawer toggled from the header hamburger; direction-aware close (`translate-x-full` RTL vs `-translate-x-full` LTR).
+- Structure top→bottom:
+  1. Brand block (Lista logo click → catalog, "PRICEPILOT" tagline).
+  2. Primary nav: catalog / basket / comparison / orders.
+  3. "ארגון קנייה פיזית" CTA.
+  4. Three **colored collapsible list sections**:
+     - Online shopping — `#D7352D` tomato (open by default)
+     - Physical shopping — `#2F6B3C` signal green (collapsed)
+     - Recipes — `#E88B3C` warm amber (collapsed)
+     - Each section: `SectionHeader` with colored dot + count + chevron toggle, `AddButton` **above** the lists (not below), `ListCard` per item with inline rename, item count, privacy chip (shared/private), View / Use / Delete actions.
+  5. User card at the bottom — click opens `ProfileModal`; logged out shows Login.
+- Main content offsets with `lg:ps-[280px]` (padding-inline-start) to match RTL/LTR.
+
+#### 4. Profile Modal + Firestore `users/{uid}` — `components/ProfileModal.tsx` (NEW)
+- Three sections: Identity (read-only from Firebase Auth), Delivery Address (editable city / street / apartment), Language (he/en). Shopping-mode section was removed per user request — mode now follows whether the user is buying online or organizing physical shopping, not a global preference.
+- Persists to `users/{uid}` Firestore doc via `saveUserProfile`.
+- **Firestore rejects `undefined`**: `saveUserProfile` now uses a recursive `stripUndefined` helper. Callers should build the `location` object from defined keys only.
+- Cross-device hydration: `App.tsx` subscribes to `subscribeToUserProfile` on login and rehydrates city / location / mode.
+- Added Firestore rule:
+  ```
+  match /users/{userId} {
+    allow read, write: if request.auth != null && request.auth.uid == userId;
+  }
+  ```
+
+#### 5. CategoryNavBar Revamp — `components/CategoryNavBar.tsx`
+- Pills reshaped to `flex-col` with icon-on-top + label-below (fixed `w-[100px]`/`sm:w-[120px]`, `min-h-[90px]`/`104px`).
+- Icon rendering switched to **CSS mask + `background-color`** so the single-color SVG library can be tinted to any design token (`iconStyle()` helper). Color rules: idle `var(--ink-muted)`, hover `var(--accent)`, active `var(--ink)`.
+- Active state softened from solid black to `paper-surface` + 2px `var(--ink-muted)` border + subtle shadow (user feedback: "too much black").
+- 2-line labels with `line-clamp-2 break-words leading-[1.15]` fix truncation on longer category names.
+- Hover mega-menu dropdown: full-width `position: absolute` panel below the bar with subcategories + sub-subcategories, matching paper palette.
+
+#### 6. Product Catalog Area Cleanup — `components/ProductCatalogArea.tsx`
+- Dropped the inline search bar (search lives only in the Header now).
+- Kept sort + filter controls, right-aligned.
+- Replaced emerald promo banner with a Paper editorial slogan (tomato eyebrow + Instrument Serif 22px).
+- ~130 class swaps to use Paper tokens (`var(--paper-surface)`, `var(--ink)`, `var(--accent)`, etc.).
+
+#### 7. Shopping Input Area Updates — `components/ShoppingInputArea.tsx`
+- Added `showSmartList` / `onShowSmartListChange` props for controlled-mode support (lifted state to `App.tsx` without breaking uncontrolled callers — prop-controlled fallback pattern).
+- Removed the old small indigo "AI Assistant" button (the new prominent Smart AI CTA lives in the Header).
+- Delivery-fee chip: fixed translation path (`priceComparison.deliveryFee`, not `productBrowse.*`). Label refined to "🚚 משלוח ₪29.9".
+
+#### 8. Translation Tweaks — `constants/translations.ts`
+- `availableStores`: "חנויות אונליין זמינות באזורך" (he) / "Online stores in your area" (en) — clearer than the generic "available stores".
+- `addToList`: "הוסף" / "Add" — dropped the leading "+" from the string (the button already renders one, causing "+ +").
+
+#### 9. Bug Fixes
+- **RTL padding side**: `pe-[280px]` was pushing content away from the rail on the wrong side. Fixed to `ps-[280px]`.
+- **List rename not saving**: `updateListTitle(user.uid, listId, title)` was being called with an extra first arg — real signature is `(listId, title)`. The extra arg swallowed the title. Fixed call sites.
+- **"New list" reopened location picker**: `handleCreateShoppingList` was resetting `shoppingCity` / `location` / `mode`. Fixed — if profile is set, go straight to `build_list`.
+- **Firestore permission denied on profile save**: Added `users/{uid}` rule via Firebase Console (see above).
+- **Duplicate "+" on "הוסף" button**: Translation had `"+ הוסף"` and the button also rendered `+`. Translation cleaned up.
+
+### Files Changed
+- `index.html` — Paper tokens, font loading, body bg, theme-color meta.
+- `components/Header.tsx` — Slimmed shopping header + big Smart AI gradient CTA.
+- `components/RightRail.tsx` — **NEW** — nav + colored list sections + profile link + mobile drawer.
+- `components/ProfileModal.tsx` — **NEW** — identity + delivery + language; persists to Firestore.
+- `components/CategoryNavBar.tsx` — CSS-mask icons, 2-line labels, softened active state.
+- `components/ProductCatalogArea.tsx` — Paper tokens swap, dropped internal search, editorial slogan.
+- `components/ShoppingInputArea.tsx` — Controlled `showSmartList`, removed old AI button, delivery-chip fix.
+- `components/Footer.tsx` — Hover accent → tomato.
+- `services/firestoreService.ts` — `getUserProfile`, `saveUserProfile` (with recursive `stripUndefined`), `subscribeToUserProfile`, `USERS_COLLECTION = 'users'`.
+- `types.ts` — `UserSettings` interface.
+- `firestore.rules` — `users/{userId}` rule.
+- `constants/translations.ts` — `availableStores`, `addToList` tweaks.
+- `App.tsx` — RightRail + ProfileModal wiring, profile hydration on login, `lg:ps-[280px]` layout shift, `shoppingView` / `railMobileOpen` / `profileOpen` / `smartListOpen` state.
+- `DESIGN_SYSTEM.md` — **NEW** — tokens, patterns, components, RTL rules, mobile-parity standing rule.
+
+### Design Reference
+The original Claude Design handoff (proposals for Live Summary, Split Basket, Price Diary, Smart Pantry, Receipt OCR, Family Basket, Personal Inflation) was extracted to `/tmp/lista-design/lista-design/` and used as inspiration only. Incremental adoption continues — next candidate is the **Live Summary** panel on the left side, to sit alongside the classic basket view.
+
+### Standing Rule (agent memory)
+**Mobile parity is mandatory.** Every design change must ship for mobile in the same pass. No desktop-only rollouts.
+
+---
+
+**Last Updated**: April 20, 2026
+**Version**: 6.0.0
 **Status**: Production Ready
 

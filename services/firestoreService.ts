@@ -11,9 +11,51 @@ import {
   onSnapshot,
   arrayUnion
 } from 'firebase/firestore';
-import { ListDocument, CategoryGroup, Recipe, InputMode, SavedRecipe, ShoppingProduct, ShoppingMode, UserLocation } from '../types';
+import { ListDocument, CategoryGroup, Recipe, InputMode, SavedRecipe, ShoppingProduct, ShoppingMode, UserLocation, UserSettings } from '../types';
 
 const COLLECTION_NAME = 'lists';
+const USERS_COLLECTION = 'users';
+
+// ────────────────────────────────────────────────────────────
+// User profile / settings
+// ────────────────────────────────────────────────────────────
+
+export const getUserProfile = async (uid: string): Promise<UserSettings | null> => {
+  const ref = doc(db, USERS_COLLECTION, uid);
+  const snap = await getDoc(ref);
+  return snap.exists() ? (snap.data() as UserSettings) : null;
+};
+
+// Strip undefined recursively — Firestore rejects undefined values.
+const stripUndefined = (value: any): any => {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(stripUndefined).filter((v) => v !== undefined);
+  const out: any = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (v === undefined) continue;
+    out[k] = stripUndefined(v);
+  }
+  return out;
+};
+
+export const saveUserProfile = async (uid: string, data: Partial<UserSettings>): Promise<void> => {
+  const ref = doc(db, USERS_COLLECTION, uid);
+  const existing = await getDoc(ref);
+  const payload: Partial<UserSettings> = stripUndefined({
+    ...data,
+    uid,
+    updatedAt: Date.now(),
+  });
+  if (!existing.exists()) payload.createdAt = Date.now();
+  await setDoc(ref, payload, { merge: true });
+};
+
+export const subscribeToUserProfile = (uid: string, cb: (profile: UserSettings | null) => void) => {
+  const ref = doc(db, USERS_COLLECTION, uid);
+  return onSnapshot(ref, (snap) => {
+    cb(snap.exists() ? (snap.data() as UserSettings) : null);
+  });
+};
 
 export const createList = async (title: string, ownerId: string, ownerEmail: string) => {
   console.log('[createList] Creating list:', title, 'for user:', ownerEmail);
