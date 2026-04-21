@@ -236,7 +236,16 @@ export const TRANSLATIONS = {
       commonProducts: "Everyday Essentials",
       promoProducts: "Hot Deals — Fresh Price Drops",
       scrollForMore: "Swipe for more",
-      searchProducts: "Search products..."
+      searchProducts: "Search products...",
+      basketForYou: "For your basket:",
+      bestPriceLabel: "Best price for your basket",
+      sendToPricePilot: "Send to PricePilot",
+      itemsPromo: "{n} items on sale",
+      savingsAmount: "↗ Save ₪{n}",
+      basketEmptyHint: "Add items to compare prices",
+      basketTotal: "Basket total",
+      mobileCheapestLabel: "Cheapest",
+      mobileItemsCount: "🛒 {n} items"
     },
     smartList: {
       pasteList: "AI Assistant",
@@ -511,7 +520,16 @@ export const TRANSLATIONS = {
       commonProducts: "מוצרים יומיומיים",
       promoProducts: "מחירים חדשים במבצע",
       scrollForMore: "החלק לעוד",
-      searchProducts: "חפש מוצרים..."
+      searchProducts: "חפש מוצרים...",
+      basketForYou: "לסל שלך:",
+      bestPriceLabel: "המחיר הכי טוב לסל שלך",
+      sendToPricePilot: "שליחה ל-PricePilot",
+      itemsPromo: "{n} פריטים במבצע",
+      savingsAmount: "↗ חיסכון ₪{n}",
+      basketEmptyHint: "הוסיפו פריטים כדי להשוות מחירים",
+      basketTotal: "סה״כ סל",
+      mobileCheapestLabel: "הכי זול",
+      mobileItemsCount: "🛒 {n} פריטים"
     },
     smartList: {
       pasteList: "עוזר AI",
