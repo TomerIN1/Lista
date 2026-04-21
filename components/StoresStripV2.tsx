@@ -50,7 +50,9 @@ const StoresStripV2: React.FC<StoresStripV2Props> = ({
             key={c.chain}
             type="button"
             onClick={() => onSelectChain(c.chain)}
-            aria-label={`${c.displayName} ₪${Math.round(totalToShow)}`}
+            aria-label={totalToShow > 0
+              ? `${c.displayName} ₪${Math.round(totalToShow)}`
+              : c.displayName}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] whitespace-nowrap flex-shrink-0 transition-all"
             style={
               isBest
@@ -75,7 +77,7 @@ const StoresStripV2: React.FC<StoresStripV2Props> = ({
             />
             <span className="font-bold">{c.displayName}</span>
             <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-              ₪{Math.round(totalToShow)}
+              {totalToShow > 0 ? `₪${Math.round(totalToShow)}` : '—'}
             </span>
             {c.deliveryFee != null && (
               <span className="text-[9px]" style={{
