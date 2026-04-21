@@ -1,0 +1,66 @@
+// components/LiveBasketPanel.tsx
+import React from 'react';
+import { ShoppingProduct, Unit } from '../types';
+import { ChainTotal, LiveComparisonResult } from '../hooks/useLiveComparison';
+import KPIHero from './KPIHero';
+import BasketList from './BasketList';
+
+interface LiveBasketPanelProps {
+  products: ShoppingProduct[];
+  comparison: LiveComparisonResult | null;
+  /** The chain currently shown in KPIHero — defaults to comparison.cheapest. */
+  selectedChain: ChainTotal | null;
+  onUpdate: (barcode: string, updates: { amount?: number; unit?: Unit }) => void;
+  onRemove: (barcode: string) => void;
+  onClear: () => void;
+  onSendToPricePilot: () => void;
+}
+
+const LiveBasketPanel: React.FC<LiveBasketPanelProps> = ({
+  products, comparison, selectedChain,
+  onUpdate, onRemove, onClear, onSendToPricePilot,
+}) => {
+  // Savings = if user is viewing the cheapest, compare to next; else compare to cheapest.
+  const savings: number | null = (() => {
+    if (!comparison || !selectedChain) return null;
+    const cheapest = comparison.cheapest;
+    if (!cheapest) return null;
+    if (selectedChain.chain === cheapest.chain) {
+      return comparison.savingsVsNext;
+    }
+    const sel = selectedChain.totalWithDelivery ?? selectedChain.total;
+    const ch = cheapest.totalWithDelivery ?? cheapest.total;
+    return ch - sel; // negative when not best, KPIHero hides it
+  })();
+
+  const promoCount = products.filter(p => p.has_promotion).length;
+
+  return (
+    <aside
+      className="hidden lg:flex flex-col fixed top-[60px] bottom-0 z-30 w-[300px]"
+      style={{
+        insetInlineEnd: 0,
+        background: 'var(--paper-surface)',
+        borderInlineStart: '1px solid var(--line)',
+      }}
+    >
+      <KPIHero
+        selectedChain={selectedChain}
+        savings={savings}
+        promoCount={promoCount}
+        itemCount={products.length}
+        onSendToPricePilot={onSendToPricePilot}
+      />
+      {/* Tip row — v1: hidden until tip data exists. Render nothing. */}
+      {/* See spec §5: row will light up when delivery-threshold lookup ships. */}
+      <BasketList
+        products={products}
+        onUpdate={onUpdate}
+        onRemove={onRemove}
+        onClear={onClear}
+      />
+    </aside>
+  );
+};
+
+export default LiveBasketPanel;
