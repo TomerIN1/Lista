@@ -13,7 +13,7 @@ interface BasketListProps {
 }
 
 const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, onClear }) => {
-  const { t, isRTL } = useLanguage();
+  const { t, tUnit, isRTL } = useLanguage();
   const hasContent = products.length > 0;
 
   const estimatedTotal = products.reduce((sum, p) => {
@@ -85,7 +85,7 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
                   {p.name}
                 </div>
                 <div className="text-[8px] mt-0.5" style={{ color: 'var(--ink-soft)' }}>
-                  {p.amount} {p.unit}
+                  {p.amount} {tUnit(p.unit)}
                 </div>
               </div>
               <div className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--ink)' }}>
