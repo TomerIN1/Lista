@@ -4,6 +4,7 @@ import { ShoppingProduct, Unit } from '../types';
 import { ChainTotal, LiveComparisonResult } from '../hooks/useLiveComparison';
 import KPIHero from './KPIHero';
 import BasketList from './BasketList';
+import { calculateSavings } from '../utils/calculateSavings';
 
 interface LiveBasketPanelProps {
   products: ShoppingProduct[];
@@ -20,18 +21,7 @@ const LiveBasketPanel: React.FC<LiveBasketPanelProps> = ({
   products, comparison, selectedChain,
   onUpdate, onRemove, onClear, onSendToPricePilot,
 }) => {
-  // Savings = if user is viewing the cheapest, compare to next; else compare to cheapest.
-  const savings: number | null = (() => {
-    if (!comparison || !selectedChain) return null;
-    const cheapest = comparison.cheapest;
-    if (!cheapest) return null;
-    if (selectedChain.chain === cheapest.chain) {
-      return comparison.savingsVsNext;
-    }
-    const sel = selectedChain.totalWithDelivery ?? selectedChain.total;
-    const ch = cheapest.totalWithDelivery ?? cheapest.total;
-    return ch - sel; // negative when not best, KPIHero hides it
-  })();
+  const savings = calculateSavings(comparison, selectedChain);
 
   const promoCount = products.filter(p => p.has_promotion).length;
 

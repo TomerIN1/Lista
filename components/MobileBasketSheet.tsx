@@ -4,6 +4,7 @@ import { ShoppingProduct, Unit } from '../types';
 import { ChainTotal, LiveComparisonResult } from '../hooks/useLiveComparison';
 import KPIHero from './KPIHero';
 import BasketList from './BasketList';
+import { calculateSavings } from '../utils/calculateSavings';
 
 interface MobileBasketSheetProps {
   open: boolean;
@@ -29,14 +30,7 @@ const MobileBasketSheet: React.FC<MobileBasketSheetProps> = ({
     return () => { document.body.style.overflow = prev; };
   }, [open]);
 
-  const savings: number | null = (() => {
-    if (!comparison || !selectedChain) return null;
-    if (!comparison.cheapest) return null;
-    if (selectedChain.chain === comparison.cheapest.chain) return comparison.savingsVsNext;
-    const sel = selectedChain.totalWithDelivery ?? selectedChain.total;
-    const ch = comparison.cheapest.totalWithDelivery ?? comparison.cheapest.total;
-    return ch - sel;
-  })();
+  const savings = calculateSavings(comparison, selectedChain);
 
   const promoCount = products.filter(p => p.has_promotion).length;
 
