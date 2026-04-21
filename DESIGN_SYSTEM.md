@@ -109,6 +109,11 @@ Color rules:
 - Hover → `var(--accent)`
 - Active → `var(--ink)` + pill gets 2px `var(--ink-muted)` border + soft shadow.
 
+Icon source — two folders, mapping lives in `getCategoryIconSrc(name)` (`components/ProductCatalogArea.tsx`):
+- **Primary**: `/public/listaicons/` — line-art SVG bundle (mixed `en_he` filenames). Mapped via `LISTA_ICON_MAP` (20 categories covered today).
+- **Fallback**: `/public/category-icons/` — the original set, filename === Hebrew category name. Used when `LISTA_ICON_MAP` has no entry (`אחר ולא מסווג`, `הכל`, `טבק ועישון`, …).
+- The new SVGs ship with two strokes (indigo + gray); CSS-mask collapses them to a single tint, which is the intended Paper behavior. Don't try to preserve the original colors.
+
 Hover reveals a **full-width mega-menu dropdown** below the bar (`position: absolute; start-0; end-0; top-full`) with subcategory + sub-subcategory navigation.
 
 ### 4.3 RightRail — `components/RightRail.tsx`
@@ -202,5 +207,5 @@ The original Claude Design bundle (proposals, ideation, Idea_*.jsx mockups for L
 
 ---
 
-**Last updated**: 2026-04-20
+**Last updated**: 2026-04-21
 **Owner**: Tomer (@tomerikoka)

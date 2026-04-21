@@ -4075,6 +4075,30 @@ Fix: stop passing `city` to `getGroupDetail`. The modal now fetches all chains a
 
 ---
 
+## Session: April 21, 2026 — Category Icons: "listaicons" set
+
+### Overview
+Swapped the category navigation icons from the original `/category-icons/` set to the new `/listaicons/` line-art bundle. Added a mapping layer so missing categories cleanly fall back to the legacy SVGs — no broken tiles.
+
+### Changes Made
+- Copied 24 SVGs from `listaicons/` (repo root, source) → `public/listaicons/` (served by Vite).
+- `components/ProductCatalogArea.tsx`: added `LISTA_ICON_MAP` (category name → new filename) covering 20 of the 24 active categories. Updated `getCategoryIconSrc(name)` to prefer the mapped `/listaicons/{file}` and fall back to `/category-icons/{name}.svg` when no mapping exists.
+- `DESIGN_SYSTEM.md`: documented the two-folder layout + fallback rule under §4.2 CategoryNavBar.
+
+### Mapping Notes
+- The new SVGs ship as two-color line drawings (indigo accent + gray). The existing CSS-mask tinting in `CategoryNavBar.tsx` (`iconStyle()`) collapses them to a single Paper-token tint — intentional, matches the rest of the design language.
+- **Mapped (20)**: תינוקות, יין בירה ואלכוהול, ניקיון כביסה וחד פעמי, חיות מחמד, מבצעים, משקאות, טקסטיל והלבשה בסיסית, פנאי נסיעות ועונתי, בית מטבח ואירוח, מזווה בישול ואפייה, בשר עוף דגים ומעדניה, בריאות טבע וללא גלוטן, לחם מאפים ודגני בוקר, פרחים גינה וחוץ, חשמל אלקטרוניקה וסוללות, חטיפים מתוקים ופיצוחים, פירות וירקות, פארם טיפוח אישי ובריאות, קפואים, שימורים רטבים וממרחים.
+- **Falling back to legacy**: `הכל`, `אחר ולא מסווג`, `טבק ועישון`, `מוצרי חלב וביצים` — no matching new icon yet. Next pass: source matching artwork for these to complete the set.
+- **Unused new icons**: `cleaning_option 2.svg`, `כביסה_laundry.svg`, `מכולת_groceries.svg`, `פירות_fruit.svg` (we picked `vegteable_ירקות.svg` for "פירות וירקות").
+
+### Files Changed
+- `public/listaicons/*` — **NEW** — 24 line-art SVGs.
+- `components/ProductCatalogArea.tsx` — `LISTA_ICON_MAP` + updated `getCategoryIconSrc`.
+- `DESIGN_SYSTEM.md` — icon-source documentation.
+- `PROJECT_DOCUMENTATION.md` — this entry.
+
+---
+
 ## Session: April 17–20, 2026 — "Paper" Design Language v2.0
 
 ### Overview

@@ -11,9 +11,39 @@ import { defaultCartUnit } from '../utils/priceFormat';
 
 // ─── Category icon helpers ──────────────────────────────────────────────────
 
-/** Resolve SVG icon path for a category (file names match Hebrew category names) */
+// New "listaicons" set → category mapping. Filenames preserved verbatim
+// (mixed en/he naming is intentional — that's how the asset bundle shipped).
+// Categories not listed here fall back to the older /category-icons/ set so
+// nothing breaks when an icon is missing.
+const LISTA_ICON_MAP: Record<string, string> = {
+  'תינוקות': 'babies_תינוקות.svg',
+  'יין בירה ואלכוהול': 'beer alcohol_שתיה חריפה.svg',
+  'ניקיון כביסה וחד פעמי': 'cleaning_מוצרי ניקיון.svg',
+  'חיות מחמד': 'pets_חיות מחמד.svg',
+  'מבצעים': 'sales_מבצעים.svg',
+  'משקאות': 'soda_שתיה.svg',
+  'טקסטיל והלבשה בסיסית': 'textile_ביגוד.svg',
+  'פנאי נסיעות ועונתי': 'travel_נסיעות.svg',
+  'בית מטבח ואירוח': 'אירוח_home.svg',
+  'מזווה בישול ואפייה': 'אפיה_baking.svg',
+  'בשר עוף דגים ומעדניה': 'בשר ודגים_fisg and neat.svg',
+  'בריאות טבע וללא גלוטן': 'ללא גלוטן_gluten free.svg',
+  'לחם מאפים ודגני בוקר': 'מאפים ולחמים_bread.svg',
+  'פרחים גינה וחוץ': 'מוצרי דינה_gardening.svg',
+  'חשמל אלקטרוניקה וסוללות': 'מוצרי חשמל_electricity.svg',
+  'חטיפים מתוקים ופיצוחים': 'ממתקים_candies.svg',
+  'פירות וירקות': 'vegteable_ירקות.svg',
+  'פארם טיפוח אישי ובריאות': 'קוסמטיקה_cosmetics.svg',
+  'קפואים': 'קפואים_feozen.svg',
+  'שימורים רטבים וממרחים': 'שימורים_cans.svg',
+};
+
+/** Resolve SVG icon path for a category. Prefers the new "listaicons" set,
+ *  falls back to the legacy /category-icons/ file when no new icon exists. */
 export function getCategoryIconSrc(name: string): string {
   const normalised = name.replace(/\s+/g, ' ');
+  const listaFile = LISTA_ICON_MAP[normalised];
+  if (listaFile) return `/listaicons/${encodeURIComponent(listaFile)}`;
   return `/category-icons/${encodeURIComponent(normalised)}.svg`;
 }
 
