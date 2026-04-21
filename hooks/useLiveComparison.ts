@@ -105,6 +105,9 @@ export function useLiveComparison(input: UseLiveComparisonInput): {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
+  // products is intentionally NOT in deps: cartSignature is the stable
+  // canonical representation, and listing products would refetch on every
+  // re-render when the array identity changes but contents don't.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartSignature, city, cityCode, storeType, eligibleStoreIds, deliveryFees]);
 
