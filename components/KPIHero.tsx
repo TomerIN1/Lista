@@ -78,6 +78,7 @@ const KPIHero: React.FC<KPIHeroProps> = ({
       <button
         type="button"
         onClick={onSendToPricePilot}
+        aria-label={t('productBrowse.sendToPricePilot')}
         className="w-full py-2.5 rounded-lg text-white font-bold text-[11px] flex items-center justify-center gap-1.5"
         style={{ background: 'var(--accent)', boxShadow: '0 1px 3px rgba(215,53,45,0.25)' }}
       >
