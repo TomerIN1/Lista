@@ -27,11 +27,11 @@ const LiveBasketPanel: React.FC<LiveBasketPanelProps> = ({
 
   return (
     <aside
-      className="hidden lg:flex flex-col fixed top-[72px] bottom-0 z-30 w-[300px]"
+      className="hidden lg:flex flex-col fixed top-0 bottom-0 z-10 w-[300px] pt-[64px]"
       style={{
         insetInlineEnd: 0,
         background: 'var(--paper-surface)',
-        boxShadow: 'inset 1px 0 0 var(--line), -8px 0 24px -16px rgba(0,0,0,0.08)',
+        borderInlineStart: '1px solid var(--line)',
       }}
     >
       <KPIHero
