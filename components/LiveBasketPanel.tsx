@@ -1,5 +1,6 @@
 // components/LiveBasketPanel.tsx
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { ShoppingProduct, Unit } from '../types';
 import { ChainTotal, LiveComparisonResult } from '../hooks/useLiveComparison';
 import KPIHero from './KPIHero';
@@ -25,7 +26,7 @@ const LiveBasketPanel: React.FC<LiveBasketPanelProps> = ({
 
   const promoCount = products.filter(p => p.has_promotion).length;
 
-  return (
+  return createPortal(
     <aside
       className="hidden lg:flex flex-col fixed top-0 bottom-0 z-30 w-[300px]"
       style={{
@@ -49,7 +50,8 @@ const LiveBasketPanel: React.FC<LiveBasketPanelProps> = ({
         onRemove={onRemove}
         onClear={onClear}
       />
-    </aside>
+    </aside>,
+    document.body
   );
 };
 

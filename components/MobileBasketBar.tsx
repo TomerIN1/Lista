@@ -1,5 +1,6 @@
 // components/MobileBasketBar.tsx
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronUp } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ChainTotal } from '../hooks/useLiveComparison';
@@ -20,7 +21,7 @@ const MobileBasketBar: React.FC<MobileBasketBarProps> = ({ selectedChain, itemCo
   const dec = (total - whole).toFixed(2).slice(1);
   const itemsLabel = t('productBrowse.mobileItemsCount').replace('{n}', String(itemCount));
 
-  return (
+  return createPortal(
     <button
       type="button"
       onClick={onTap}
@@ -52,7 +53,8 @@ const MobileBasketBar: React.FC<MobileBasketBarProps> = ({ selectedChain, itemCo
         {itemsLabel}
       </span>
       <ChevronUp className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.7)' }} />
-    </button>
+    </button>,
+    document.body
   );
 };
 

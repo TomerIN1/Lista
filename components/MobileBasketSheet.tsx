@@ -1,5 +1,6 @@
 // components/MobileBasketSheet.tsx
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { ShoppingProduct, Unit } from '../types';
 import { ChainTotal, LiveComparisonResult } from '../hooks/useLiveComparison';
@@ -37,7 +38,7 @@ const MobileBasketSheet: React.FC<MobileBasketSheetProps> = ({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="lg:hidden fixed inset-0 z-50">
       {/* Backdrop */}
       <div
@@ -93,7 +94,8 @@ const MobileBasketSheet: React.FC<MobileBasketSheetProps> = ({
           />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
