@@ -150,6 +150,39 @@ Persists to `users/{uid}` in Firestore. Uses `stripUndefined` helper in `service
 - Editorial slogan at the top uses Instrument Serif 22px with a tomato "eyebrow" label above.
 - Product cards: paper surface, serif price, `-X%` tomato pill for promos, green `"חיסכון ₪X"` for savings.
 
+### 4.6 Live Summary — persistent basket panel
+
+The basket is **always visible** alongside the catalog (supermarkets always show your cart). One source of truth feeds three surfaces.
+
+**Surfaces:**
+- Desktop: `LiveBasketPanel` — fixed `width: 300px`, pinned to the inline-end edge (`insetInlineEnd: 0`), top-to-bottom.
+- Mobile: `MobileBasketBar` — sticky bottom bar showing cheapest chain + total + item count + "Show basket".
+- Mobile: `MobileBasketSheet` — bottom sheet (88vh, 20px top radius) that hosts the same `KPIHero` + `BasketList` as desktop.
+
+**Composition (all three surfaces):**
+1. `KPIHero` — best-chain badge (`chainBadgeColor` + 2-letter `chainAbbrev`) + Instrument Serif price (38px whole + 14px decimals) + "*כולל משלוח ₪X" hint when delivery is bundled + "חיסכון ₪X" / "X פריטים במבצע" pills + tomato CTA "Send to PricePilot".
+2. `BasketList` — items with image thumb, name + "מבצע"/"PROMO" pill when on promo, qty steppers, line price (strikethrough regular + accent promo when discounted), total footer using promo prices when present.
+
+**Cross-chain comparison strip:**
+- `StoresStripV2` replaces the old top stores strip. Chips show chain + cart total + shipping; cheapest is filled green with a star; chains with fewer matches show a "חסרים N" badge; chains with zero matched items show an em-dash "—".
+
+**Data flow:**
+- `useLiveComparison(products)` debounces (600ms) and calls existing `compareListPrices()` → returns `{ chains, cheapest }`.
+- Sort order: `matchedItems desc → cost asc` (most-matched first wins ties on price).
+- `chainCodeFromDisplay()` reverse-lookups display name → canonical chain code so branding helpers work.
+- `selectedChainCode` state on `ShoppingInputArea` keeps `LiveBasketPanel`, `MobileBasketBar`, and `MobileBasketSheet` in sync. `handleClear` resets it to `null`.
+- `calculateSavings(comparison, selectedChain)` is shared by panel + sheet; never duplicate it.
+
+**Containing-block trap (DO NOT FORGET):**
+`App.tsx:935` has `overflow-y-auto`. Any element with `overflow ≠ visible` becomes a containing block for `position: fixed` descendants — meaning a panel that says `top: 0` anchors to that scroll container, **not the viewport**, leaving an unwanted gap.
+
+The fix: wrap `LiveBasketPanel`, `MobileBasketBar`, and `MobileBasketSheet` in `createPortal(..., document.body)`. Any future fixed-position component layered into the shopping page must do the same — or reproduce the gap.
+
+**Layout offsets:**
+- Catalog reserves space with `lg:ps-[280px]` (RightRail) + `lg:pe-[300px]` (LiveBasketPanel) on `App.tsx`.
+- Panel uses `pt-6` so its content sits flush with the Lista logo in the RightRail.
+- RTL/LTR: panel uses `borderInlineStart` (logical) so the join line lands on the correct edge automatically.
+
 ---
 
 ## 5. Firestore Shape
@@ -207,5 +240,5 @@ The original Claude Design bundle (proposals, ideation, Idea_*.jsx mockups for L
 
 ---
 
-**Last updated**: 2026-04-21
+**Last updated**: 2026-04-23
 **Owner**: Tomer (@tomerikoka)

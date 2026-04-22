@@ -4202,3 +4202,74 @@ The original Claude Design handoff (proposals for Live Summary, Split Basket, Pr
 **Version**: 6.0.0
 **Status**: Production Ready
 
+---
+
+## Live Summary + Persistent Basket (April 2026 — v6.1.0)
+
+### Goal
+Make the basket and cross-chain price comparison **always visible** while the user browses the catalog, mirroring how supermarkets keep your cart in view. One source of truth — `useLiveComparison` — feeds three surfaces (desktop panel, mobile sticky bar, mobile bottom sheet).
+
+Spec: `docs/superpowers/specs/2026-04-21-live-summary-design.md`
+Plan: `docs/superpowers/plans/2026-04-21-live-summary.md`
+
+### What shipped
+
+#### Desktop — `components/LiveBasketPanel.tsx`
+Fixed `width: 300px`, pinned to inline-end, top-to-bottom. Hosts `KPIHero` + `BasketList`. Catalog reserves space via `lg:pe-[300px]` on `App.tsx`.
+
+#### Mobile — `components/MobileBasketBar.tsx` + `components/MobileBasketSheet.tsx`
+- Sticky bottom bar shows cheapest chain + total + item count + "Show basket".
+- Bottom sheet (88vh, 20px top radius, drag handle + visible X close) hosts the same `KPIHero` + `BasketList` as desktop. Body scroll is locked while open.
+
+#### KPI hero — `components/KPIHero.tsx`
+Best-chain badge (`chainBadgeColor` + 2-letter `chainAbbrev`) + Instrument Serif price (38px whole + small decimals) + "*כולל משלוח" hint when delivery is bundled + "חיסכון ₪X" / "X פריטים במבצע" pills + tomato CTA "Send to PricePilot". Empty-state fallback when basket is empty.
+
+#### Basket list — `components/BasketList.tsx`
+Lifted out of `ShoppingInputArea` (~115 lines removed). Items show image thumb, name + "מבצע"/"PROMO" pill when on promo, qty steppers, line price (strikethrough regular + accent promo when discounted). Footer total uses promo prices when present. Unit string localized via `tUnit(p.unit)`.
+
+#### Cross-chain comparison — `components/StoresStripV2.tsx`
+Replaces the old top stores strip. Chips show chain + cart total + shipping; cheapest is filled green with a star; chains with fewer matches show a "חסרים N" badge; chains with zero matched items show an em-dash "—". Fade-mask edges, no scrollbar.
+
+#### Hook — `hooks/useLiveComparison.ts`
+Debounces (600ms) and calls existing `compareListPrices()` → returns `{ chains, cheapest }`. Sort order: `matchedItems desc → cost asc` (most-matched wins ties on price). `chainCodeFromDisplay()` reverse-lookups display name → canonical chain code so branding helpers work.
+
+#### Shared helpers
+- `utils/chainBranding.ts` — `chainBadgeColor` / `chainDisplayName` / `chainAbbrev`.
+- `utils/calculateSavings.ts` — single source for "savings vs next-cheapest" used by both panel + sheet (extracted after code review flagged duplication).
+
+#### Wiring — `components/ShoppingInputArea.tsx`
+Old desktop sidebar (~115 lines) and old stores strip removed. New components wired with `selectedChainCode` + `mobileSheetOpen` state. `handleSendToPricePilot` includes `isLoading` guard against double-submit. `handleClear` resets `selectedChainCode = null` so the user doesn't stay locked on a chain after emptying the basket.
+
+### Bug fixes (visual iteration)
+- **Header gap (CSS containing-block trap)**: After 6+ failed attempts at top-* offsets, deep research revealed `App.tsx:935` has `overflow-y-auto`, which makes any `position: fixed` descendant anchor to the scroll container, not the viewport. **Fixed by wrapping `LiveBasketPanel`, `MobileBasketBar`, and `MobileBasketSheet` in `createPortal(..., document.body)`** (commit `92c7c13`). DESIGN_SYSTEM.md §4.6 documents this trap so it doesn't get re-introduced.
+- **Mobile bar / sheet showing different chains**: Bar showed cheapest, sheet showed selected. Renamed bar's `cheapest` prop to `selectedChain` so they always agree (commit `87b4aa4`).
+- **Shufersal showing as cheapest with partial matches**: Hook re-sorted purely by cost. Added `matchedItems desc` as primary sort key (commit `87b4aa4`).
+- **Promo prices invisible in basket**: Items had `has_promotion` but the basket showed the regular price. Added "מבצע"/"PROMO" pill + strikethrough regular + accent promo line, and updated `estimatedTotal` to use promo prices (commit `9ce3767`).
+- **DRY violation in savings logic**: Code reviewer flagged duplication. Extracted `calculateSavings` to `utils/` (commit `f025191`).
+- **Panel/logo misalignment**: Panel content sat above Lista logo. Added `pt-6` (commit `5666495`).
+- **Em-dash for zero-match chains**: Otherwise unmatched chains showed misleading "₪0" (commit `68273b4`).
+
+### Files Changed (live-summary slice)
+- `components/KPIHero.tsx` — **NEW**
+- `components/BasketList.tsx` — **NEW** (lifted from ShoppingInputArea)
+- `components/LiveBasketPanel.tsx` — **NEW**
+- `components/MobileBasketBar.tsx` — **NEW**
+- `components/MobileBasketSheet.tsx` — **NEW**
+- `components/StoresStripV2.tsx` — **NEW**
+- `hooks/useLiveComparison.ts` — **NEW**
+- `utils/chainBranding.ts` — **NEW**
+- `utils/calculateSavings.ts` — **NEW**
+- `components/ShoppingInputArea.tsx` — Wired new components, removed old sidebar + stores strip (~270 lines net change).
+- `App.tsx` — `lg:pe-[300px]` to reserve catalog space for the panel.
+- `constants/translations.ts` — Strings for KPIHero, BasketList, StoresStripV2.
+- `DESIGN_SYSTEM.md` — Added §4.6 (Live Summary panel + containing-block trap warning).
+
+### Workflow notes
+Built using subagent-driven development on `main` directly: implementer + spec reviewer + code-quality reviewer per task, user reviews each commit before next dispatch (per `feedback_subagent_workflow.md`).
+
+---
+
+**Last Updated**: April 23, 2026
+**Version**: 6.1.0
+**Status**: Production Ready
+
