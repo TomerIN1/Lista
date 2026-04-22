@@ -18,6 +18,8 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
 
   const estimatedTotal = products.reduce((sum, p) => {
     if (!p.min_price) return sum;
+    const promoUnitPrice = p.promotion_summary?.discounted_price;
+    if (promoUnitPrice != null) return sum + promoUnitPrice * p.amount;
     const wt = computeWeightedTotal(p.min_price, p.amount, p.unit, p.unit_of_measure, p.is_weighted, p.name);
     return sum + (wt ?? p.min_price * p.amount);
   }, 0);
@@ -68,7 +70,10 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
         )}
         {products.map(p => {
           const wt = computeWeightedTotal(p.min_price, p.amount, p.unit, p.unit_of_measure, p.is_weighted, p.name);
-          const linePrice = wt ?? p.min_price * p.amount;
+          const regularLine = wt ?? p.min_price * p.amount;
+          const promoUnitPrice = p.promotion_summary?.discounted_price;
+          const promoLine = promoUnitPrice != null ? promoUnitPrice * p.amount : null;
+          const hasPromo = !!p.has_promotion;
           return (
             <div key={p.barcode} className="flex items-center gap-2 px-3 py-2"
               style={{ borderBottom: '1px solid var(--line)' }}>
@@ -81,8 +86,19 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-semibold leading-tight" style={{ color: 'var(--ink)' }}>
-                  {p.name}
+                <div className="flex items-center gap-1.5">
+                  <div className="text-[10px] font-semibold leading-tight truncate" style={{ color: 'var(--ink)' }}>
+                    {p.name}
+                  </div>
+                  {hasPromo && (
+                    <span
+                      className="text-[8px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                      style={{ background: 'var(--accent)', color: '#fff' }}
+                      title={p.promotion_summary?.description || (isRTL ? 'מבצע פעיל' : 'Active promo')}
+                    >
+                      {isRTL ? 'מבצע' : 'PROMO'}
+                    </span>
+                  )}
                 </div>
                 <div className="text-[8px] mt-0.5" style={{ color: 'var(--ink-soft)' }}>
                   {p.amount} {tUnit(p.unit)}
@@ -109,9 +125,21 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
                   <Plus className="w-2.5 h-2.5" />
                 </button>
               </div>
-              <div className="text-[10px] font-bold min-w-[32px] text-start"
-                style={{ fontFamily: 'var(--font-mono)', color: 'var(--ink)' }}>
-                ₪{linePrice.toFixed(0)}
+              <div className="flex flex-col items-end min-w-[40px]" style={{ fontFamily: 'var(--font-mono)' }}>
+                {promoLine != null ? (
+                  <>
+                    <span className="text-[8px] line-through" style={{ color: 'var(--ink-soft)' }}>
+                      ₪{regularLine.toFixed(0)}
+                    </span>
+                    <span className="text-[10px] font-bold" style={{ color: 'var(--accent)' }}>
+                      ₪{promoLine.toFixed(0)}
+                    </span>
+                  </>
+                ) : (
+                  <span className={`text-[10px] font-bold`} style={{ color: hasPromo ? 'var(--accent)' : 'var(--ink)' }}>
+                    ₪{regularLine.toFixed(0)}
+                  </span>
+                )}
               </div>
             </div>
           );
