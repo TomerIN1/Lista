@@ -4290,9 +4290,17 @@ Clean state confirmed:
 ### Root-cause note for db-api team (no code change here)
 Documented for the db-api agent: `/api/products/{barcode}` is returning inconsistent promo data vs `/api/products/search` for the same `(barcode, supermarket)` pair (live repro with PUMINO ketchup `7296073734352`: search returns correct 14.90 promo, detail returns null/leaked row). Fix belongs in the `israeli-food-prices-database-and-ap-one` repo, not here — the Lista frontend is a faithful passthrough.
 
+### API fix landed (commit d556f8a on the db-api repo)
+Db-api agent shipped the unified promo pipeline: `promotion_summary` is now identical across `/search` and `/products/{barcode}`, non-public promos (coupon / gift / threshold / Cibus / etc.) are filtered out everywhere, chain-scoped promo replaces the store-scoped leaky join, `storeType=online` camelCase now works. All four contract invariants verified live against the ketchup test case. No type migration required — `DbProduct` already declared the new optional fields (`min_price`, `max_price`, `savings`, `has_promotion`, `promotion_summary`) and `DbProductDetail` inherits them.
+
+### Defensive regex fallback — kept, annotated
+Considered deleting the Hebrew-description price-regex fallback in `ProductDetailModal.getRealPrice` (line 68), `ProductDetailModal` per-row block (line 287), and `GroupDetailModal` (line 154) on the grounds that the API now guarantees `discounted_price`. **Kept** instead — the fallback protects against (a) legacy rows where `discounted_price` was stored null, (b) future API regressions, and (c) edge cases outside the public-promo whitelist. The 46.50 contamination was caused by a *wrong* value in `discounted_price`, not a missing one, so removing the fallback would not have prevented it. Added a one-line comment above each block explaining the intent so a future reader doesn't delete it on the same "dead code" reasoning.
+
 ### Files changed
 - `constants/translations.ts` — Removed `✓` prefix from `productBrowse.added` (both `he` and `en`).
 - `index.html` — Removed `Outfit` from fonts URL; added `.font-serif` / `.font-mono` → CSS var mappings.
+- `components/ProductDetailModal.tsx` — Annotated regex fallback in `getRealPrice` + per-row promo rendering.
+- `components/GroupDetailModal.tsx` — Annotated regex fallback in cross-chain price comparison.
 
 ---
 

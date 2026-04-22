@@ -65,6 +65,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
     if (p.promotion?.discounted_price != null && p.promotion.discounted_price < best) {
       best = p.promotion.discounted_price;
     }
+    // Legacy/regression fallback — API normally fills discounted_price; keep this net for null rows.
     if (p.promotion?.description) {
       const m = p.promotion.description.match(/([\d]+\.[\d]+)/);
       if (m) { const parsed = parseFloat(m[1]); if (!isNaN(parsed) && parsed < best) best = parsed; }
@@ -283,8 +284,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ barcode, onClos
                       const realPrice = getRealPrice(p);
                       const isCheapest = i === 0 && cheapestPrice != null && mostExpensivePrice != null && cheapestPrice < mostExpensivePrice - 0.01;
                       const diff = cheapestPrice != null ? realPrice - cheapestPrice : 0;
-                      // Promo discounted price: use it when available, or parse from description
                       let promoPrice = p.promotion?.discounted_price ?? null;
+                      // Legacy/regression fallback — API normally fills discounted_price; keep this net for null rows.
                       if (promoPrice == null && p.promotion?.description) {
                         const priceMatch = p.promotion.description.match(/([\d]+\.[\d]+)/);
                         if (priceMatch) {

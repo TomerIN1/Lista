@@ -150,8 +150,8 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupId, fallbackPr
                 </p>
                 <div className="rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
                   {prices.map((p, i) => {
-                    // Compute real price accounting for promo discounted_price
                     let promoPrice = p.promotion?.discounted_price ?? null;
+                    // Legacy/regression fallback — API normally fills discounted_price; keep this net for null rows.
                     if (promoPrice == null && p.promotion?.description) {
                       const m = p.promotion.description.match(/([\d]+\.[\d]+)/);
                       if (m) { const parsed = parseFloat(m[1]); if (!isNaN(parsed) && parsed < p.regular_price) promoPrice = parsed; }
