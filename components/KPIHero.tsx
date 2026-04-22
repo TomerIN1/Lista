@@ -27,7 +27,7 @@ const KPIHero: React.FC<KPIHeroProps> = ({
 
   if (itemCount === 0 || !selectedChain) {
     return (
-      <div className="px-4 pt-2 pb-4" style={{ borderBottom: '1px solid var(--line)' }}>
+      <div className="px-4 pt-3 pb-4" style={{ borderBottom: '1px solid var(--line)' }}>
         <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--ink-soft)' }}>
           {t('productBrowse.bestPriceLabel')}
         </div>
@@ -42,7 +42,7 @@ const KPIHero: React.FC<KPIHeroProps> = ({
   const decimals = (totalToDisplay - wholeShekels).toFixed(2).slice(1); // ".40"
 
   return (
-    <div className="px-4 pt-2 pb-4" style={{ borderBottom: '1px solid var(--line)' }}>
+    <div className="px-4 pt-3 pb-4" style={{ borderBottom: '1px solid var(--line)' }}>
       <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--ink-soft)' }}>
         {t('productBrowse.bestPriceLabel')}
       </div>

@@ -27,7 +27,7 @@ const LiveBasketPanel: React.FC<LiveBasketPanelProps> = ({
 
   return (
     <aside
-      className="hidden lg:flex flex-col fixed top-[60px] bottom-0 z-30 w-[300px]"
+      className="hidden lg:flex flex-col fixed top-0 bottom-0 z-30 w-[300px]"
       style={{
         insetInlineEnd: 0,
         background: 'var(--paper-surface)',
