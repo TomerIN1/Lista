@@ -23,8 +23,13 @@ const StoresStripV2: React.FC<StoresStripV2Props> = ({
 
   return (
     <div
-      className="flex items-center gap-2 px-3 py-2 overflow-x-auto"
-      style={{ background: 'var(--paper-surface)', borderBottom: '1px solid var(--line)' }}
+      className="flex items-center gap-2 px-3 py-2 overflow-x-auto no-scrollbar"
+      style={{
+        background: 'var(--paper-surface)',
+        borderBottom: '1px solid var(--line)',
+        WebkitMaskImage: 'linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)',
+        maskImage: 'linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)',
+      }}
     >
       <div
         className="flex items-center gap-1 text-[10px] flex-shrink-0"

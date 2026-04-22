@@ -124,8 +124,10 @@ function toLiveComparison(r: ListPriceComparison): LiveComparisonResult {
     matchedItems: s.matchedItems,
   }));
 
-  // Resort here too for safety: prefer totalWithDelivery when available.
+  // Sort: most matched items first (so a chain with partial matches doesn't
+  // look "cheapest" just because it's missing items), then by cost asc.
   chains.sort((a, b) => {
+    if (b.matchedItems !== a.matchedItems) return b.matchedItems - a.matchedItems;
     const aCost = a.totalWithDelivery ?? a.total;
     const bCost = b.totalWithDelivery ?? b.total;
     return aCost - bCost;

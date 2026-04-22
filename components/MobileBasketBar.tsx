@@ -6,16 +6,16 @@ import { ChainTotal } from '../hooks/useLiveComparison';
 import { chainAbbrev, chainBadgeColor } from '../utils/chainBranding';
 
 interface MobileBasketBarProps {
-  cheapest: ChainTotal | null;
+  selectedChain: ChainTotal | null;
   itemCount: number;
   onTap: () => void;
 }
 
-const MobileBasketBar: React.FC<MobileBasketBarProps> = ({ cheapest, itemCount, onTap }) => {
+const MobileBasketBar: React.FC<MobileBasketBarProps> = ({ selectedChain, itemCount, onTap }) => {
   const { t } = useLanguage();
-  if (itemCount === 0 || !cheapest) return null;
+  if (itemCount === 0 || !selectedChain) return null;
 
-  const total = cheapest.totalWithDelivery ?? cheapest.total;
+  const total = selectedChain.totalWithDelivery ?? selectedChain.total;
   const whole = Math.floor(total);
   const dec = (total - whole).toFixed(2).slice(1);
   const itemsLabel = t('productBrowse.mobileItemsCount').replace('{n}', String(itemCount));
@@ -37,9 +37,9 @@ const MobileBasketBar: React.FC<MobileBasketBarProps> = ({ cheapest, itemCount, 
           {t('productBrowse.mobileCheapestLabel')}
           <span
             className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white"
-            style={{ background: chainBadgeColor(cheapest.chain) }}
+            style={{ background: chainBadgeColor(selectedChain.chain) }}
           >
-            {chainAbbrev(cheapest.chain)} {cheapest.displayName}
+            {chainAbbrev(selectedChain.chain)} {selectedChain.displayName}
           </span>
         </span>
         <span className="text-[20px] leading-none" style={{ fontFamily: 'var(--font-serif)' }}>

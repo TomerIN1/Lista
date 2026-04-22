@@ -215,7 +215,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
 
       {/* mobile bar + sheet */}
       <MobileBasketBar
-        cheapest={liveCmp.data?.cheapest ?? null}
+        selectedChain={selectedChain}
         itemCount={products.length}
         onTap={() => setMobileSheetOpen(true)}
       />

@@ -1,5 +1,6 @@
 // components/MobileBasketSheet.tsx
 import React, { useEffect } from 'react';
+import { X } from 'lucide-react';
 import { ShoppingProduct, Unit } from '../types';
 import { ChainTotal, LiveComparisonResult } from '../hooks/useLiveComparison';
 import KPIHero from './KPIHero';
@@ -55,15 +56,26 @@ const MobileBasketSheet: React.FC<MobileBasketSheetProps> = ({
           boxShadow: '0 -8px 30px rgba(0,0,0,0.2)',
         }}
       >
-        {/* Drag handle */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full py-2 flex justify-center"
-          aria-label="Close"
-        >
-          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--paper-surface-alt)' }} />
-        </button>
+        {/* Drag handle + close button */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3 flex justify-center"
+            aria-label="Close"
+          >
+            <div className="w-10 h-1 rounded-full" style={{ background: 'var(--paper-surface-alt)' }} />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute top-1.5 end-3 w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ background: 'var(--paper-surface-alt)', color: 'var(--ink)' }}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
         <div className="overflow-y-auto flex-1">
           <KPIHero
             selectedChain={selectedChain}

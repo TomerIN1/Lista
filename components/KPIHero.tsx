@@ -61,6 +61,11 @@ const KPIHero: React.FC<KPIHeroProps> = ({
         {wholeShekels}
         <span className="text-sm align-top" style={{ color: 'var(--ink-muted)' }}>{decimals} ₪</span>
       </div>
+      {selectedChain.totalWithDelivery != null && selectedChain.totalWithDelivery !== selectedChain.total && (
+        <div className="text-[10px] mb-2" style={{ color: 'var(--ink-soft)' }}>
+          * כולל משלוח ₪{(selectedChain.totalWithDelivery - selectedChain.total).toFixed(2)}
+        </div>
+      )}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {promoCount > 0 && (
           <span className="px-2 py-0.5 rounded-full text-[10px]"
