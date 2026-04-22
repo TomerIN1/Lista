@@ -46,18 +46,19 @@ const StoresStripV2: React.FC<StoresStripV2Props> = ({
           ))}
         </>
       )}
-      {chains.map(c => {
+      {(() => {
+        const maxMatched = chains[0]?.matchedItems ?? 0;
+        return chains.map(c => {
         const isBest = c.chain === cheapest?.chain;
         const isSelected = c.chain === selectedChain;
         const totalToShow = c.totalWithDelivery ?? c.total;
+        const missing = maxMatched - c.matchedItems;
         return (
           <button
             key={c.chain}
             type="button"
             onClick={() => onSelectChain(c.chain)}
-            aria-label={totalToShow > 0
-              ? `${c.displayName} ₪${Math.round(totalToShow)}`
-              : c.displayName}
+            aria-label={`${c.displayName}${totalToShow > 0 ? ` ₪${Math.round(totalToShow)}` : ''}${missing > 0 ? ` (חסרים ${missing} מוצרים)` : ''}`}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] whitespace-nowrap flex-shrink-0 transition-all"
             style={
               isBest
@@ -91,9 +92,22 @@ const StoresStripV2: React.FC<StoresStripV2Props> = ({
                 🚚 ₪{c.deliveryFee}
               </span>
             )}
+            {missing > 0 && (
+              <span
+                className="text-[9px] font-bold rounded-full px-1.5 py-0.5"
+                style={{
+                  background: isBest ? 'rgba(255,255,255,0.2)' : 'rgba(215,53,45,0.12)',
+                  color: isBest ? 'rgba(255,255,255,0.9)' : 'var(--accent)',
+                }}
+                title={`חסרים ${missing} מוצרים`}
+              >
+                חסרים {missing}
+              </span>
+            )}
           </button>
         );
-      })}
+      });
+      })()}
     </div>
   );
 };
