@@ -933,7 +933,7 @@ const App: React.FC = () => {
       )}
 
       <div className={`flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative scroll-smooth ${
-        appMode === 'shopping' ? 'lg:ps-[280px]' : ''
+        appMode === 'shopping' ? 'lg:ps-[280px] lg:pe-[300px]' : ''
       }`}>
         {appMode !== 'shopping' && (
           <div className="lg:hidden absolute top-6 start-4 z-30">
