@@ -61,7 +61,7 @@ const MobileBasketSheet: React.FC<MobileBasketSheetProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-3 flex justify-center"
+            className="w-full py-1 flex justify-center"
             aria-label="Close"
           >
             <div className="w-10 h-1 rounded-full" style={{ background: 'var(--paper-surface-alt)' }} />
@@ -70,7 +70,7 @@ const MobileBasketSheet: React.FC<MobileBasketSheetProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute top-1.5 end-3 w-8 h-8 rounded-full flex items-center justify-center"
+            className="absolute top-0.5 end-3 w-8 h-8 rounded-full flex items-center justify-center"
             style={{ background: 'var(--paper-surface-alt)', color: 'var(--ink)' }}
           >
             <X className="w-4 h-4" />
