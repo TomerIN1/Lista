@@ -4269,7 +4269,34 @@ Built using subagent-driven development on `main` directly: implementer + spec r
 
 ---
 
+## Session 2026-04-23 (cont.) — UI polish + font hygiene
+
+### Duplicate check mark on "Added" button
+Promo carousel "הוסף" button was rendering `✓ ✓ נוסף` after adding a product. Root cause: both the JSX literal and the translation string contained `✓`. Stripped the duplicate from the translation values (`constants/translations.ts:197,481`), keeping the JSX as the single source of the glyph. Now renders `✓ נוסף` (RTL) / `✓ Added` (LTR).
+
+### Font consistency audit + fixes
+Audited every `.tsx` file for font drift against DESIGN_SYSTEM.md §2. Findings:
+- **Dead font**: `Outfit` was loaded from Google Fonts but referenced nowhere in the codebase. Removed from the `<link>` URL in `index.html:37`.
+- **Tailwind `font-mono` class bypassing `--font-mono` token**: Because Tailwind is loaded via CDN with no config, `className="font-mono"` fell back to the browser's native monospace (SF Mono / Menlo), not JetBrains Mono. Three sites were affected: `ProductDetailModal.tsx:196`, `GroupDetailModal.tsx:274`, `ShareModal.tsx:79`.
+
+**Fix (single edit in `index.html`)**: Added two CSS rules mapping the Tailwind `.font-serif` / `.font-mono` classes to `var(--font-serif)` / `var(--font-mono)` — same pattern already used for `.font-display`. This corrects the three drift sites without touching the components and prevents future drift.
+
+Clean state confirmed:
+- 12 inline `fontFamily:` declarations across components — all use `var(--font-serif)` or `var(--font-mono)`.
+- Zero hardcoded font names in JSX.
+- No CSS/SCSS files override fonts.
+- `.font-display`, `.font-serif`, `.font-mono`, `h1-h4` all route through tokens.
+
+### Root-cause note for db-api team (no code change here)
+Documented for the db-api agent: `/api/products/{barcode}` is returning inconsistent promo data vs `/api/products/search` for the same `(barcode, supermarket)` pair (live repro with PUMINO ketchup `7296073734352`: search returns correct 14.90 promo, detail returns null/leaked row). Fix belongs in the `israeli-food-prices-database-and-ap-one` repo, not here — the Lista frontend is a faithful passthrough.
+
+### Files changed
+- `constants/translations.ts` — Removed `✓` prefix from `productBrowse.added` (both `he` and `en`).
+- `index.html` — Removed `Outfit` from fonts URL; added `.font-serif` / `.font-mono` → CSS var mappings.
+
+---
+
 **Last Updated**: April 23, 2026
-**Version**: 6.1.0
+**Version**: 6.1.1
 **Status**: Production Ready
 

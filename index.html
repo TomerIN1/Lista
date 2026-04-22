@@ -34,7 +34,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/lista-05.svg" />
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&family=Rubik:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Heebo:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Rubik:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Heebo:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
       /* --- Paper design tokens (Lista 2.0 visual language) --- */
       :root {
@@ -73,6 +73,9 @@
       html[dir="rtl"] .font-display {
         font-family: 'Heebo', 'Rubik', sans-serif;
       }
+      /* Tailwind font-* classes map to design tokens */
+      .font-serif { font-family: var(--font-serif); }
+      .font-mono  { font-family: var(--font-mono); }
       
       /* Hide scrollbar for clean inputs */
       .no-scrollbar::-webkit-scrollbar {
