@@ -1,14 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  ArrowRight, ArrowLeft, ShoppingCart, Trash2, Pencil, Check,
-  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, X, Store, Sparkles,
+  ArrowRight, ArrowLeft, Pencil, Check,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { DbProduct, ShoppingProduct, Unit, DeliveryCheckResult } from '../types';
-import { SUPERMARKET_NAME_MAP } from '../services/priceDbService';
+import { ShoppingProduct, Unit, DeliveryCheckResult } from '../types';
 import ProductCatalogArea from './ProductCatalogArea';
 import SmartListPanel from '../agents_and_ai/product-discovery-assistant/SmartListPanel';
-import { formatPriceRange, isWeightedProduct, computeWeightedTotal } from '../utils/priceFormat';
 import { useLiveComparison, ChainTotal } from '../hooks/useLiveComparison';
 import LiveBasketPanel from './LiveBasketPanel';
 import StoresStripV2 from './StoresStripV2';
@@ -61,7 +59,6 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   const { t, isRTL, tUnit } = useLanguage();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(title || '');
-  const [selectedChains, setSelectedChains] = useState<string[]>([]);
   const [internalShowSmartList, setInternalShowSmartList] = useState(false);
   // Controlled or uncontrolled — prefer external state if provided
   const showSmartList = externalShowSmartList !== undefined ? externalShowSmartList : internalShowSmartList;
@@ -98,19 +95,18 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   })();
 
   const handleSendToPricePilot = () => {
-    // Reuse the existing compare flow.
+    if (isLoading) return; // guard against double-submit while a comparison is in flight
     onCompare();
   };
 
-  // Effective chains: if user hasn't explicitly filtered, use all available chains from their area
+  // Effective chains: use all available chains from the user's area
   const effectiveChains = useMemo(() => {
-    if (selectedChains.length > 0) return selectedChains;
     if (!deliveryCheck?.chains) return [];
     const isOnline = shoppingMode === 'online';
     return deliveryCheck.chains
       .filter(c => isOnline ? (c.delivers || c.click_and_collect) : true)
       .map(c => c.chain);
-  }, [selectedChains, deliveryCheck, shoppingMode]);
+  }, [deliveryCheck, shoppingMode]);
 
   const existingBarcodes = useMemo(
     () => new Set(products.map((p) => p.barcode)),
@@ -152,27 +148,13 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
 
   const handleClear = () => {
     onProductsChange([]);
+    setSelectedChainCode(null); // reset chain selection so next basket opens on cheapest
   };
 
   const handleSmartListConfirm = (newProducts: ShoppingProduct[]) => {
     onProductsChange([...products, ...newProducts]);
     setShowSmartList(false);
   };
-
-  const formatPrice = (min: number, max?: number, unitOfMeasure?: string | null, isWeighted?: boolean | null) => {
-    return formatPriceRange(min, max, unitOfMeasure, isWeighted);
-  };
-
-  const hasContent = products.length > 0;
-
-  // Estimated total price
-  const estimatedTotal = useMemo(() => {
-    return products.reduce((sum, p) => {
-      if (!p.min_price) return sum;
-      const wt = computeWeightedTotal(p.min_price, p.amount, p.unit, p.unit_of_measure, p.is_weighted, p.name);
-      return sum + (wt ?? p.min_price * p.amount);
-    }, 0);
-  }, [products]);
 
   return (
     <>
