@@ -91,6 +91,7 @@ const MobileBasketSheet: React.FC<MobileBasketSheetProps> = ({
             onUpdate={onUpdate}
             onRemove={onRemove}
             onClear={onClear}
+            storeTotal={selectedChain?.total ?? null}
           />
         </div>
       </div>

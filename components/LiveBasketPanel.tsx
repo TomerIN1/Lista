@@ -49,6 +49,7 @@ const LiveBasketPanel: React.FC<LiveBasketPanelProps> = ({
         onUpdate={onUpdate}
         onRemove={onRemove}
         onClear={onClear}
+        storeTotal={selectedChain?.total ?? null}
       />
     </aside>,
     document.body

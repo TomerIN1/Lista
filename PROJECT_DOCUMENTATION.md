@@ -4245,6 +4245,7 @@ Old desktop sidebar (~115 lines) and old stores strip removed. New components wi
 - **Mobile bar / sheet showing different chains**: Bar showed cheapest, sheet showed selected. Renamed bar's `cheapest` prop to `selectedChain` so they always agree (commit `87b4aa4`).
 - **Shufersal showing as cheapest with partial matches**: Hook re-sorted purely by cost. Added `matchedItems desc` as primary sort key (commit `87b4aa4`).
 - **Promo prices invisible in basket**: Items had `has_promotion` but the basket showed the regular price. Added "מבצע"/"PROMO" pill + strikethrough regular + accent promo line, and updated `estimatedTotal` to use promo prices (commit `9ce3767`).
+- **Basket footer total diverged from KPI (e.g. ₪880 vs ₪504)**: Footer summed `min_price * amount` (the cheapest-across-all-stores DB field), while KPI used the selected chain's actual subtotal from the live comparison. Added `storeTotal` prop to `BasketList`, wired from `selectedChain?.total` in `LiveBasketPanel` + `MobileBasketSheet`. Footer now equals KPI minus delivery; falls back to the old estimate only when no chain is selected.
 - **DRY violation in savings logic**: Code reviewer flagged duplication. Extracted `calculateSavings` to `utils/` (commit `f025191`).
 - **Panel/logo misalignment**: Panel content sat above Lista logo. Added `pt-6` (commit `5666495`).
 - **Em-dash for zero-match chains**: Otherwise unmatched chains showed misleading "₪0" (commit `68273b4`).

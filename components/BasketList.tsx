@@ -10,9 +10,13 @@ interface BasketListProps {
   onUpdate: (barcode: string, updates: { amount?: number; unit?: Unit }) => void;
   onRemove: (barcode: string) => void;
   onClear: () => void;
+  /** Selected chain subtotal (no delivery). Aligns the footer total with KPIHero,
+   *  which shows the same chain's total WITH delivery. Null → fall back to the
+   *  cross-store min-price estimate. */
+  storeTotal?: number | null;
 }
 
-const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, onClear }) => {
+const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, onClear, storeTotal }) => {
   const { t, tUnit, isRTL } = useLanguage();
   const hasContent = products.length > 0;
 
@@ -23,6 +27,8 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
     const wt = computeWeightedTotal(p.min_price, p.amount, p.unit, p.unit_of_measure, p.is_weighted, p.name);
     return sum + (wt ?? p.min_price * p.amount);
   }, 0);
+
+  const footerTotal = storeTotal != null ? storeTotal : estimatedTotal;
 
   const handleDecrement = (p: ShoppingProduct) => {
     if (p.amount <= 1) onRemove(p.barcode);
@@ -156,7 +162,7 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
             {t('productBrowse.basketTotal')}
           </span>
           <span className="text-[14px]" style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink)' }}>
-            ₪{estimatedTotal.toFixed(2)}
+            ₪{footerTotal.toFixed(2)}
           </span>
         </div>
       )}
