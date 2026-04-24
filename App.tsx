@@ -199,17 +199,19 @@ const App: React.FC = () => {
             setStoreRecommendation(null);
             setStatus('idle');
 
-            // Restore city, location, and mode from document
-            if (current.shoppingCity) setShoppingCity(current.shoppingCity);
-            if (current.shoppingLocation) setShoppingLocation(current.shoppingLocation);
-            if (current.shoppingMode) setSelectedShoppingMode(current.shoppingMode);
+            // Profile is the source of truth for city/location/mode — we do
+            // NOT restore them from the list document. Lists still carry a
+            // created-at snapshot (see createShoppingList) but it's read-only
+            // history; prices always compare against the user's current profile.
+            // Sharing lists only makes sense in physical shopping mode where
+            // delivery address doesn't matter anyway.
 
-            // If city and mode exist, go to build_list; otherwise go to setup
-            if (current.shoppingCity && current.shoppingMode) {
+            // Go straight to build_list when the profile already has city+mode;
+            // otherwise land on setup so the user completes their profile.
+            if (shoppingCity && selectedShoppingMode) {
               setShoppingStep('build_list');
             } else {
               setShoppingStep('setup');
-              setSelectedShoppingMode(current.shoppingMode || null);
             }
           }
         } else {

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { X, User as UserIcon, MapPin, ShoppingCart, Monitor, Globe, Check, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, User as UserIcon, MapPin, ShoppingCart, Monitor, Globe, Check, Loader2, Search } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { UserProfile, UserLocation, ShoppingMode } from '../types';
 import { saveUserProfile } from '../services/firestoreService';
+import { useAddressAutocomplete } from '../hooks/useAddressAutocomplete';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -20,21 +21,91 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   const { language, setLanguage, isRTL } = useLanguage();
   const [draftCity, setDraftCity] = useState(city);
   const [draftStreet, setDraftStreet] = useState(location?.streetName || '');
-  const [draftAddress, setDraftAddress] = useState(location?.address || '');
+  const [draftCityCode, setDraftCityCode] = useState<number | undefined>(location?.cityCode);
+  const [draftHouse, setDraftHouse] = useState(() => {
+    // "address" has historically held the full display text (street + city) after
+    // autocomplete, OR just the house/entrance if the user typed it in the older
+    // free-text profile. Treat it as house/entrance only when it clearly isn't a
+    // full address (no comma, short, not equal to city or street).
+    const a = location?.address?.trim() || '';
+    if (!a) return '';
+    if (a.includes(',')) return '';
+    if (a === location?.city || a === location?.streetName) return '';
+    return a;
+  });
   const [draftMode, setDraftMode] = useState<ShoppingMode>(shoppingMode || 'online');
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const {
+    query,
+    setQuery,
+    suggestions,
+    isSearching,
+    selectedAddress,
+    selectAddress,
+    clearSelection,
+  } = useAddressAutocomplete();
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync the drafts from the selected autocomplete address.
   useEffect(() => {
-    if (isOpen) {
-      setDraftCity(city);
-      setDraftStreet(location?.streetName || '');
-      setDraftAddress(location?.address || '');
-      setDraftMode(shoppingMode || 'online');
-      setJustSaved(false);
+    if (!selectedAddress) return;
+    setDraftCity(selectedAddress.city);
+    setDraftStreet(selectedAddress.streetName || '');
+    setDraftCityCode(selectedAddress.cityCode);
+  }, [selectedAddress]);
+
+  // When the modal opens, pre-seed the autocomplete from the saved location so
+  // the user sees their existing address instead of an empty search.
+  useEffect(() => {
+    if (!isOpen) return;
+    setDraftCity(city);
+    setDraftStreet(location?.streetName || '');
+    setDraftCityCode(location?.cityCode);
+    setDraftMode(shoppingMode || 'online');
+    setJustSaved(false);
+    if (city || location?.streetName) {
+      selectAddress({
+        streetName: location?.streetName || '',
+        cityName: city,
+        cityCode: location?.cityCode ?? 0,
+        streetCode: 0,
+        displayText: location?.address || (location?.streetName ? `${location.streetName}, ${city}` : city),
+      });
+    } else {
+      clearSelection();
     }
   }, [isOpen, city, location, shoppingMode]);
+
+  // Open dropdown as suggestions arrive, close on outside click.
+  useEffect(() => {
+    if (suggestions.length > 0 && !selectedAddress) setIsDropdownOpen(true);
+  }, [suggestions, selectedAddress]);
+
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current && !inputRef.current.contains(e.target as Node)
+      ) setIsDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  const handleChangeAddress = () => {
+    clearSelection();
+    setQuery('');
+    setDraftCity('');
+    setDraftStreet('');
+    setDraftCityCode(undefined);
+    setTimeout(() => inputRef.current?.focus(), 40);
+  };
 
   if (!isOpen) return null;
 
@@ -45,8 +116,14 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
       // Firestore rejects undefined — only include defined fields
       const newLocation: UserLocation = { city: draftCity };
       if (draftStreet.trim()) newLocation.streetName = draftStreet.trim();
-      if (draftAddress.trim()) newLocation.address = draftAddress.trim();
-      if (location?.cityCode !== undefined) newLocation.cityCode = location.cityCode;
+      const displayText = draftStreet.trim()
+        ? `${draftStreet.trim()}, ${draftCity}`
+        : draftCity;
+      const finalAddress = draftHouse.trim()
+        ? `${displayText} ${draftHouse.trim()}`
+        : displayText;
+      if (finalAddress) newLocation.address = finalAddress;
+      if (draftCityCode !== undefined) newLocation.cityCode = draftCityCode;
       await saveUserProfile(user.uid, {
         displayName: user.displayName,
         email: user.email,
@@ -124,23 +201,97 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
         <div className="px-6 pt-6">
           <SectionLabel>{isRTL ? 'כתובת למשלוח' : 'Delivery address'}</SectionLabel>
           <div className="mt-2 space-y-2">
-            <Field
-              icon={<MapPin className="w-4 h-4" />}
-              placeholder={isRTL ? 'עיר' : 'City'}
-              value={draftCity}
-              onChange={setDraftCity}
-              isRTL={isRTL}
-            />
-            <Field
-              placeholder={isRTL ? 'רחוב' : 'Street'}
-              value={draftStreet}
-              onChange={setDraftStreet}
-              isRTL={isRTL}
-            />
+            {selectedAddress && !isDropdownOpen ? (
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 rounded-[12px] border"
+                style={{ background: 'var(--paper-bg)', borderColor: 'var(--line)' }}
+              >
+                <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--ink-soft)' }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm truncate" style={{ color: 'var(--ink)' }}>
+                    {selectedAddress.address || selectedAddress.city}
+                  </div>
+                  {selectedAddress.city && selectedAddress.streetName && (
+                    <div className="text-[11px] truncate" style={{ color: 'var(--ink-soft)' }}>{selectedAddress.city}</div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleChangeAddress}
+                  className="text-[11px] font-medium flex items-center gap-1 flex-shrink-0"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  <X className="w-3.5 h-3.5" />
+                  {isRTL ? 'שנה' : 'Change'}
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <div
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-[12px] border"
+                  style={{ background: 'var(--paper-bg)', borderColor: 'var(--line)' }}
+                >
+                  {isSearching ? (
+                    <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" style={{ color: 'var(--ink-soft)' }} />
+                  ) : (
+                    <Search className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--ink-soft)' }} />
+                  )}
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onFocus={() => { if (suggestions.length > 0) setIsDropdownOpen(true); }}
+                    placeholder={isRTL ? 'חפש רחוב ועיר' : 'Search street and city'}
+                    className="flex-1 bg-transparent text-sm focus:outline-none"
+                    style={{ color: 'var(--ink)', textAlign: isRTL ? 'right' : 'left' }}
+                    dir={isRTL ? 'rtl' : 'ltr'}
+                  />
+                </div>
+                {isDropdownOpen && (
+                  <div
+                    ref={dropdownRef}
+                    className="absolute z-50 w-full mt-1 rounded-[12px] shadow-lg max-h-56 overflow-y-auto"
+                    style={{ background: 'var(--paper-surface)', border: '1px solid var(--line)' }}
+                  >
+                    {isSearching ? (
+                      <div className="px-4 py-3 text-xs text-center flex items-center justify-center gap-2" style={{ color: 'var(--ink-soft)' }}>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        {isRTL ? 'מחפש…' : 'Searching…'}
+                      </div>
+                    ) : suggestions.length > 0 ? (
+                      suggestions.map((s, i) => (
+                        <button
+                          key={`${s.streetCode}-${s.cityCode}-${i}`}
+                          type="button"
+                          onClick={() => { selectAddress(s); setIsDropdownOpen(false); }}
+                          className="w-full text-start px-4 py-2.5 text-sm"
+                          style={{ color: 'var(--ink)' }}
+                        >
+                          {s.streetName ? (
+                            <>
+                              <span className="font-medium">{s.streetName}</span>
+                              <span className="mx-1" style={{ color: 'var(--ink-soft)' }}>,</span>
+                              <span style={{ color: 'var(--ink-muted)' }}>{s.cityName}</span>
+                            </>
+                          ) : (
+                            <span className="font-medium">{s.cityName}</span>
+                          )}
+                        </button>
+                      ))
+                    ) : query.trim().length >= 2 ? (
+                      <div className="px-4 py-3 text-xs text-center" style={{ color: 'var(--ink-soft)' }}>
+                        {isRTL ? 'אין תוצאות' : 'No results'}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )}
             <Field
               placeholder={isRTL ? 'בית / דירה / כניסה' : 'House / apt / entrance'}
-              value={draftAddress}
-              onChange={setDraftAddress}
+              value={draftHouse}
+              onChange={setDraftHouse}
               isRTL={isRTL}
             />
           </div>
