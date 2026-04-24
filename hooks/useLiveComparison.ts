@@ -26,6 +26,10 @@ export interface LiveComparisonResult {
   cheapest: ChainTotal | null;
   /** Difference between cheapest and the chain at index 1. Null if < 2 chains. */
   savingsVsNext: number | null;
+  /** Unique items in the cart at comparison time. Consumers compute per-chain
+   *  "missing N" as totalItems - chain.matchedItems — comparing against a
+   *  leader chain is wrong when every chain is short by the same item. */
+  totalItems: number;
 }
 
 interface UseLiveComparisonInput {
@@ -116,7 +120,7 @@ export function useLiveComparison(input: UseLiveComparisonInput): {
           eligible_store_ref_ids: eligibleStoreIds,
           delivery_fees: deliveryFees,
         });
-        setData(toLiveComparison(result, deliverableChainNames));
+        setData(toLiveComparison(result, deliverableChainNames, products.length));
         setError(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Comparison failed');
@@ -140,6 +144,7 @@ export function useLiveComparison(input: UseLiveComparisonInput): {
 function toLiveComparison(
   r: ListPriceComparison,
   deliverableChainNames: Set<string> | null,
+  totalItems: number,
 ): LiveComparisonResult {
   const allChains: ChainTotal[] = r.stores.map((s: StorePriceSummary) => ({
     chain: chainCodeFromDisplay(s.supermarketName), // canonical code, used by chainBranding helpers
@@ -147,7 +152,13 @@ function toLiveComparison(
     total: s.totalCost,
     totalWithDelivery: s.totalWithDelivery,
     deliveryFee: s.deliveryFee,
-    matchedItems: s.matchedItems,
+    // Count only items that actually carry a usable price at this branch.
+    // The API's `matchedItems` field counts items flagged `available: true`
+    // even when their `effective_unit_price` is null (happens for some weighted
+    // deli items whose per-branch weight price wasn't computable). The basket
+    // breakdown + PricePilot use the priced-item set as the source of truth, so
+    // we align the strip and KPI ranking to the same count.
+    matchedItems: s.itemPrices.length,
   }));
 
   // Drop chains that don't deliver to the user's city when in online mode.
@@ -172,5 +183,5 @@ function toLiveComparison(
     ? (next.totalWithDelivery ?? next.total) - (cheapest.totalWithDelivery ?? cheapest.total)
     : null;
 
-  return { chains, cheapest, savingsVsNext };
+  return { chains, cheapest, savingsVsNext, totalItems };
 }

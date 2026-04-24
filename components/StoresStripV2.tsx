@@ -10,10 +10,13 @@ interface StoresStripV2Props {
   selectedChain: string | null;   // canonical chain code
   onSelectChain: (chain: string) => void;
   loading?: boolean;
+  /** Unique items in the cart — used to compute "missing N" per chain.
+   *  Omitted → falls back to the top chain's matchedItems (legacy behavior). */
+  totalItems?: number;
 }
 
 const StoresStripV2: React.FC<StoresStripV2Props> = ({
-  chains, selectedChain, onSelectChain, loading,
+  chains, selectedChain, onSelectChain, loading, totalItems,
 }) => {
   const { t } = useLanguage();
 
@@ -47,12 +50,14 @@ const StoresStripV2: React.FC<StoresStripV2Props> = ({
         </>
       )}
       {(() => {
-        const maxMatched = chains[0]?.matchedItems ?? 0;
+        // Compare against cart size, not the top chain. When every chain is
+        // short by the same item, a leader-relative count would hide the gap.
+        const denom = totalItems ?? chains[0]?.matchedItems ?? 0;
         return chains.map(c => {
         const isBest = c.chain === cheapest?.chain;
         const isSelected = c.chain === selectedChain;
         const totalToShow = c.totalWithDelivery ?? c.total;
-        const missing = maxMatched - c.matchedItems;
+        const missing = Math.max(0, denom - c.matchedItems);
         return (
           <button
             key={c.chain}

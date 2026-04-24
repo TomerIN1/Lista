@@ -166,6 +166,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         selectedChain={selectedChainCode}
         onSelectChain={setSelectedChainCode}
         loading={liveCmp.loading}
+        totalItems={liveCmp.data?.totalItems ?? products.length}
       />
 
       {/* ── Smart List / Catalog toggle ─────────────────── */}
