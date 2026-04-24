@@ -3,7 +3,7 @@ import React from 'react';
 import { ShoppingCart, Trash2, Minus, Plus } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ShoppingProduct, Unit } from '../types';
-import { computeWeightedTotal } from '../utils/priceFormat';
+import { computeWeightedTotal, getQuantityStep, roundQuantity } from '../utils/priceFormat';
 import { CATEGORY_ORDER, getCategoryIconSrc } from './ProductCatalogArea';
 
 const UNCATEGORIZED_HE = 'אחר ולא מסווג';
@@ -55,8 +55,17 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
   const footerTotal = storeTotal != null ? storeTotal : estimatedTotal;
 
   const handleDecrement = (p: ShoppingProduct) => {
-    if (p.amount <= 1) onRemove(p.barcode);
-    else onUpdate(p.barcode, { amount: p.amount - 1 });
+    const step = getQuantityStep(p);
+    const next = roundQuantity(p.amount - step, step);
+    // Remove when the next value would fall below one full step (with epsilon
+    // to survive float drift). Matches ProductCard's "minQty === step" floor.
+    if (next < step - 1e-6) onRemove(p.barcode);
+    else onUpdate(p.barcode, { amount: next });
+  };
+
+  const handleIncrement = (p: ShoppingProduct) => {
+    const step = getQuantityStep(p);
+    onUpdate(p.barcode, { amount: roundQuantity(p.amount + step, step) });
   };
 
   return (
@@ -174,10 +183,10 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
                     >
                       <Minus className="w-2.5 h-2.5" />
                     </button>
-                    <span className="min-w-[14px] text-center">{p.amount}</span>
+                    <span className="min-w-[22px] text-center">{p.amount}</span>
                     <button
                       type="button"
-                      onClick={() => onUpdate(p.barcode, { amount: p.amount + 1 })}
+                      onClick={() => handleIncrement(p)}
                       aria-label="+"
                       className="w-[18px] h-[18px] rounded flex items-center justify-center"
                       style={{ background: 'var(--paper-surface-alt)' }}

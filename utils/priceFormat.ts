@@ -102,6 +102,38 @@ export function isWeightedProduct(unitOfMeasure?: string | null, isWeighted?: bo
 }
 
 /**
+ * Increment/decrement step for adding a product to the cart and editing its
+ * amount in the basket. Also the minimum allowed amount — decrementing below
+ * this removes the product.
+ *
+ * Packaged units: 1. Weighted fresh produce (tomato, cucumber): 0.5 kg.
+ * Weighted deli/dairy (cheese, fish counter): 0.1 kg — finer because these are
+ * typically bought in small amounts.
+ *
+ * Must stay in sync with ProductCard / ProductDetailModal — they currently
+ * inline the same logic; prefer importing this helper in new code.
+ */
+export function getQuantityStep(product: {
+  category?: string | null;
+  unit_of_measure?: string | null;
+  is_weighted?: boolean | null;
+}): number {
+  const weighted = isWeightedProduct(product.unit_of_measure, product.is_weighted);
+  if (!weighted) return 1;
+  const fine = product.category === 'מוצרי חלב וביצים' || product.category === 'בשר עוף דגים ומעדניה';
+  return fine ? 0.1 : 0.5;
+}
+
+/**
+ * Round a quantity to the precision of its step (0.1 → 1 decimal, 0.5 →
+ * 1 decimal, 1 → integer). Guards against float drift like 0.1 + 0.1 = 0.2000...4.
+ */
+export function roundQuantity(amount: number, step: number): number {
+  const decimals = step < 1 ? 1 : 0;
+  return Number(amount.toFixed(decimals));
+}
+
+/**
  * Returns the display label for the unit badge on product cards.
  * e.g. "ק״ג", "100ג׳", "ליטר"
  */
