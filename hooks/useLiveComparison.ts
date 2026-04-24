@@ -72,6 +72,21 @@ export function useLiveComparison(input: UseLiveComparisonInput): {
     return Object.keys(map).length > 0 ? map : undefined;
   }, [deliveryCheck]);
 
+  // Chains that deliver (or do click-and-collect) to the user's city. Used to
+  // filter the comparison so non-deliverable chains (e.g. מחסני השוק when user
+  // is in קריית אונו) never appear in the strip, KPI, or mobile bar — even if
+  // the backend returns them. Null means "no filter" (physical mode or no
+  // delivery check yet).
+  const deliverableChainNames = useMemo<Set<string> | null>(() => {
+    if (!deliveryCheck?.chains) return null;
+    if (storeType !== 'online') return null;
+    const set = new Set<string>();
+    for (const c of deliveryCheck.chains) {
+      if (c.delivers || c.click_and_collect) set.add(c.chain);
+    }
+    return set;
+  }, [deliveryCheck, storeType]);
+
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
 
@@ -93,7 +108,7 @@ export function useLiveComparison(input: UseLiveComparisonInput): {
           eligible_store_ref_ids: eligibleStoreIds,
           delivery_fees: deliveryFees,
         });
-        setData(toLiveComparison(result));
+        setData(toLiveComparison(result, deliverableChainNames));
         setError(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Comparison failed');
@@ -109,13 +124,16 @@ export function useLiveComparison(input: UseLiveComparisonInput): {
   // canonical representation, and listing products would refetch on every
   // re-render when the array identity changes but contents don't.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartSignature, city, cityCode, storeType, eligibleStoreIds, deliveryFees]);
+  }, [cartSignature, city, cityCode, storeType, eligibleStoreIds, deliveryFees, deliverableChainNames]);
 
   return { data, loading, error };
 }
 
-function toLiveComparison(r: ListPriceComparison): LiveComparisonResult {
-  const chains: ChainTotal[] = r.stores.map((s: StorePriceSummary) => ({
+function toLiveComparison(
+  r: ListPriceComparison,
+  deliverableChainNames: Set<string> | null,
+): LiveComparisonResult {
+  const allChains: ChainTotal[] = r.stores.map((s: StorePriceSummary) => ({
     chain: chainCodeFromDisplay(s.supermarketName), // canonical code, used by chainBranding helpers
     displayName: s.supermarketName,                  // human-readable, used in UI text
     total: s.totalCost,
@@ -123,6 +141,13 @@ function toLiveComparison(r: ListPriceComparison): LiveComparisonResult {
     deliveryFee: s.deliveryFee,
     matchedItems: s.matchedItems,
   }));
+
+  // Drop chains that don't deliver to the user's city when in online mode.
+  // deliveryCheck.chains[].chain is a display name (e.g. "מחסני השוק"), which
+  // matches StorePriceSummary.supermarketName → ChainTotal.displayName.
+  const chains = deliverableChainNames
+    ? allChains.filter(c => deliverableChainNames.has(c.displayName))
+    : allChains;
 
   // Sort: most matched items first (so a chain with partial matches doesn't
   // look "cheapest" just because it's missing items), then by cost asc.
