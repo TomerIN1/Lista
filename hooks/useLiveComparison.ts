@@ -77,12 +77,20 @@ export function useLiveComparison(input: UseLiveComparisonInput): {
   // is in קריית אונו) never appear in the strip, KPI, or mobile bar — even if
   // the backend returns them. Null means "no filter" (physical mode or no
   // delivery check yet).
+  //
+  // Names are stored BOTH raw (e.g. "Market Warehouses") and translated through
+  // SUPERMARKET_NAME_MAP ("מחסני השוק"). The comparison API returns Hebrew
+  // display names, the delivery-check API tends to return English — matching
+  // on either form keeps us robust to which side changes.
   const deliverableChainNames = useMemo<Set<string> | null>(() => {
     if (!deliveryCheck?.chains) return null;
     if (storeType !== 'online') return null;
     const set = new Set<string>();
     for (const c of deliveryCheck.chains) {
-      if (c.delivers || c.click_and_collect) set.add(c.chain);
+      if (!(c.delivers || c.click_and_collect)) continue;
+      set.add(c.chain);
+      const translated = SUPERMARKET_NAME_MAP[c.chain];
+      if (translated) set.add(translated);
     }
     return set;
   }, [deliveryCheck, storeType]);
