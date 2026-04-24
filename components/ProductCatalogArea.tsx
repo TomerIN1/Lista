@@ -81,6 +81,8 @@ export function sortSubItems<T extends { name: string }>(items: T[], _parentName
   return items;
 }
 
+export { CATEGORY_ORDER };
+
 export function sortCategories(cats: CategoryNode[]): CategoryNode[] {
   const orderMap = new Map(CATEGORY_ORDER.map((name, i) => [name.replace(/\s+/g, ' '), i]));
   return [...cats].sort((a, b) => {
