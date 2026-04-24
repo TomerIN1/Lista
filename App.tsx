@@ -690,6 +690,19 @@ const App: React.FC = () => {
     }
   }, [selectedShoppingMode]);
 
+  // Re-fetch the delivery check whenever the user's city or street changes.
+  // Without this, saving a new city in ProfileModal left deliveryCheck stale
+  // and the chain strip kept filtering against the old city's deliverable set.
+  // checkDelivery has its own 10-min LRU, so overlap with setup/hydration
+  // callsites is a cache hit, not a duplicate network call.
+  useEffect(() => {
+    if (appMode !== 'shopping') return;
+    if (!shoppingCity) return;
+    checkDelivery(shoppingCity, shoppingLocation?.streetName)
+      .then((result) => setDeliveryCheck(result))
+      .catch((err) => console.error('Delivery check failed:', err));
+  }, [appMode, shoppingCity, shoppingLocation?.streetName]);
+
   // Initialize shopping city, location & mode from localStorage; auto-skip setup if saved
   useEffect(() => {
     const savedCity = localStorage.getItem('lista_shopping_city');
