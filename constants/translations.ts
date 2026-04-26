@@ -256,7 +256,11 @@ export const TRANSLATIONS = {
       buyEntryReceiptHeading: "Order summary",
       buyEntryUnavailable: "Unavailable",
       buyEntrySubtotal: "Subtotal",
-      buyEntryGrandTotal: "Total"
+      buyEntryGrandTotal: "Total",
+      agentCloseTitle: "Close this order?",
+      agentCloseBody: "The cart we built on the store's site won't be auto-emptied. You can clear it on the store's site, or check out there anyway.",
+      agentCloseConfirm: "Close order",
+      agentCloseCancel: "Back to chat"
     },
     smartList: {
       pasteList: "AI Assistant",
@@ -551,7 +555,11 @@ export const TRANSLATIONS = {
       buyEntryReceiptHeading: "סיכום הזמנה",
       buyEntryUnavailable: "לא זמין",
       buyEntrySubtotal: "סה״כ קטגוריה",
-      buyEntryGrandTotal: "סה״כ"
+      buyEntryGrandTotal: "סה״כ",
+      agentCloseTitle: "לסגור את ההזמנה?",
+      agentCloseBody: "העגלה שיצרנו באתר החנות לא תתרוקן באופן אוטומטי. ניתן לרוקן אותה באתר החנות, או להמשיך לתשלום שם בכל זאת.",
+      agentCloseConfirm: "סגרו הזמנה",
+      agentCloseCancel: "חזרה לצ׳אט"
     },
     smartList: {
       pasteList: "עוזר AI",

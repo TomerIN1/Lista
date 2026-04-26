@@ -16,11 +16,13 @@ interface LiveBasketPanelProps {
   onRemove: (barcode: string) => void;
   onClear: () => void;
   onSendToPricePilot: () => void;
+  /** Disable list edits while an agent run is in progress. */
+  frozen?: boolean;
 }
 
 const LiveBasketPanel: React.FC<LiveBasketPanelProps> = ({
   products, comparison, selectedChain,
-  onUpdate, onRemove, onClear, onSendToPricePilot,
+  onUpdate, onRemove, onClear, onSendToPricePilot, frozen,
 }) => {
   const savings = calculateSavings(comparison, selectedChain);
 
@@ -50,6 +52,7 @@ const LiveBasketPanel: React.FC<LiveBasketPanelProps> = ({
         onRemove={onRemove}
         onClear={onClear}
         storeTotal={selectedChain?.total ?? null}
+        frozen={frozen}
       />
     </aside>,
     document.body

@@ -38,6 +38,9 @@ interface ShoppingInputAreaProps {
   /** Called with the chain's display name (e.g. "רמי לוי") when the user
    *  picks a chain in the Buy phase entry screen. Routes to the agent. */
   onStartOnlineAgent: (storeDisplayName: string) => void;
+  /** True while an agent run is in progress. List editing is disabled and a
+   *  banner is shown to direct the user to close the order to make changes. */
+  agentRunning?: boolean;
 }
 
 const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
@@ -60,6 +63,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   showSmartList: externalShowSmartList,
   onShowSmartListChange,
   onStartOnlineAgent,
+  agentRunning,
 }) => {
   const { t, isRTL, tUnit } = useLanguage();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -224,6 +228,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         onRemove={handleRemoveProduct}
         onClear={handleClear}
         onSendToPricePilot={handleSendToPricePilot}
+        frozen={agentRunning}
       />
 
       {/* mobile bar + sheet */}
@@ -242,6 +247,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         onRemove={handleRemoveProduct}
         onClear={handleClear}
         onSendToPricePilot={() => { setMobileSheetOpen(false); handleSendToPricePilot(); }}
+        frozen={agentRunning}
       />
 
       <BuyPhaseEntry

@@ -38,9 +38,12 @@ interface BasketListProps {
    *  which shows the same chain's total WITH delivery. Null → fall back to the
    *  cross-store min-price estimate. */
   storeTotal?: number | null;
+  /** When true, the list is read-only (e.g. an agent run is in progress).
+   *  +/-/clear buttons are disabled and a banner is shown above the items. */
+  frozen?: boolean;
 }
 
-const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, onClear, storeTotal }) => {
+const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, onClear, storeTotal, frozen }) => {
   const { t, tUnit, isRTL } = useLanguage();
   const hasContent = products.length > 0;
 
@@ -90,7 +93,8 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
             onClick={onClear}
             aria-label={t('productBrowse.clearAll')}
             className="p-1"
-            style={{ color: 'var(--ink-soft)' }}
+            disabled={frozen}
+            style={{ color: 'var(--ink-soft)', opacity: frozen ? 0.4 : 1, cursor: frozen ? 'not-allowed' : 'pointer' }}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -173,13 +177,14 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
                       {p.amount} {tUnit(p.unit)}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--ink)' }}>
+                  <div className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--ink)', opacity: frozen ? 0.4 : 1 }}>
                     <button
                       type="button"
                       onClick={() => handleDecrement(p)}
                       aria-label="−"
+                      disabled={frozen}
                       className="w-[18px] h-[18px] rounded flex items-center justify-center"
-                      style={{ background: 'var(--paper-surface-alt)' }}
+                      style={{ background: 'var(--paper-surface-alt)', cursor: frozen ? 'not-allowed' : 'pointer' }}
                     >
                       <Minus className="w-2.5 h-2.5" />
                     </button>
@@ -188,8 +193,9 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
                       type="button"
                       onClick={() => handleIncrement(p)}
                       aria-label="+"
+                      disabled={frozen}
                       className="w-[18px] h-[18px] rounded flex items-center justify-center"
-                      style={{ background: 'var(--paper-surface-alt)' }}
+                      style={{ background: 'var(--paper-surface-alt)', cursor: frozen ? 'not-allowed' : 'pointer' }}
                     >
                       <Plus className="w-2.5 h-2.5" />
                     </button>

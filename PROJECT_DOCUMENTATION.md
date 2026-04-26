@@ -4450,7 +4450,37 @@ User asked to "finish the cart items" — make the expanded card section feel li
 
 ---
 
-**Last Updated**: April 26, 2026
+## Session 2026-04-27 — Increment 3b: agent-run lifecycle UX
+
+Implemented Increment 3b per parent spec §10 #3 (the half left over after 3a shipped). Pure UI; `PriceAgentChat`, `agentService`, and the Python agent are untouched per agents-last sequencing. Two pieces:
+
+### 1. Honest cancel-confirm
+When the user closes `PriceAgentChat` mid-flow, an interception dialog now surfaces in `App.tsx` (no edit to `PriceAgentChat.tsx` itself — `onClose` is wrapped at the boundary):
+- Title "לסגור את ההזמנה?" / "Close this order?"
+- Body: "העגלה שיצרנו באתר החנות לא תתרוקן באופן אוטומטי. ניתן לרוקן אותה באתר החנות, או להמשיך לתשלום שם בכל זאת." (matching spec §7.4 "honest copy" requirement)
+- Two buttons: "חזרה לצ׳אט" (cancel — returns to the chat) and "סגרו הזמנה" (confirm — runs the original close logic, clearing `isPriceAgentOpen` and `onlineStoreName`)
+- RTL-aware modal with backdrop, centered on screen, `z-[60]` to sit above the chat panel.
+
+### 2. List-edit defensive lock during agent runs (no visible UI)
+A `frozen?: boolean` prop was threaded:
+`App.tsx (isPriceAgentOpen)` → `ShoppingInputArea (agentRunning)` → `LiveBasketPanel + MobileBasketSheet (frozen)` → `BasketList (frozen)`. When true, `BasketList`'s +/-/clear buttons get `disabled` and `cursor: not-allowed`.
+
+Initial implementation also rendered an amber "סגרו את ההזמנה הפתוחה כדי לערוך את הרשימה" banner above the items, but in the existing layout `PriceAgentChat` covers the same screen edge as `LiveBasketPanel` (both `inset-inline-end` in RTL), so the basket isn't visible while the chat is open and the banner was never shown to the user. The banner JSX and its translation key were dropped after in-product validation; the disabled-buttons logic stays as cheap defensive code in case the layout ever changes to show both side-by-side.
+
+### Files changed
+- `App.tsx` — added `closeConfirmOpen` state + `requestCloseAgent`/`confirmCloseAgent`/`cancelCloseAgent` helpers; wrapped the `PriceAgentChat` `onClose` prop to call `requestCloseAgent`; rendered the confirm dialog at the end of the App's tree; passed `agentRunning={isPriceAgentOpen}` to `ShoppingInputArea`.
+- `components/ShoppingInputArea.tsx`, `components/LiveBasketPanel.tsx`, `components/MobileBasketSheet.tsx`, `components/BasketList.tsx` — added `frozen` / `agentRunning` prop pass-through; `BasketList` disables +/-/clear when frozen.
+- `constants/translations.ts` — 4 new keys: `agentCloseTitle`, `agentCloseBody`, `agentCloseConfirm`, `agentCloseCancel`.
+
+### Iterated in product
+- User asked where the freeze banner was visible. Investigation showed the chat panel covers the basket sidebar entirely (both `inset-inline-end`/`left-0` in RTL); banner was effectively dead code. Banner removed, defensive disabled-buttons kept.
+
+### Not changed
+- `PriceAgentChat.tsx`, `agentService.ts`, `pricepilot_agent_v4/` — untouched. Cancel-confirm lives at the App-level wrapper around `PriceAgentChat`, so the chat shell stays unmodified.
+
+---
+
+**Last Updated**: April 27, 2026
 **Version**: 6.1.1
 **Status**: Production Ready
 

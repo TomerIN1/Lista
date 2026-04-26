@@ -844,6 +844,17 @@ const App: React.FC = () => {
   };
 
   const [onlineStoreName, setOnlineStoreName] = useState<string | null>(null);
+  // Cancel-confirm: when the user closes PriceAgentChat mid-flow, intercept the
+  // close and show an honest reminder that the cart at the chain's site is not
+  // auto-emptied. Pure UI, no agent-side coupling.
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const requestCloseAgent = () => setCloseConfirmOpen(true);
+  const confirmCloseAgent = () => {
+    setCloseConfirmOpen(false);
+    setIsPriceAgentOpen(false);
+    setOnlineStoreName(null);
+  };
+  const cancelCloseAgent = () => setCloseConfirmOpen(false);
 
   const handleShoppingOnline = (storeName?: string) => {
     if (shoppingProducts.length === 0) return;
@@ -1114,6 +1125,7 @@ const App: React.FC = () => {
                         onProductsChange={handleShoppingProductsChange}
                         onCompare={handleShoppingCompare}
                         onStartOnlineAgent={handleShoppingOnline}
+                        agentRunning={isPriceAgentOpen}
                         isLoading={isShoppingComparing}
                         title={activeList?.title}
                         onTitleChange={user && activeListId ? handleTitleUpdate : undefined}
@@ -1222,13 +1234,69 @@ const App: React.FC = () => {
       {/* Price Agent Chat Panel */}
       <PriceAgentChat
         isOpen={isPriceAgentOpen}
-        onClose={() => { setIsPriceAgentOpen(false); setOnlineStoreName(null); }}
+        onClose={requestCloseAgent}
         userId={user?.uid || 'guest'}
         listId={activeListId || 'guest-list'}
         groceryList={groupsToShoppingItems(localGroups)}
         storeName={onlineStoreName || undefined}
         userCity={shoppingCity || undefined}
       />
+
+      {/* Honest cancel-confirm — shown when the user closes the agent chat.
+          Reminds them the cart on the store's site isn't auto-emptied. */}
+      {closeConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center px-4"
+          style={{ direction: language === 'he' ? 'rtl' : 'ltr' }}
+        >
+          <div
+            className="absolute inset-0"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+            onClick={cancelCloseAgent}
+            aria-hidden
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-[420px] rounded-2xl p-5"
+            style={{
+              background: 'var(--paper-surface)',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+            }}
+          >
+            <div
+              className="text-[18px] mb-2"
+              style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink)' }}
+            >
+              {t('productBrowse.agentCloseTitle')}
+            </div>
+            <div
+              className="text-sm mb-4"
+              style={{ color: 'var(--ink-muted)', lineHeight: 1.5 }}
+            >
+              {t('productBrowse.agentCloseBody')}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={cancelCloseAgent}
+                className="px-4 py-2 rounded-lg text-sm font-bold"
+                style={{ background: 'var(--paper-surface-alt)', color: 'var(--ink)' }}
+              >
+                {t('productBrowse.agentCloseCancel')}
+              </button>
+              <button
+                type="button"
+                onClick={confirmCloseAgent}
+                className="px-4 py-2 rounded-lg text-sm font-bold text-white"
+                style={{ background: 'var(--accent)' }}
+              >
+                {t('productBrowse.agentCloseConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

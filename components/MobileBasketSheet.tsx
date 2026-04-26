@@ -18,11 +18,13 @@ interface MobileBasketSheetProps {
   onRemove: (barcode: string) => void;
   onClear: () => void;
   onSendToPricePilot: () => void;
+  /** Disable list edits while an agent run is in progress. */
+  frozen?: boolean;
 }
 
 const MobileBasketSheet: React.FC<MobileBasketSheetProps> = ({
   open, onClose, products, comparison, selectedChain,
-  onUpdate, onRemove, onClear, onSendToPricePilot,
+  onUpdate, onRemove, onClear, onSendToPricePilot, frozen,
 }) => {
   // Lock body scroll while open
   useEffect(() => {
@@ -92,6 +94,7 @@ const MobileBasketSheet: React.FC<MobileBasketSheetProps> = ({
             onRemove={onRemove}
             onClear={onClear}
             storeTotal={selectedChain?.total ?? null}
+            frozen={frozen}
           />
         </div>
       </div>
