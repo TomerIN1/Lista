@@ -4359,6 +4359,32 @@ Implemented Increment 1 of the Plan/Buy phase separation spec (`docs/superpowers
 
 ---
 
+## Session 2026-04-26 (cont.) — Increment 2: Buy phase entry screen
+
+Implemented Increment 2 of the Plan/Buy phase separation spec (`docs/superpowers/specs/2026-04-25-plan-buy-phase-separation-design.md` §10 #2). Pure-UI: a new `BuyPhaseEntry` modal/sheet replaces the legacy CTA → `ShoppingPriceStep` → store-pick path. The "Buy this list" CTA now opens this entry screen, which lists per-chain cards backed by the existing `useLiveComparison` data (no extra fetch). Tapping a card hands `chain.displayName` to `App.handleShoppingOnline`, which opens `PriceAgentChat` exactly as before. Mobile renders as a bottom-sheet, desktop as a centered modal.
+
+User reviewed in dev and confirmed the cards match the spec but flagged that the chain-level summary alone is too thin — specifically wants missing-item names (not just the count) and per-item details visible in a future increment. Substitution alternatives stay scoped to Increment 4 (agent chat).
+
+### Files changed
+- `components/BuyPhaseEntry.tsx` — new component (~165 lines). Centered modal on `lg:`, bottom-sheet on smaller viewports. Body-scroll lock + Esc/backdrop/X close. RTL-aware via `direction` and `inset-inline-*` utilities.
+- `components/ShoppingInputArea.tsx` — added `onStartOnlineAgent` prop, `buyPhaseOpen` state, `handlePickChain` helper. `handleSendToPricePilot` now opens the modal instead of calling `onCompare()`.
+- `App.tsx` — passes `onStartOnlineAgent={handleShoppingOnline}` to `ShoppingInputArea`. Loosened `handleShoppingOnline`'s guard from `!priceComparison` to `shoppingProducts.length === 0` so the agent can launch directly from the entry screen without going through `handleShoppingCompare`.
+- `constants/translations.ts` — added 5 new keys (`buyEntryTitle`, `buyEntrySubtitle`, `buyEntryBestBadge`, `buyEntryItemsMissing`, `buyEntryDeliveryFee`) in EN + HE under `productBrowse`.
+
+### Code review tweaks (applied before commit)
+- Translated close button `aria-label` (was hardcoded "Close" in English; now `t('result.close')`).
+- Drag handle marked `aria-hidden tabIndex={-1}` so screen readers don't announce two close buttons.
+- Suppress the "🚚 משלוח ₪0" badge when `deliveryFee === 0` (was rendering an ambiguous "Delivery ₪0" string).
+
+### Not changed
+- `PriceAgentChat`, `agentService`, the Python agent — untouched per agents-last sequencing.
+- `ShoppingPriceStep` and `handleShoppingCompare` — kept in the codebase but unreachable from the Plan-phase CTA in v1. Cleanup deferred (spec §11).
+- Below-min-order badge, list-edit freeze during agent runs, honest cancel copy — Increment 3 work.
+- Substitution confirm cards — Increment 4 work.
+- Per-item price/category/amount and missing-item names inside the entry cards — explicitly flagged by the user post-review as a follow-up enhancement; not bundled into this increment.
+
+---
+
 **Last Updated**: April 26, 2026
 **Version**: 6.1.1
 **Status**: Production Ready

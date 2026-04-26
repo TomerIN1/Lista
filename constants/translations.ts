@@ -245,7 +245,12 @@ export const TRANSLATIONS = {
       basketEmptyHint: "Add items to compare prices",
       basketTotal: "List total",
       mobileCheapestLabel: "Cheapest",
-      mobileItemsCount: "🛒 {n} items"
+      mobileItemsCount: "🛒 {n} items",
+      buyEntryTitle: "How to buy",
+      buyEntrySubtitle: "Pick a store to send your list to",
+      buyEntryBestBadge: "Best",
+      buyEntryItemsMissing: "{n} missing",
+      buyEntryDeliveryFee: "Delivery"
     },
     smartList: {
       pasteList: "AI Assistant",
@@ -529,7 +534,12 @@ export const TRANSLATIONS = {
       basketEmptyHint: "הוסיפו פריטים כדי להשוות מחירים",
       basketTotal: "סה״כ רשימה",
       mobileCheapestLabel: "הכי זול",
-      mobileItemsCount: "🛒 {n} פריטים"
+      mobileItemsCount: "🛒 {n} פריטים",
+      buyEntryTitle: "איך לקנות",
+      buyEntrySubtitle: "בחרו חנות לשליחת הרשימה",
+      buyEntryBestBadge: "מומלץ",
+      buyEntryItemsMissing: "{n} חסרים",
+      buyEntryDeliveryFee: "משלוח"
     },
     smartList: {
       pasteList: "עוזר AI",

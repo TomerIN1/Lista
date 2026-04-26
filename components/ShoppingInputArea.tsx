@@ -12,6 +12,7 @@ import LiveBasketPanel from './LiveBasketPanel';
 import StoresStripV2 from './StoresStripV2';
 import MobileBasketBar from './MobileBasketBar';
 import MobileBasketSheet from './MobileBasketSheet';
+import BuyPhaseEntry from './BuyPhaseEntry';
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
@@ -34,6 +35,9 @@ interface ShoppingInputAreaProps {
   onCategoryChange?: (cat: string | null) => void;
   showSmartList?: boolean;
   onShowSmartListChange?: (v: boolean) => void;
+  /** Called with the chain's display name (e.g. "רמי לוי") when the user
+   *  picks a chain in the Buy phase entry screen. Routes to the agent. */
+  onStartOnlineAgent: (storeDisplayName: string) => void;
 }
 
 const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
@@ -55,6 +59,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   onCategoryChange,
   showSmartList: externalShowSmartList,
   onShowSmartListChange,
+  onStartOnlineAgent,
 }) => {
   const { t, isRTL, tUnit } = useLanguage();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -70,6 +75,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
 
   const [selectedChainCode, setSelectedChainCode] = useState<string | null>(null);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [buyPhaseOpen, setBuyPhaseOpen] = useState(false);
 
   const liveCmp = useLiveComparison({
     products,
@@ -95,8 +101,14 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   })();
 
   const handleSendToPricePilot = () => {
-    if (isLoading) return; // guard against double-submit while a comparison is in flight
-    onCompare();
+    if (isLoading) return;
+    if (!liveCmp.data || liveCmp.data.chains.length === 0) return;
+    setBuyPhaseOpen(true);
+  };
+
+  const handlePickChain = (chain: ChainTotal) => {
+    setBuyPhaseOpen(false);
+    onStartOnlineAgent(chain.displayName);
   };
 
   // Effective chains: use all available chains from the user's area
@@ -230,6 +242,14 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         onRemove={handleRemoveProduct}
         onClear={handleClear}
         onSendToPricePilot={() => { setMobileSheetOpen(false); handleSendToPricePilot(); }}
+      />
+
+      <BuyPhaseEntry
+        open={buyPhaseOpen}
+        onClose={() => setBuyPhaseOpen(false)}
+        chains={liveCmp.data?.chains ?? []}
+        totalItems={liveCmp.data?.totalItems ?? products.length}
+        onPickChain={handlePickChain}
       />
     </>
   );

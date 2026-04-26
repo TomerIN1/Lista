@@ -846,7 +846,7 @@ const App: React.FC = () => {
   const [onlineStoreName, setOnlineStoreName] = useState<string | null>(null);
 
   const handleShoppingOnline = (storeName?: string) => {
-    if (!priceComparison) return;
+    if (shoppingProducts.length === 0) return;
 
     // Build temporary groups from DB products for the agent
     const tempItems = shoppingProducts.map((p) => ({
@@ -1113,6 +1113,7 @@ const App: React.FC = () => {
                         products={shoppingProducts}
                         onProductsChange={handleShoppingProductsChange}
                         onCompare={handleShoppingCompare}
+                        onStartOnlineAgent={handleShoppingOnline}
                         isLoading={isShoppingComparing}
                         title={activeList?.title}
                         onTitleChange={user && activeListId ? handleTitleUpdate : undefined}
