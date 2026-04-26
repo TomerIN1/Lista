@@ -4385,6 +4385,39 @@ User reviewed in dev and confirmed the cards match the spec but flagged that the
 
 ---
 
+## Session 2026-04-26 (cont. 2) — Increment 3a: data-derived badges in BuyPhaseEntry
+
+Implemented the first half of Increment 3 per the sub-spec at `docs/superpowers/specs/2026-04-26-increment-3a-data-derived-badges-design.md`. Pure-UI polish on the BuyPhaseEntry cards: missing-item names are now visible (the user's flagged top priority post-Increment-2), an amber "מתחת למינימום" pill renders when the chain falls below its min order, and an expansion affordance lets the user inspect missing items without leaving the modal.
+
+### What ships
+- Three new fields on `ChainTotal` in `hooks/useLiveComparison.ts`: `unmatchedItems: UnmatchedItem[]` (name + Lista-taxonomy category), `minimumOrder: number | null`, `belowMinimum: boolean`. All sourced from the existing `compareListPrices` response — no API or backend change.
+- BuyPhaseEntry cards gain:
+  - Amber "מתחת למינימום" / "Below min order" pill when `belowMinimum`.
+  - The existing red `{n} חסרים` pill is now interactive — underlined + small chevron icon, tap to expand.
+  - A standalone chevron at the end of the card as a secondary expand affordance.
+  - Per-card local expand state (one card open at a time).
+  - Expanded section: missing items grouped by Lista category (פירות וירקות, מוצרי חלב וביצים, ...) in canonical `LISTA_CATEGORIES` order. Bullet list per category. `max-height: 240px` with internal scroll for long lists.
+- Two new translation keys in `productBrowse`: `buyEntryBelowMin`, `buyEntryMissingHeading`.
+
+### Files changed
+- `hooks/useLiveComparison.ts` — exports new `UnmatchedItem` type; `toLiveComparison` now accepts `products: ShoppingProduct[]` and builds a name → category map for enrichment; defaults to `DEFAULT_CATEGORY` for unmatched names.
+- `components/BuyPhaseEntry.tsx` — outer card converted from `<button>` to `<div role="button">` (HTML forbids nested buttons); per-card expand state; in-pill chevron + underline on the missing pill; amber below-min pill; standalone chevron at end of card; category-grouped expanded section using a `groupByCategory` helper that orders by `LISTA_CATEGORIES`.
+- `constants/translations.ts` — `buyEntryBelowMin` ("Below min order" / "מתחת למינימום") and `buyEntryMissingHeading` ("Missing at this store:" / "חסרים בחנות זו:").
+
+### Iterated in product (per `feedback_short_specs.md`)
+- First pass rendered missing items as a comma-separated string. User flagged it as unscannable for chains with 26–42 missing items. Pivoted to a bulleted list with `max-height + overflow: auto`.
+- User then asked for category grouping using the canonical Lista taxonomy. Threaded `category` through `unmatchedItems` and grouped under sub-headings.
+- User then noted the `1 חסרים` pill had no visual cue indicating it was tappable. Added underline + inline `ChevronDown` icon (rotates 180° on expand).
+
+### Not changed
+- `PriceAgentChat`, `agentService`, the Python agent — untouched per agents-last sequencing.
+- `StorePriceSummary` and `priceDbService.ts` — unchanged. Category enrichment happens at the `useLiveComparison` boundary using a name-based join; deeper barcode-preserving refactor not needed for v1.
+- `BasketStrategyPicker`, `SavingsReport` — they consume `unmatchedItems: string[]` from `StorePriceSummary` (untouched). Only `ChainTotal.unmatchedItems` got the shape change.
+- Edit-freeze during agent runs and honest cancel copy → Increment 3b (next).
+- Per-item prices / amount inside the expanded view → still deferred; missing-names + categories was the user-flagged priority and shipped here.
+
+---
+
 **Last Updated**: April 26, 2026
 **Version**: 6.1.1
 **Status**: Production Ready

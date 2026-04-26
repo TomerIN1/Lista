@@ -1,10 +1,38 @@
 // components/BuyPhaseEntry.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, ChevronDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ChainTotal } from '../hooks/useLiveComparison';
+import { ChainTotal, UnmatchedItem } from '../hooks/useLiveComparison';
 import { chainBadgeColor, chainAbbrev } from '../utils/chainBranding';
+import { LISTA_CATEGORIES, DEFAULT_CATEGORY } from '../agents_and_ai/product-discovery-assistant/listaCategories';
+
+/** Group missing items by their Lista category and emit them in
+ *  LISTA_CATEGORIES order so the user sees produce → dairy → ... in
+ *  the natural shopping flow. Unknown categories fall through into
+ *  DEFAULT_CATEGORY ("אחר ולא מסווג") at the end. */
+function groupByCategory(items: UnmatchedItem[]): Array<{ category: string; names: string[] }> {
+  const buckets = new Map<string, string[]>();
+  for (const it of items) {
+    const cat = it.category || DEFAULT_CATEGORY;
+    const arr = buckets.get(cat) ?? [];
+    arr.push(it.name);
+    buckets.set(cat, arr);
+  }
+  const ordered: Array<{ category: string; names: string[] }> = [];
+  for (const cat of LISTA_CATEGORIES) {
+    const names = buckets.get(cat);
+    if (names && names.length > 0) {
+      ordered.push({ category: cat, names });
+      buckets.delete(cat);
+    }
+  }
+  // Anything not in the canonical taxonomy goes at the end.
+  for (const [cat, names] of buckets) {
+    ordered.push({ category: cat, names });
+  }
+  return ordered;
+}
 
 interface BuyPhaseEntryProps {
   open: boolean;
@@ -24,6 +52,13 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
   open, onClose, chains, totalItems, onPickChain,
 }) => {
   const { t, isRTL } = useLanguage();
+
+  // Per-card expand state — one card open at a time.
+  // Resets naturally when modal unmounts (component re-mounts on next open).
+  const [expandedChain, setExpandedChain] = useState<string | null>(null);
+  const isExpanded = (chain: string) => expandedChain === chain;
+  const toggleExpanded = (chain: string) =>
+    setExpandedChain(prev => (prev === chain ? null : chain));
 
   // Lock body scroll + Esc-to-close while open.
   useEffect(() => {
@@ -104,75 +139,184 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
             const whole = Math.floor(totalToShow);
             const decimals = (totalToShow - whole).toFixed(2).slice(1); // ".40"
             const missing = Math.max(0, totalItems - c.matchedItems);
+            const hasMissing = c.unmatchedItems.length > 0;
 
             return (
-              <button
+              // Outer card: div role="button" to allow inner <button> elements (HTML spec
+              // forbids nesting interactive content inside <button>).
+              <div
                 key={c.chain}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => onPickChain(c)}
-                className="w-full p-3 rounded-xl flex items-center gap-3 text-start transition-all"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onPickChain(c);
+                  }
+                }}
+                className="w-full p-3 rounded-xl text-start transition-all cursor-pointer"
                 style={{
                   background: 'var(--paper-surface-alt)',
                   border: isBest ? '2px solid var(--save)' : '1px solid var(--line)',
                 }}
               >
-                {/* Brand badge */}
-                <div
-                  className="w-[42px] h-[42px] rounded-[9px] flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0"
-                  style={{ background: chainBadgeColor(c.chain) }}
-                >
-                  {chainAbbrev(c.chain)}
-                </div>
-
-                {/* Chain meta */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span
-                      className="text-sm font-bold truncate"
-                      style={{ color: 'var(--ink)' }}
-                    >
-                      {c.displayName}
-                    </span>
-                    {isBest && (
-                      <span
-                        className="px-1.5 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0"
-                        style={{ background: 'var(--save)', color: '#fff' }}
-                      >
-                        {t('productBrowse.buyEntryBestBadge')}
-                      </span>
-                    )}
+                {/* Main row: badge + meta + price + chevron */}
+                <div className="flex items-center gap-3">
+                  {/* Brand badge */}
+                  <div
+                    className="w-[42px] h-[42px] rounded-[9px] flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0"
+                    style={{ background: chainBadgeColor(c.chain) }}
+                  >
+                    {chainAbbrev(c.chain)}
                   </div>
-                  <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--ink-muted)' }}>
-                    <span>
-                      {c.matchedItems}/{totalItems}
-                    </span>
-                    {c.deliveryFee != null && c.deliveryFee > 0 && (
+
+                  {/* Chain meta */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span
+                        className="text-sm font-bold truncate"
+                        style={{ color: 'var(--ink)' }}
+                      >
+                        {c.displayName}
+                      </span>
+                      {isBest && (
+                        <span
+                          className="px-1.5 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0"
+                          style={{ background: 'var(--save)', color: '#fff' }}
+                        >
+                          {t('productBrowse.buyEntryBestBadge')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center flex-wrap gap-2 text-[10px]" style={{ color: 'var(--ink-muted)' }}>
                       <span>
-                        🚚 {t('productBrowse.buyEntryDeliveryFee')} ₪{c.deliveryFee}
+                        {c.matchedItems}/{totalItems}
                       </span>
-                    )}
-                    {missing > 0 && (
-                      <span
-                        className="px-1.5 py-0.5 rounded-full font-bold"
-                        style={{ background: 'rgba(215,53,45,0.12)', color: 'var(--accent)' }}
-                      >
-                        {t('productBrowse.buyEntryItemsMissing').replace('{n}', String(missing))}
-                      </span>
-                    )}
+                      {c.deliveryFee != null && c.deliveryFee > 0 && (
+                        <span>
+                          🚚 {t('productBrowse.buyEntryDeliveryFee')} ₪{c.deliveryFee}
+                        </span>
+                      )}
+                      {missing > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleExpanded(c.chain); }}
+                          aria-expanded={isExpanded(c.chain)}
+                          aria-label={`${t('productBrowse.buyEntryItemsMissing').replace('{n}', String(missing))} — ${t('productBrowse.buyEntryMissingHeading')}`}
+                          className="px-1.5 py-0.5 rounded-full font-bold inline-flex items-center gap-1"
+                          style={{
+                            background: 'rgba(215,53,45,0.12)',
+                            color: 'var(--accent)',
+                            textDecoration: 'underline',
+                            textUnderlineOffset: 2,
+                          }}
+                        >
+                          {t('productBrowse.buyEntryItemsMissing').replace('{n}', String(missing))}
+                          <ChevronDown
+                            className="w-3 h-3"
+                            style={{
+                              transform: isExpanded(c.chain) ? 'rotate(180deg)' : 'rotate(0deg)',
+                              transition: 'transform 0.2s',
+                            }}
+                          />
+                        </button>
+                      )}
+                      {c.belowMinimum && (
+                        <span
+                          className="px-1.5 py-0.5 rounded-full font-bold"
+                          style={{ background: 'rgba(245,158,11,0.12)', color: '#B45309' }}
+                        >
+                          {t('productBrowse.buyEntryBelowMin')}
+                        </span>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Total price */}
+                  <div
+                    className="text-end leading-none flex-shrink-0"
+                    style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink)' }}
+                  >
+                    <span style={{ fontSize: 22 }}>{whole}</span>
+                    <span className="text-xs align-top" style={{ color: 'var(--ink-muted)' }}>
+                      {decimals} ₪
+                    </span>
+                  </div>
+
+                  {/* Chevron — only when hasMissing */}
+                  {hasMissing && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleExpanded(c.chain); }}
+                      aria-expanded={isExpanded(c.chain)}
+                      className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full"
+                      style={{ color: 'var(--ink-muted)' }}
+                    >
+                      <ChevronDown
+                        className="w-4 h-4"
+                        style={{
+                          transform: isExpanded(c.chain) ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s',
+                        }}
+                      />
+                    </button>
+                  )}
                 </div>
 
-                {/* Total price */}
-                <div
-                  className="text-end leading-none flex-shrink-0"
-                  style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink)' }}
-                >
-                  <span style={{ fontSize: 22 }}>{whole}</span>
-                  <span className="text-xs align-top" style={{ color: 'var(--ink-muted)' }}>
-                    {decimals} ₪
-                  </span>
-                </div>
-              </button>
+                {/* Expanded section — missing items list */}
+                {isExpanded(c.chain) && hasMissing && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      paddingTop: 8,
+                      borderTop: '1px dashed var(--line)',
+                      fontSize: 11,
+                      color: 'var(--ink-muted)',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                      {t('productBrowse.buyEntryMissingHeading')}
+                    </div>
+                    <div
+                      style={{
+                        maxHeight: 240,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {groupByCategory(c.unmatchedItems).map(group => (
+                        <div key={group.category} style={{ marginBottom: 8 }}>
+                          <div
+                            style={{
+                              fontWeight: 600,
+                              color: 'var(--ink)',
+                              marginBottom: 2,
+                            }}
+                          >
+                            {group.category}
+                          </div>
+                          <ul
+                            style={{
+                              listStyleType: 'disc',
+                              paddingInlineStart: 18,
+                              margin: 0,
+                            }}
+                          >
+                            {group.names.map((name, idx) => (
+                              <li
+                                key={`${group.category}-${name}-${idx}`}
+                                style={{ marginBottom: 2, lineHeight: 1.5 }}
+                              >
+                                {name}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>

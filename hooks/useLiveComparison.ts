@@ -2,6 +2,14 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { ShoppingProduct, DeliveryCheckResult, ListPriceComparison, StorePriceSummary } from '../types';
 import { compareListPrices, SUPERMARKET_NAME_MAP } from '../services/priceDbService';
+import { DEFAULT_CATEGORY } from '../agents_and_ai/product-discovery-assistant/listaCategories';
+
+/** Missing item enriched with the user's basket-side category (Lista taxonomy)
+ *  so the BuyPhaseEntry expanded view can group + sort by category. */
+export interface UnmatchedItem {
+  name: string;
+  category: string;
+}
 
 /** Reverse-lookup: turn a display name (e.g. "ויקטורי") back into a canonical
  *  chain code (e.g. "victory") so we can call into chainBranding helpers. */
@@ -19,6 +27,10 @@ export interface ChainTotal {
   totalWithDelivery?: number;
   deliveryFee?: number;
   matchedItems: number;
+  // NEW: data-derived badge fields
+  unmatchedItems: UnmatchedItem[];
+  minimumOrder: number | null;
+  belowMinimum: boolean;
 }
 
 export interface LiveComparisonResult {
@@ -120,7 +132,7 @@ export function useLiveComparison(input: UseLiveComparisonInput): {
           eligible_store_ref_ids: eligibleStoreIds,
           delivery_fees: deliveryFees,
         });
-        setData(toLiveComparison(result, deliverableChainNames, products.length));
+        setData(toLiveComparison(result, deliverableChainNames, products.length, products));
         setError(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Comparison failed');
@@ -145,21 +157,43 @@ function toLiveComparison(
   r: ListPriceComparison,
   deliverableChainNames: Set<string> | null,
   totalItems: number,
+  products: ShoppingProduct[],
 ): LiveComparisonResult {
-  const allChains: ChainTotal[] = r.stores.map((s: StorePriceSummary) => ({
-    chain: chainCodeFromDisplay(s.supermarketName), // canonical code, used by chainBranding helpers
-    displayName: s.supermarketName,                  // human-readable, used in UI text
-    total: s.totalCost,
-    totalWithDelivery: s.totalWithDelivery,
-    deliveryFee: s.deliveryFee,
-    // Count only items that actually carry a usable price at this branch.
-    // The API's `matchedItems` field counts items flagged `available: true`
-    // even when their `effective_unit_price` is null (happens for some weighted
-    // deli items whose per-branch weight price wasn't computable). The basket
-    // breakdown + PricePilot use the priced-item set as the source of truth, so
-    // we align the strip and KPI ranking to the same count.
-    matchedItems: s.itemPrices.length,
-  }));
+  // Build a name → Lista-taxonomy category lookup from the user's basket.
+  // The compare API returns unmatchedItems by name; matching back to the
+  // basket gives us the canonical category for grouping in BuyPhaseEntry.
+  const categoryByName = new Map<string, string>();
+  for (const p of products) {
+    if (p.name) categoryByName.set(p.name, p.category || DEFAULT_CATEGORY);
+  }
+
+  const allChains: ChainTotal[] = r.stores.map((s: StorePriceSummary) => {
+    const cost = s.totalWithDelivery ?? s.totalCost;
+    const minimumOrder = s.minimumOrder ?? null;
+    const belowMinimum =
+      minimumOrder != null && minimumOrder > 0 && cost < minimumOrder;
+
+    return {
+      chain: chainCodeFromDisplay(s.supermarketName), // canonical code, used by chainBranding helpers
+      displayName: s.supermarketName,                  // human-readable, used in UI text
+      total: s.totalCost,
+      totalWithDelivery: s.totalWithDelivery,
+      deliveryFee: s.deliveryFee,
+      // Count only items that actually carry a usable price at this branch.
+      // The API's `matchedItems` field counts items flagged `available: true`
+      // even when their `effective_unit_price` is null (happens for some weighted
+      // deli items whose per-branch weight price wasn't computable). The basket
+      // breakdown + PricePilot use the priced-item set as the source of truth, so
+      // we align the strip and KPI ranking to the same count.
+      matchedItems: s.itemPrices.length,
+      unmatchedItems: s.unmatchedItems.map(name => ({
+        name,
+        category: categoryByName.get(name) ?? DEFAULT_CATEGORY,
+      })),
+      minimumOrder,
+      belowMinimum,
+    };
+  });
 
   // Drop chains that don't deliver to the user's city when in online mode.
   // deliveryCheck.chains[].chain is a display name (e.g. "מחסני השוק"), which

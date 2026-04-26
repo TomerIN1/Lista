@@ -250,7 +250,9 @@ export const TRANSLATIONS = {
       buyEntrySubtitle: "Pick a store to send your list to",
       buyEntryBestBadge: "Best",
       buyEntryItemsMissing: "{n} missing",
-      buyEntryDeliveryFee: "Delivery"
+      buyEntryDeliveryFee: "Delivery",
+      buyEntryBelowMin: "Below min order",
+      buyEntryMissingHeading: "Missing at this store:"
     },
     smartList: {
       pasteList: "AI Assistant",
@@ -539,7 +541,9 @@ export const TRANSLATIONS = {
       buyEntrySubtitle: "בחרו חנות לשליחת הרשימה",
       buyEntryBestBadge: "מומלץ",
       buyEntryItemsMissing: "{n} חסרים",
-      buyEntryDeliveryFee: "משלוח"
+      buyEntryDeliveryFee: "משלוח",
+      buyEntryBelowMin: "מתחת למינימום",
+      buyEntryMissingHeading: "חסרים בחנות זו:"
     },
     smartList: {
       pasteList: "עוזר AI",
