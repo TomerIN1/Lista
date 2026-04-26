@@ -4343,7 +4343,23 @@ Each increment ships independently to main, validated visually before the next i
 
 ---
 
-**Last Updated**: April 25, 2026
+## Session 2026-04-26 — Increment 1: terminology + CTA swap
+
+Implemented Increment 1 of the Plan/Buy phase separation spec (`docs/superpowers/specs/2026-04-25-plan-buy-phase-separation-design.md`). Pure-UI: dropped "סל" / "basket" from user-visible copy, renamed the primary CTA from "Send to PricePilot" / "שליחה ל-PricePilot" to "Buy this list" / "קנה את הרשימה". The CTA already opens `PriceAgentChat` with the currently-selected chain, so the working flow is unchanged.
+
+### Files changed
+- `constants/translations.ts` — 12 string-value swaps (5 EN, 7 HE). Keys unchanged.
+- `components/BasketList.tsx:80` — hardcoded "My basket" / "הסל שלי" → "My List" / "הרשימה שלי".
+- `components/RightRail.tsx:117` — sidebar nav label "Basket" / "הסל" → "List" / "הרשימה".
+
+### Not changed
+- Translation key `sendToPricePilot` retained (renaming the key would also touch agent-side strings; deferred per spec §11 and `feedback_agents_touch_last.md`).
+- `BasketList` / `LiveBasketPanel` / `MobileBasketSheet` component names unchanged (spec §11 defers these to a later cleanup pass).
+- `PriceAgentChat`, agent server, extension — untouched.
+
+---
+
+**Last Updated**: April 26, 2026
 **Version**: 6.1.1
 **Status**: Production Ready
 

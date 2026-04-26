@@ -77,7 +77,7 @@ const BasketList: React.FC<BasketListProps> = ({ products, onUpdate, onRemove, o
       >
         <div className="flex items-baseline gap-2">
           <b className="text-[14px]" style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink)' }}>
-            {isRTL ? 'הסל שלי' : 'My basket'}
+            {isRTL ? 'הרשימה שלי' : 'My List'}
           </b>
           <span className="text-[10px]" style={{ color: 'var(--ink-soft)' }}>
             {hasContent

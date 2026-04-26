@@ -114,7 +114,7 @@ const RightRail: React.FC<RightRailProps> = ({
   // Primary nav items
   const navItems: Array<{ id: ShoppingView; label: string; Icon: React.ElementType; badge?: number }> = [
     { id: 'catalog',    label: isRTL ? 'קטלוג'   : 'Catalog',     Icon: LayoutGrid },
-    { id: 'basket',     label: isRTL ? 'הסל'     : 'Basket',      Icon: ShoppingBasket, badge: cartItemCount || undefined },
+    { id: 'basket',     label: isRTL ? 'הרשימה'  : 'List',        Icon: ShoppingBasket, badge: cartItemCount || undefined },
     { id: 'comparison', label: isRTL ? 'השוואה'  : 'Comparison',  Icon: ArrowUpDown },
     { id: 'orders',     label: isRTL ? 'הזמנות'  : 'Orders',      Icon: Package },
   ];
