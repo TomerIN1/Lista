@@ -4312,7 +4312,38 @@ Considered deleting the Hebrew-description price-regex fallback in `ProductDetai
 
 ---
 
-**Last Updated**: April 23, 2026
+## Session 2026-04-25 — Plan/Buy phase separation design (spec only)
+
+Brainstormed and locked the design for separating today's "basket" into two distinct concepts: a persistent **List** (Plan phase) and a transient **Order** (Buy phase). Spec captured at `docs/superpowers/specs/2026-04-25-plan-buy-phase-separation-design.md`. **No code changed in this session — design only.**
+
+### Decisions locked
+- Two-phase mental model: List (store-agnostic, persistent) + Order (store-specific, transient).
+- v1 ships Route 1 only — single store + per-item substitution confirmation. Multi-store routes (auto-split, manual split) deferred to v2.
+- v2 trigger: a 2nd working store agent (Shufersal or Victory) is end-to-end shippable.
+- Per-store agent isolation: each store gets its own duplicated agent module, not a generalized one.
+- Substitution UX: always confirm per item (no auto-apply heuristic in v1).
+- Manual split UI (v2): per-item store dropdown.
+- User-visible terminology: drop "סל" / "basket"; use "רשימה" / "List" in Plan phase, "הזמנה" / "Order" in Buy phase. CTA "קנה את הרשימה" / "Buy this list".
+
+### Key insight
+The backend already assumes the two-phase model. The list is store-agnostic (`utils/basketStrategies.ts`), the agent is single-store-per-run (`pricepilot_agent_v4/agent.py`), the bridge is per-store (`services/extensionBridge.ts`). Only the UI conflates them. v1 is mostly a UI surfacing exercise — `find_replacements`, OOS workflow, SSE bridge, agent session model all reused as-is.
+
+### Implementation increments planned (will be detailed in follow-up plan)
+**Sequencing**: pure-UI work first; agent-touching work last. The `PriceAgentChat` / agent surface gets a dedicated focused increment after structural UI is validated.
+
+1. Terminology + CTA swap *(pure UI)* — rename user-visible copy, replace per-chain "Send to PricePilot" CTAs with single "Buy this list" CTA.
+2. Buy phase entry screen *(pure UI)* — new `BuyPhaseEntry` component, per-chain cards, mobile + desktop parity.
+3. v1 edge-case polish *(pure UI)* — below-min badge, list-edit freeze during agent runs, missing-item summary, honest cancel copy.
+4. Substitution confirm cards *(agent-touching, last)* — structured chat buttons replacing plain-text alternatives in `PriceAgentChat`.
+
+Each increment ships independently to main, validated visually before the next is dispatched (per `feedback_subagent_workflow.md` working rhythm).
+
+### Files added
+- `docs/superpowers/specs/2026-04-25-plan-buy-phase-separation-design.md` — full design spec.
+
+---
+
+**Last Updated**: April 25, 2026
 **Version**: 6.1.1
 **Status**: Production Ready
 
