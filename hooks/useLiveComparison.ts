@@ -1,6 +1,6 @@
 // hooks/useLiveComparison.ts
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { ShoppingProduct, DeliveryCheckResult, ListPriceComparison, StorePriceSummary } from '../types';
+import { ShoppingProduct, DeliveryCheckResult, ListPriceComparison, StorePriceSummary, ItemPriceDetail } from '../types';
 import { compareListPrices, SUPERMARKET_NAME_MAP } from '../services/priceDbService';
 import { DEFAULT_CATEGORY } from '../agents_and_ai/product-discovery-assistant/listaCategories';
 
@@ -8,6 +8,12 @@ import { DEFAULT_CATEGORY } from '../agents_and_ai/product-discovery-assistant/l
  *  so the BuyPhaseEntry expanded view can group + sort by category. */
 export interface UnmatchedItem {
   name: string;
+  category: string;
+}
+
+/** Priced item at a chain, enriched with the user's basket-side Lista category
+ *  so the BuyPhaseEntry receipt view can group line items by category. */
+export interface PricedItem extends ItemPriceDetail {
   category: string;
 }
 
@@ -31,6 +37,9 @@ export interface ChainTotal {
   unmatchedItems: UnmatchedItem[];
   minimumOrder: number | null;
   belowMinimum: boolean;
+  /** Per-item price detail at this chain, enriched with Lista category.
+   *  Powers the receipt-style breakdown in the BuyPhaseEntry expanded view. */
+  itemPrices: PricedItem[];
 }
 
 export interface LiveComparisonResult {
@@ -192,6 +201,10 @@ function toLiveComparison(
       })),
       minimumOrder,
       belowMinimum,
+      itemPrices: s.itemPrices.map(ip => ({
+        ...ip,
+        category: categoryByName.get(ip.itemName) ?? DEFAULT_CATEGORY,
+      })),
     };
   });
 

@@ -252,7 +252,11 @@ export const TRANSLATIONS = {
       buyEntryItemsMissing: "{n} missing",
       buyEntryDeliveryFee: "Delivery",
       buyEntryBelowMin: "Below min order",
-      buyEntryMissingHeading: "Missing at this store:"
+      buyEntryMissingHeading: "Missing at this store:",
+      buyEntryReceiptHeading: "Order summary",
+      buyEntryUnavailable: "Unavailable",
+      buyEntrySubtotal: "Subtotal",
+      buyEntryGrandTotal: "Total"
     },
     smartList: {
       pasteList: "AI Assistant",
@@ -543,7 +547,11 @@ export const TRANSLATIONS = {
       buyEntryItemsMissing: "{n} חסרים",
       buyEntryDeliveryFee: "משלוח",
       buyEntryBelowMin: "מתחת למינימום",
-      buyEntryMissingHeading: "חסרים בחנות זו:"
+      buyEntryMissingHeading: "חסרים בחנות זו:",
+      buyEntryReceiptHeading: "סיכום הזמנה",
+      buyEntryUnavailable: "לא זמין",
+      buyEntrySubtotal: "סה״כ קטגוריה",
+      buyEntryGrandTotal: "סה״כ"
     },
     smartList: {
       pasteList: "עוזר AI",

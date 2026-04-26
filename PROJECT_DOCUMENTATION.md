@@ -4418,6 +4418,38 @@ Implemented the first half of Increment 3 per the sub-spec at `docs/superpowers/
 
 ---
 
+## Session 2026-04-26 (cont. 3) — Receipt-style expanded view in BuyPhaseEntry
+
+User asked to "finish the cart items" — make the expanded card section feel like a receipt: all items grouped by Lista category, per-item price, qty × unit price, per-category subtotal, total, and promo display (original strikethrough + discounted price). The data and rendering logic were already present in the unreachable `SavingsReport.tsx`; this increment threaded them onto `ChainTotal` and adapted the layout into BuyPhaseEntry's expanded section, grouped by canonical Lista taxonomy. Pure UI; no agent / API / backend changes.
+
+### What ships
+- `ChainTotal` gains `itemPrices: PricedItem[]` where `PricedItem extends ItemPriceDetail with { category }`. Threaded the same way as `unmatchedItems`, using a name → category map built from `shoppingProducts` in `useLiveComparison.toLiveComparison`.
+- `BuyPhaseEntry` expanded section replaced. Now renders a receipt-style breakdown:
+  - Heading "סיכום הזמנה" / "Order summary".
+  - Categories in canonical `LISTA_CATEGORIES` order. Each section has a heading (subtle bottom border) and a list of items.
+  - Priced item line: `name · ₪unit / displayUnit × qty · line total`. Strike-through original price + accent-colored discounted price when `originalPrice > price`. Promo description (`🏷 ip.promotion.description`) on a sub-line when present.
+  - Missing items appear inline within their category, strike-through with "לא זמין" / "Unavailable" suffix.
+  - Per-category subtotal row.
+  - Footer: 🚚 delivery fee + bold grand total with delivery.
+- Chevron at the end of the card now opens the receipt for any chain that has data (previously only opened for chains with missing items).
+- The `{n} חסרים` pill stays clickable and underlined (secondary expand affordance) but the in-pill chevron icon was removed — the standalone chevron is the canonical control, and the in-pill icon was redundant once the receipt covers everything.
+- Four new translation keys: `buyEntryReceiptHeading`, `buyEntryUnavailable`, `buyEntrySubtotal`, `buyEntryGrandTotal`.
+
+### Files changed
+- `hooks/useLiveComparison.ts` — exports new `PricedItem` type; `toLiveComparison` enriches `s.itemPrices` with category alongside the existing `unmatchedItems` enrichment.
+- `components/BuyPhaseEntry.tsx` — replaced the single-purpose `groupByCategory` helper with `buildReceipt(priced, missing)` returning `ReceiptCategoryGroup[]` (interleaves matched + missing lines per category, computes subtotal). Receipt JSX inlined into the expanded section.
+- `constants/translations.ts` — 4 new keys × 2 locales.
+
+### Iterated in product
+- Tested in dev. After validation, user noted the in-pill chevron next to `1 חסרים` was redundant once the standalone chevron at end of card became the primary expand affordance. Removed the in-pill chevron; kept the underline so the pill remains a discoverable secondary tap target.
+
+### Not changed
+- `PriceAgentChat`, `agentService`, the Python agent — untouched per agents-last sequencing.
+- `SavingsReport.tsx`, `ShoppingPriceStep.tsx`, `priceDbService.ts` — untouched. Receipt logic was reimplemented inside BuyPhaseEntry rather than extracting a shared component, since the visual treatment differs and shared abstraction was premature for a single new consumer.
+- Edit-freeze during agent runs and honest cancel copy → still queued as the next increment (lifecycle UX pair).
+
+---
+
 **Last Updated**: April 26, 2026
 **Version**: 6.1.1
 **Status**: Production Ready

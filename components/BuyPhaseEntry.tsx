@@ -3,33 +3,58 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ChainTotal, UnmatchedItem } from '../hooks/useLiveComparison';
+import { ChainTotal, UnmatchedItem, PricedItem } from '../hooks/useLiveComparison';
 import { chainBadgeColor, chainAbbrev } from '../utils/chainBranding';
 import { LISTA_CATEGORIES, DEFAULT_CATEGORY } from '../agents_and_ai/product-discovery-assistant/listaCategories';
 
-/** Group missing items by their Lista category and emit them in
- *  LISTA_CATEGORIES order so the user sees produce → dairy → ... in
- *  the natural shopping flow. Unknown categories fall through into
- *  DEFAULT_CATEGORY ("אחר ולא מסווג") at the end. */
-function groupByCategory(items: UnmatchedItem[]): Array<{ category: string; names: string[] }> {
-  const buckets = new Map<string, string[]>();
-  for (const it of items) {
-    const cat = it.category || DEFAULT_CATEGORY;
-    const arr = buckets.get(cat) ?? [];
-    arr.push(it.name);
-    buckets.set(cat, arr);
+/** A single line in the receipt — either a priced item (matched) or a
+ *  missing-name placeholder (unmatched at this chain). The receipt
+ *  renderer treats them in one stream so a category section shows both
+ *  what's available and what's not in one place. */
+type ReceiptLine =
+  | { kind: 'priced'; item: PricedItem }
+  | { kind: 'missing'; name: string };
+
+interface ReceiptCategoryGroup {
+  category: string;
+  lines: ReceiptLine[];
+  subtotal: number; // sum of priced lines only
+}
+
+/** Build receipt-style category groups from the chain's matched + unmatched
+ *  items, ordered by canonical LISTA_CATEGORIES so the user reads
+ *  produce → dairy → ... in the natural shopping flow. */
+function buildReceipt(priced: PricedItem[], missing: UnmatchedItem[]): ReceiptCategoryGroup[] {
+  const buckets = new Map<string, { lines: ReceiptLine[]; subtotal: number }>();
+  const ensure = (cat: string) => {
+    let b = buckets.get(cat);
+    if (!b) {
+      b = { lines: [], subtotal: 0 };
+      buckets.set(cat, b);
+    }
+    return b;
+  };
+
+  for (const ip of priced) {
+    const b = ensure(ip.category || DEFAULT_CATEGORY);
+    b.lines.push({ kind: 'priced', item: ip });
+    b.subtotal += ip.total;
   }
-  const ordered: Array<{ category: string; names: string[] }> = [];
+  for (const um of missing) {
+    const b = ensure(um.category || DEFAULT_CATEGORY);
+    b.lines.push({ kind: 'missing', name: um.name });
+  }
+
+  const ordered: ReceiptCategoryGroup[] = [];
   for (const cat of LISTA_CATEGORIES) {
-    const names = buckets.get(cat);
-    if (names && names.length > 0) {
-      ordered.push({ category: cat, names });
+    const b = buckets.get(cat);
+    if (b && b.lines.length > 0) {
+      ordered.push({ category: cat, lines: b.lines, subtotal: b.subtotal });
       buckets.delete(cat);
     }
   }
-  // Anything not in the canonical taxonomy goes at the end.
-  for (const [cat, names] of buckets) {
-    ordered.push({ category: cat, names });
+  for (const [cat, b] of buckets) {
+    ordered.push({ category: cat, lines: b.lines, subtotal: b.subtotal });
   }
   return ordered;
 }
@@ -140,6 +165,8 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
             const decimals = (totalToShow - whole).toFixed(2).slice(1); // ".40"
             const missing = Math.max(0, totalItems - c.matchedItems);
             const hasMissing = c.unmatchedItems.length > 0;
+            const hasReceipt = c.itemPrices.length > 0 || hasMissing;
+            const receipt = hasReceipt ? buildReceipt(c.itemPrices, c.unmatchedItems) : [];
 
             return (
               // Outer card: div role="button" to allow inner <button> elements (HTML spec
@@ -204,7 +231,7 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                           onClick={(e) => { e.stopPropagation(); toggleExpanded(c.chain); }}
                           aria-expanded={isExpanded(c.chain)}
                           aria-label={`${t('productBrowse.buyEntryItemsMissing').replace('{n}', String(missing))} — ${t('productBrowse.buyEntryMissingHeading')}`}
-                          className="px-1.5 py-0.5 rounded-full font-bold inline-flex items-center gap-1"
+                          className="px-1.5 py-0.5 rounded-full font-bold"
                           style={{
                             background: 'rgba(215,53,45,0.12)',
                             color: 'var(--accent)',
@@ -213,13 +240,6 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                           }}
                         >
                           {t('productBrowse.buyEntryItemsMissing').replace('{n}', String(missing))}
-                          <ChevronDown
-                            className="w-3 h-3"
-                            style={{
-                              transform: isExpanded(c.chain) ? 'rotate(180deg)' : 'rotate(0deg)',
-                              transition: 'transform 0.2s',
-                            }}
-                          />
                         </button>
                       )}
                       {c.belowMinimum && (
@@ -244,12 +264,13 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                     </span>
                   </div>
 
-                  {/* Chevron — only when hasMissing */}
-                  {hasMissing && (
+                  {/* Chevron — opens the receipt view */}
+                  {hasReceipt && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); toggleExpanded(c.chain); }}
                       aria-expanded={isExpanded(c.chain)}
+                      aria-label={t('productBrowse.buyEntryReceiptHeading')}
                       className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full"
                       style={{ color: 'var(--ink-muted)' }}
                     >
@@ -264,55 +285,141 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                   )}
                 </div>
 
-                {/* Expanded section — missing items list */}
-                {isExpanded(c.chain) && hasMissing && (
+                {/* Expanded receipt — items grouped by category, per-category subtotal,
+                    delivery + grand total at the bottom. Read-only; tapping anywhere
+                    inside still bubbles up to the card body and picks the chain. */}
+                {isExpanded(c.chain) && hasReceipt && (
                   <div
                     style={{
-                      marginTop: 8,
-                      paddingTop: 8,
+                      marginTop: 10,
+                      paddingTop: 10,
                       borderTop: '1px dashed var(--line)',
                       fontSize: 11,
-                      color: 'var(--ink-muted)',
+                      color: 'var(--ink)',
                     }}
                   >
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                      {t('productBrowse.buyEntryMissingHeading')}
+                    <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--ink-muted)' }}>
+                      {t('productBrowse.buyEntryReceiptHeading')}
                     </div>
-                    <div
-                      style={{
-                        maxHeight: 240,
-                        overflowY: 'auto',
-                      }}
-                    >
-                      {groupByCategory(c.unmatchedItems).map(group => (
-                        <div key={group.category} style={{ marginBottom: 8 }}>
+                    <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                      {receipt.map(group => (
+                        <div key={group.category} style={{ marginBottom: 10 }}>
+                          {/* Category heading */}
                           <div
                             style={{
                               fontWeight: 600,
+                              fontSize: 11,
                               color: 'var(--ink)',
-                              marginBottom: 2,
+                              borderBottom: '1px solid var(--line)',
+                              paddingBottom: 2,
+                              marginBottom: 4,
                             }}
                           >
                             {group.category}
                           </div>
-                          <ul
-                            style={{
-                              listStyleType: 'disc',
-                              paddingInlineStart: 18,
-                              margin: 0,
-                            }}
-                          >
-                            {group.names.map((name, idx) => (
-                              <li
-                                key={`${group.category}-${name}-${idx}`}
-                                style={{ marginBottom: 2, lineHeight: 1.5 }}
-                              >
-                                {name}
-                              </li>
-                            ))}
-                          </ul>
+
+                          {/* Lines */}
+                          {group.lines.map((line, idx) => {
+                            if (line.kind === 'missing') {
+                              return (
+                                <div
+                                  key={`m-${idx}-${line.name}`}
+                                  className="flex items-baseline gap-2"
+                                  style={{
+                                    color: 'var(--ink-muted)',
+                                    opacity: 0.7,
+                                    marginBottom: 2,
+                                  }}
+                                >
+                                  <span style={{ flex: 1, textDecoration: 'line-through' }}>
+                                    {line.name}
+                                  </span>
+                                  <span style={{ fontStyle: 'italic', fontSize: 10 }}>
+                                    {t('productBrowse.buyEntryUnavailable')}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            const ip = line.item;
+                            const unitPrice = ip.displayPrice ?? ip.price;
+                            const origUnitPrice = ip.displayOriginalPrice ?? ip.originalPrice;
+                            const hasPromo = origUnitPrice != null && origUnitPrice > unitPrice;
+                            const unitLabel = ip.displayUnit ? ` / ${ip.displayUnit}` : '';
+                            const qtySuffix = ip.amount > 1 ? ` × ${ip.amount}` : '';
+                            return (
+                              <div key={`p-${idx}-${ip.itemName}`} style={{ marginBottom: 3 }}>
+                                <div className="flex items-baseline gap-2">
+                                  <span style={{ flex: 1, color: 'var(--ink)' }}>
+                                    {ip.itemName}
+                                  </span>
+                                  <span
+                                    className="flex items-baseline gap-1"
+                                    style={{ fontSize: 10, color: 'var(--ink-muted)' }}
+                                  >
+                                    {hasPromo && (
+                                      <span style={{ textDecoration: 'line-through' }}>
+                                        ₪{origUnitPrice.toFixed(2)}
+                                      </span>
+                                    )}
+                                    <span style={{ color: hasPromo ? 'var(--accent)' : 'var(--ink-muted)', fontWeight: hasPromo ? 700 : 400 }}>
+                                      ₪{unitPrice.toFixed(2)}{unitLabel}{qtySuffix}
+                                    </span>
+                                  </span>
+                                  <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: 50, textAlign: 'end' }}>
+                                    ₪{ip.total.toFixed(2)}
+                                  </span>
+                                </div>
+                                {ip.promotion?.description && (
+                                  <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 1 }}>
+                                    🏷 {ip.promotion.description}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {/* Category subtotal */}
+                          {group.subtotal > 0 && (
+                            <div
+                              className="flex items-baseline justify-between"
+                              style={{
+                                fontSize: 10,
+                                color: 'var(--ink-muted)',
+                                marginTop: 2,
+                                fontWeight: 600,
+                              }}
+                            >
+                              <span>{t('productBrowse.buyEntrySubtotal')}</span>
+                              <span>₪{group.subtotal.toFixed(2)}</span>
+                            </div>
+                          )}
                         </div>
                       ))}
+                    </div>
+
+                    {/* Footer: delivery + grand total */}
+                    <div
+                      style={{
+                        marginTop: 6,
+                        paddingTop: 6,
+                        borderTop: '1px solid var(--line)',
+                      }}
+                    >
+                      {c.deliveryFee != null && c.deliveryFee > 0 && (
+                        <div className="flex items-baseline justify-between" style={{ marginBottom: 2 }}>
+                          <span style={{ color: 'var(--ink-muted)' }}>
+                            🚚 {t('productBrowse.buyEntryDeliveryFee')}
+                          </span>
+                          <span>₪{c.deliveryFee.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div
+                        className="flex items-baseline justify-between"
+                        style={{ fontWeight: 700, fontSize: 12, color: 'var(--ink)' }}
+                      >
+                        <span>{t('productBrowse.buyEntryGrandTotal')}</span>
+                        <span>₪{(c.totalWithDelivery ?? c.total).toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
                 )}
