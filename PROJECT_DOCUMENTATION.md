@@ -4578,9 +4578,17 @@ Three more sharpenings on top of the polish above:
 
 Files changed: `components/BuyPhaseEntry.tsx`, `components/ShoppingInputArea.tsx`, `components/SubstitutionSheet.tsx`, `agents_and_ai/product-discovery-assistant/smartListService.ts`, `constants/translations.ts`, `PROJECT_DOCUMENTATION.md`. Build green; pre-existing TS errors in `ProductCatalogArea.tsx` / `RightRail.tsx` remain.
 
+### Hotfix — category force ignores DEFAULT_CATEGORY + bulk-button color
+
+The category-strict change above was too aggressive when the missing item's basket-side category was the catch-all `DEFAULT_CATEGORY` (`'אחר ולא מסווג'`). For an item like `קטשופ` added to the list without a meaningful category, forcing the default bucket blocked legitimate matches whose DB category is more specific (e.g. real ketchup tagged `שימורים רטבים וממרחים`), so the bulk replace silently found nothing.
+
+`processSmartChat` now treats `forcedListaCategory === DEFAULT_CATEGORY` as if no force were passed — the AI's per-search tag wins, same as the unforced path before the strict change. Specific user categories (e.g. `אגוזי מלך` → `פירות וירקות`) still force; the cross-category leak (`אגוזי מלך` → chocolate `אגוזי`) stays blocked.
+
+Also: the "Replace all missing" button switched from solid green to outlined green so the primary "Shop with PricePilot" CTA stays visually dominant — both used `var(--save)` and competed for attention.
+
 ---
 
 **Last Updated**: April 28, 2026
-**Version**: 6.2.0
+**Version**: 6.2.1
 **Status**: Production Ready
 

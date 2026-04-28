@@ -537,8 +537,9 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                         disabled={isBulkRunning}
                         className="w-full mb-3 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-70"
                         style={{
-                          background: 'var(--save)',
-                          color: '#fff',
+                          background: 'transparent',
+                          color: 'var(--save)',
+                          border: '1.5px solid var(--save)',
                         }}
                       >
                         {isBulkRunning ? (

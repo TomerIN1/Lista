@@ -407,13 +407,20 @@ export async function processSmartChat(
           selectedChains
         );
 
-        // Caller-forced category wins over AI's per-search tag. Used by the
-        // substitution flow where the basket-side category is authoritative
-        // and the AI's re-tagging is the source of cross-category mismatches.
-        const category =
-          forcedListaCategory && isValidCategory(forcedListaCategory)
-            ? forcedListaCategory
-            : (isValidCategory(search.listaCategory) ? search.listaCategory! : DEFAULT_CATEGORY);
+        // Caller-forced category wins over AI's per-search tag — but only if
+        // it's a meaningful category. The catch-all DEFAULT_CATEGORY ("אחר ולא
+        // מסווג") is not informative; forcing it would block legitimate
+        // matches whose DB category is more specific (e.g. a missing item the
+        // user added without a category being forced to reject real ketchup
+        // tagged "שימורים רטבים וממרחים"). When the force is the default
+        // bucket, fall back to the AI's per-search tag like the unforced path.
+        const isMeaningfulForce =
+          forcedListaCategory &&
+          isValidCategory(forcedListaCategory) &&
+          forcedListaCategory !== DEFAULT_CATEGORY;
+        const category = isMeaningfulForce
+          ? forcedListaCategory!
+          : (isValidCategory(search.listaCategory) ? search.listaCategory! : DEFAULT_CATEGORY);
         const preferFresh =
           search.preferFresh === true || FRESH_CATEGORIES.has(category);
 
