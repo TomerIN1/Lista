@@ -18,6 +18,9 @@ import ShoppingSetupStep from './components/ShoppingSetupStep';
 import CategoryNavBar from './components/CategoryNavBar';
 import RightRail, { ShoppingView } from './components/RightRail';
 import ProfileModal from './components/ProfileModal';
+import ProductDetailModal from './components/ProductDetailModal';
+import GroupDetailModal from './components/GroupDetailModal';
+import { defaultCartUnit } from './utils/priceFormat';
 import { LEGAL_TEXT, LegalDocType } from './constants/legalText';
 import { useLanguage } from './contexts/LanguageContext';
 import { groupsToShoppingItems } from './types';
@@ -79,6 +82,11 @@ const App: React.FC = () => {
   // Supermarket UI state
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
+  // Catalog filter — only updated when the user commits the search via the
+  // dropdown's "All results" CTA, NOT live as they type.
+  const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
+  // Product detail modal triggered from the header search dropdown
+  const [searchModalProduct, setSearchModalProduct] = useState<DbProduct | null>(null);
   const [isCartExpandedGlobal, setIsCartExpandedGlobal] = useState(false);
   const [selectedNavCategory, setSelectedNavCategory] = useState<string | null>(null);
   const [selectedNavSubcategory, setSelectedNavSubcategory] = useState<string | null>(null);
@@ -984,10 +992,31 @@ const App: React.FC = () => {
             onLocationClick={() => setShowLocationModal(true)}
             onCartClick={() => setIsCartExpandedGlobal(prev => !prev)}
             searchQuery={headerSearchQuery}
-            onSearchChange={setHeaderSearchQuery}
+            onSearchChange={(q) => {
+              setHeaderSearchQuery(q);
+              // Clearing the input also clears the catalog filter
+              if (q === '') setCatalogSearchQuery('');
+            }}
             disabled={status === 'loading' || isAdding || isShoppingComparing}
             onMenuClick={() => appMode === 'shopping' ? setRailMobileOpen(true) : setSidebarOpen(true)}
             onOpenAI={appMode === 'shopping' ? () => setSmartListOpen(true) : undefined}
+            searchDropdownEnabled={appMode === 'shopping' && shoppingStep === 'build_list'}
+            searchStoreType={selectedShoppingMode || undefined}
+            selectedSearchBarcodes={new Set(shoppingProducts.map((p) => p.barcode))}
+            onAddProductFromSearch={(p, amount) => {
+              if (shoppingProducts.some((sp) => sp.barcode === p.barcode)) return;
+              const unit = defaultCartUnit(p.unit_of_measure, p.is_weighted, p.name);
+              setShoppingProducts((prev) => [...prev, { ...p, amount, unit }]);
+            }}
+            onOpenProductFromSearch={(p) => setSearchModalProduct(p)}
+            onSeeAllSearchResults={() => {
+              // Commit the typed query to the catalog filter and clear category
+              // narrowing so the user sees results across the whole catalog.
+              setCatalogSearchQuery(headerSearchQuery);
+              setSelectedNavCategory(null);
+              setSelectedNavSubcategory(null);
+              setSelectedNavSubSubcategory(null);
+            }}
           />
 
           <div className="flex-1">
@@ -1099,6 +1128,7 @@ const App: React.FC = () => {
                           setSelectedNavSubcategory(sub || null);
                           setSelectedNavSubSubcategory(subsub || null);
                           setHeaderSearchQuery('');
+                          setCatalogSearchQuery('');
                         }}
                       />
                     )}
@@ -1133,7 +1163,7 @@ const App: React.FC = () => {
                         storeType={selectedShoppingMode || undefined}
                         deliveryCheck={deliveryCheck}
                         shoppingMode={selectedShoppingMode}
-                        externalSearchQuery={headerSearchQuery}
+                        externalSearchQuery={catalogSearchQuery}
                         externalCategory={selectedNavCategory}
                         externalSubcategory={selectedNavSubcategory}
                         externalSubSubcategory={selectedNavSubSubcategory}
@@ -1228,6 +1258,45 @@ const App: React.FC = () => {
           cities={availableCities}
           isLoadingCities={isLoadingCities}
           selectedLocation={shoppingLocation}
+        />
+      )}
+
+      {/* Product detail modal — opened from the header search dropdown.
+          Use GroupDetailModal for grouped products (fresh produce) so the user
+          sees the same multi-chain view they'd get from the catalog. */}
+      {searchModalProduct && searchModalProduct.product_group_id != null && (
+        <GroupDetailModal
+          groupId={searchModalProduct.product_group_id}
+          fallbackProduct={searchModalProduct as any}
+          storeType={selectedShoppingMode || undefined}
+          onClose={() => setSearchModalProduct(null)}
+          onAdd={(product, amount) => {
+            const exists = shoppingProducts.some((sp) => sp.barcode === product.barcode);
+            if (!exists) {
+              const unit = defaultCartUnit(product.unit_of_measure, product.is_weighted, product.name);
+              setShoppingProducts((prev) => [...prev, { ...product, amount, unit }]);
+            }
+            setSearchModalProduct(null);
+          }}
+          isAdded={shoppingProducts.some((sp) => sp.barcode === searchModalProduct.barcode)}
+        />
+      )}
+      {searchModalProduct && searchModalProduct.product_group_id == null && (
+        <ProductDetailModal
+          barcode={searchModalProduct.barcode}
+          fallbackImageUrl={searchModalProduct.image_url}
+          fallbackProduct={searchModalProduct as any}
+          storeType={selectedShoppingMode || undefined}
+          onClose={() => setSearchModalProduct(null)}
+          onAdd={(product, amount) => {
+            const exists = shoppingProducts.some((sp) => sp.barcode === product.barcode);
+            if (!exists) {
+              const unit = defaultCartUnit(product.unit_of_measure, product.is_weighted, product.name);
+              setShoppingProducts((prev) => [...prev, { ...product, amount, unit }]);
+            }
+            setSearchModalProduct(null);
+          }}
+          isAdded={shoppingProducts.some((sp) => sp.barcode === searchModalProduct.barcode)}
         />
       )}
 

@@ -392,9 +392,9 @@ Dual-mode header that changes layout based on `appMode`.
 - Subtitle text with highlighted keyword
 
 **Shopping Mode** (supermarket-style sticky bar):
-- Sticky header (`sticky top-0 z-20 bg-white/95 backdrop-blur-sm`)
+- Sticky header (`sticky top-0 z-40 backdrop-blur-md`) — z-40 so the search dropdown can overlap the z-30 `CategoryNavBar` below
 - Layout: `[☰ Menu] [Mode Toggle] [Logo] [Search Bar] [📍 Location] [🛒 Cart] [Auth]`
-- **Search bar**: Controlled input synced to `headerSearchQuery` in App.tsx, forwarded to `ProductCatalogArea`
+- **Search bar**: Controlled input synced to `headerSearchQuery` in App.tsx. Typing opens a `SearchDropdown` panel anchored under the input (see component section); the catalog filter (`catalogSearchQuery`) is only applied when the user clicks the dropdown's "All results" CTA — typing does NOT filter the catalog live.
 - **Location badge**: Shows current city name, clickable to open location change modal
 - **Cart badge**: Shows item count, clickable (emerald when items present, slate when empty)
 - **Menu button**: Always visible, opens sidebar overlay (for My Lists access)
@@ -696,6 +696,30 @@ Individual product card for the browse/search grid.
 - **Quantity selector**: +/− buttons with amount and unit label. Weighted products step by 0.5 kg (starting at 0.5, label "ק״ג"), per-unit products step by 1 (starting at 1, label "יח׳"). Hidden once product is added.
 - Add / Added button (green CTA → disabled state once in cart). `onAdd(amount)` passes selected quantity to cart.
 - Card body click opens `ProductDetailModal`
+
+---
+
+### SearchDropdown.tsx
+**Location**: `components/SearchDropdown.tsx`
+
+Two-pane autocomplete panel rendered under the header search input in shopping mode (build_list step only). Inspired by the Rami Levy search overlay.
+
+**Behavior**:
+- Activates at ≥2 chars, debounced 250ms via `useDebounce`
+- Calls `searchProducts(q, 20, 0, undefined, storeType)` and collapses the result down to 10 displayed items
+- Mirrors `ProductCatalogArea`'s dedup: groups any results sharing a `product_group_id` (e.g. tomatoes from 3 chains) into one representative card, picks the cheapest as the rep, and overrides its image with the curated group image from `getProductGroups()`
+- Closes on Escape, outside click, or input clear
+
+**Layout**:
+- **Right pane (RTL-first, ~40% width)**: bold text list of product names; the matched substring is highlighted in `--accent`. Click a name → opens the modal.
+- **Left pane (~60% width)**: 2/3-column grid of `ProductCard` components (the same card used by the catalog) — full quantity stepper, weight badge, price, and "הוסף" button. Per-product step rules from `getQuantityStep`: 0.5 ק״ג for weighted produce, 0.1 ק״ג for fine dairy/deli/fish, 1 unit otherwise.
+- **Bottom CTA**: `לכל התוצאות של "<query>"` — full-width accent button that commits the typed query to the catalog filter and closes the panel
+- Mobile: panes stack (text list → card grid → CTA), `max-h: min(70vh, 560px)` with internal scroll
+
+**Wiring** (controlled by `App.tsx`):
+- `onAddProduct(p, amount)` → builds a `ShoppingProduct` via `defaultCartUnit` and pushes to `shoppingProducts` (skips dupes; `selectedSearchBarcodes` greys the card)
+- `onOpenProduct(p)` → sets `searchModalProduct` in App; App mounts `GroupDetailModal` if `product_group_id != null`, otherwise `ProductDetailModal`
+- `onSeeAllResults` → copies `headerSearchQuery` to `catalogSearchQuery` and clears category narrowing so the catalog shows results across all categories
 
 ---
 
@@ -4480,7 +4504,40 @@ Initial implementation also rendered an amber "סגרו את ההזמנה הפת
 
 ---
 
-**Last Updated**: April 27, 2026
-**Version**: 6.1.1
+## Session 2026-04-28 — Header search autocomplete dropdown
+
+Built a Rami-Levy–style two-pane autocomplete that opens under the shopping-mode header search input. Pure UI on top of existing services (`searchProducts`, `getProductGroups`); no API or backend changes. Shipped as one increment.
+
+### What got built
+- New `components/SearchDropdown.tsx`. Activates at ≥2 chars (debounced 250ms). Calls `searchProducts(q, 20)` and collapses to 10 visible items.
+- **Right pane**: text-only list of names; matched substring highlighted in `--accent`. Click → opens product modal.
+- **Left pane**: grid of the existing `ProductCard` (no reinvented card) — same qty stepper, weight badge, and "הוסף" button; per-product step from `getQuantityStep` (0.5 ק״ג produce, 0.1 ק״ג fine dairy/deli, 1 unit).
+- **Bottom CTA**: `לכל התוצאות של "<query>"` — commits the query to the catalog filter.
+
+### Decoupled live-typing from catalog filter
+Two separate states in `App.tsx`:
+- `headerSearchQuery` — drives the dropdown only, updates per keystroke
+- `catalogSearchQuery` — passed to `ShoppingInputArea.externalSearchQuery`, only set when the CTA is clicked or cleared when input is emptied / category picked
+
+This was a user-driven correction after v1 wired `headerSearchQuery` straight into the catalog filter, which made products behind the dropdown shuffle on every keystroke.
+
+### Dedup mirrors the catalog
+The dropdown applies the same `product_group_id` collapsing logic `ProductCatalogArea` uses (cheapest as representative, override `image_url` with the curated group image). A search for `עגבניה` now shows one tomato card instead of three, matching the main catalog. Clicking it opens `GroupDetailModal` (multi-chain price view), not `ProductDetailModal`. App mounts both modals and picks by `product_group_id`.
+
+### Z-index fix
+The shopping `Header` was bumped from `z-20` → `z-40` so its sticky stacking context outranks `CategoryNavBar` (z-30). Without this the dropdown rendered behind the category icons row. Modals (z-50+) still cover the header.
+
+### Files changed
+- New: `components/SearchDropdown.tsx`
+- `components/Header.tsx` — added 6 optional props (`searchDropdownEnabled`, `onAddProductFromSearch`, `onOpenProductFromSearch`, `onSeeAllSearchResults`, `searchStoreType`, `selectedSearchBarcodes`); wrapped input in `relative` container; tracks local `searchDropdownOpen`; sticky z bumped to `z-40`.
+- `App.tsx` — added `catalogSearchQuery` and `searchModalProduct` state; wired the four search-dropdown callbacks; mounted `ProductDetailModal` + `GroupDetailModal` (chosen by `product_group_id`); imported `defaultCartUnit`.
+
+### Not changed
+- `searchProducts`, `getProductGroups`, `ProductCard`, `ProductDetailModal`, `GroupDetailModal` — reused as-is per "don't reinvent the card."
+
+---
+
+**Last Updated**: April 28, 2026
+**Version**: 6.1.2
 **Status**: Production Ready
 

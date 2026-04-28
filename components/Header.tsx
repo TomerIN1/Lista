@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Globe, LogIn, LogOut, User as UserIcon, Search, MapPin, ShoppingCart, Sparkles, Menu } from 'lucide-react';
 import AccessibilityMenu from './AccessibilityMenu';
-import { AppMode, UserProfile } from '../types';
+import { AppMode, UserProfile, DbProduct } from '../types';
+import SearchDropdown from './SearchDropdown';
 
 interface HeaderProps {
   user: UserProfile | null;
@@ -21,6 +22,13 @@ interface HeaderProps {
   disabled?: boolean;
   onMenuClick?: () => void;
   onOpenAI?: () => void;
+  // Search dropdown — only relevant in shopping mode while building list
+  searchDropdownEnabled?: boolean;
+  onAddProductFromSearch?: (product: DbProduct, amount: number) => void;
+  onOpenProductFromSearch?: (product: DbProduct) => void;
+  onSeeAllSearchResults?: () => void;
+  searchStoreType?: string;
+  selectedSearchBarcodes?: Set<string>;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -28,8 +36,12 @@ const Header: React.FC<HeaderProps> = ({
   appMode = 'organize', onModeSwitch, shoppingCity, cartItemCount = 0,
   onLocationClick, onCartClick, searchQuery = '', onSearchChange, disabled = false,
   onMenuClick, onOpenAI,
+  searchDropdownEnabled = false,
+  onAddProductFromSearch, onOpenProductFromSearch, onSeeAllSearchResults,
+  searchStoreType, selectedSearchBarcodes,
 }) => {
   const { language, setLanguage, t, isRTL } = useLanguage();
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
 
   const isShopping = appMode === 'shopping';
 
@@ -112,7 +124,7 @@ const Header: React.FC<HeaderProps> = ({
   if (isShopping) {
     return (
       <header
-        className="sticky top-0 z-20 backdrop-blur-md border-b shadow-sm -mx-3 sm:-mx-4 mb-3"
+        className="sticky top-0 z-40 backdrop-blur-md border-b shadow-sm -mx-3 sm:-mx-4 mb-3"
         style={{ background: 'rgba(245,241,232,0.88)', borderColor: 'var(--line)' }}
       >
         {/* Main header row — slimmed down: search + profile only */}
@@ -147,25 +159,41 @@ const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Search bar */}
-          <div
-            className="flex-1 flex items-center gap-2 rounded-full px-3 py-2 border transition-all min-w-0"
-            style={{ background: 'var(--paper-surface-alt)', borderColor: 'var(--line)' }}
-          >
-            <Search className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--ink-soft)' }} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchChange?.(e.target.value)}
-              placeholder={t('productBrowse.searchProducts')}
-              className="flex-1 bg-transparent text-sm focus:outline-none min-w-0"
-              style={{ color: 'var(--ink)', textAlign: isRTL ? 'right' : 'left' }}
-              dir={isRTL ? 'rtl' : 'ltr'}
-            />
-            {searchQuery && (
-              <button onClick={() => onSearchChange?.('')} style={{ color: 'var(--ink-soft)' }}>
-                <span className="sr-only">Clear</span>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
+          <div className="flex-1 relative min-w-0" data-search-input>
+            <div
+              className="flex items-center gap-2 rounded-full px-3 py-2 border transition-all"
+              style={{ background: 'var(--paper-surface-alt)', borderColor: 'var(--line)' }}
+            >
+              <Search className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--ink-soft)' }} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => { onSearchChange?.(e.target.value); setSearchDropdownOpen(true); }}
+                onFocus={() => setSearchDropdownOpen(true)}
+                placeholder={t('productBrowse.searchProducts')}
+                className="flex-1 bg-transparent text-sm focus:outline-none min-w-0"
+                style={{ color: 'var(--ink)', textAlign: isRTL ? 'right' : 'left' }}
+                dir={isRTL ? 'rtl' : 'ltr'}
+              />
+              {searchQuery && (
+                <button onClick={() => { onSearchChange?.(''); setSearchDropdownOpen(false); }} style={{ color: 'var(--ink-soft)' }}>
+                  <span className="sr-only">Clear</span>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
+            </div>
+
+            {searchDropdownEnabled && onAddProductFromSearch && onOpenProductFromSearch && onSeeAllSearchResults && (
+              <SearchDropdown
+                query={searchQuery}
+                isOpen={searchDropdownOpen}
+                onClose={() => setSearchDropdownOpen(false)}
+                onAddProduct={(p, amount) => { onAddProductFromSearch(p, amount); /* keep dropdown open so user can add more */ }}
+                onOpenProduct={(p) => { onOpenProductFromSearch(p); setSearchDropdownOpen(false); }}
+                onSeeAllResults={() => { onSeeAllSearchResults(); setSearchDropdownOpen(false); }}
+                storeType={searchStoreType}
+                selectedBarcodes={selectedSearchBarcodes}
+              />
             )}
           </div>
 
