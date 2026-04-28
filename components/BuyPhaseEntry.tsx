@@ -1,19 +1,32 @@
 // components/BuyPhaseEntry.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronDown } from 'lucide-react';
+import { X, ChevronDown, Loader2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ChainTotal, UnmatchedItem, PricedItem } from '../hooks/useLiveComparison';
 import { chainBadgeColor, chainAbbrev } from '../utils/chainBranding';
 import { LISTA_CATEGORIES, DEFAULT_CATEGORY } from '../agents_and_ai/product-discovery-assistant/listaCategories';
+import { processSmartChat } from '../agents_and_ai/product-discovery-assistant/smartListService';
+import { DbProduct } from '../types';
 
-/** A single line in the receipt — either a priced item (matched) or a
- *  missing-name placeholder (unmatched at this chain). The receipt
- *  renderer treats them in one stream so a category section shows both
- *  what's available and what's not in one place. */
+/** Per-chain substitution: user picked a replacement DB product for a
+ *  missing item name. Stored locally in ShoppingInputArea, applied at
+ *  chain-pick time and surfaced visually here as synthetic priced lines. */
+export interface ChainSubstitution {
+  originalName: string;
+  replacement: DbProduct;
+  quantity: number;
+}
+
+/** A single line in the receipt — a real priced item, a missing-name
+ *  placeholder, or a synthetic substitution line (a user-picked replacement
+ *  for a missing item). The receipt renderer treats them in one stream so
+ *  a category section shows both what's available and what's not in one
+ *  place. */
 type ReceiptLine =
   | { kind: 'priced'; item: PricedItem }
-  | { kind: 'missing'; name: string };
+  | { kind: 'missing'; name: string }
+  | { kind: 'sub'; originalName: string; replacement: DbProduct; quantity: number };
 
 interface ReceiptCategoryGroup {
   category: string;
@@ -23,8 +36,16 @@ interface ReceiptCategoryGroup {
 
 /** Build receipt-style category groups from the chain's matched + unmatched
  *  items, ordered by canonical LISTA_CATEGORIES so the user reads
- *  produce → dairy → ... in the natural shopping flow. */
-function buildReceipt(priced: PricedItem[], missing: UnmatchedItem[]): ReceiptCategoryGroup[] {
+ *  produce → dairy → ... in the natural shopping flow.
+ *
+ *  Substitutions are merged in: for each `subs` entry, the matching
+ *  unmatched item is dropped from the missing-list and a synthetic priced
+ *  "sub" line is appended in the original missing item's category bucket. */
+function buildReceipt(
+  priced: PricedItem[],
+  missing: UnmatchedItem[],
+  subs: ChainSubstitution[],
+): ReceiptCategoryGroup[] {
   const buckets = new Map<string, { lines: ReceiptLine[]; subtotal: number }>();
   const ensure = (cat: string) => {
     let b = buckets.get(cat);
@@ -40,9 +61,44 @@ function buildReceipt(priced: PricedItem[], missing: UnmatchedItem[]): ReceiptCa
     b.lines.push({ kind: 'priced', item: ip });
     b.subtotal += ip.total;
   }
+
+  // Substitutions index by originalName so we can look up a missing item's
+  // category and drop the missing line in favour of the replacement.
+  const subByName = new Map<string, ChainSubstitution>();
+  for (const s of subs) subByName.set(s.originalName, s);
+
   for (const um of missing) {
-    const b = ensure(um.category || DEFAULT_CATEGORY);
-    b.lines.push({ kind: 'missing', name: um.name });
+    const sub = subByName.get(um.name);
+    if (sub) {
+      const b = ensure(um.category || DEFAULT_CATEGORY);
+      const lineTotal = (sub.replacement.min_price ?? 0) * sub.quantity;
+      b.lines.push({
+        kind: 'sub',
+        originalName: sub.originalName,
+        replacement: sub.replacement,
+        quantity: sub.quantity,
+      });
+      b.subtotal += lineTotal;
+      subByName.delete(um.name); // consumed
+    } else {
+      const b = ensure(um.category || DEFAULT_CATEGORY);
+      b.lines.push({ kind: 'missing', name: um.name });
+    }
+  }
+
+  // Stragglers: substitutions whose originalName didn't appear in the
+  // missing list (shouldn't normally happen — defensive). Bucket under
+  // DEFAULT_CATEGORY so they still surface to the user.
+  for (const sub of subByName.values()) {
+    const b = ensure(DEFAULT_CATEGORY);
+    const lineTotal = (sub.replacement.min_price ?? 0) * sub.quantity;
+    b.lines.push({
+      kind: 'sub',
+      originalName: sub.originalName,
+      replacement: sub.replacement,
+      quantity: sub.quantity,
+    });
+    b.subtotal += lineTotal;
   }
 
   const ordered: ReceiptCategoryGroup[] = [];
@@ -71,12 +127,29 @@ interface BuyPhaseEntryProps {
    *  responsible for closing the modal and launching the agent with
    *  chain.displayName as storeName. */
   onPickChain: (chain: ChainTotal) => void;
+  /** Per-chain substitutions chosen by the user, keyed by canonical chain
+   *  code. Powers the synthetic priced lines and the augmented chain
+   *  totals/missing counts. */
+  chainSubs?: Record<string, ChainSubstitution[]>;
+  /** User tapped a missing-item line — open the substitution sheet. */
+  onRequestSubstitution?: (chain: ChainTotal, missingItemName: string) => void;
+  /** User tapped the small ✕ on a substituted line to revert the swap. */
+  onUndoSubstitution?: (chain: ChainTotal, originalName: string) => void;
+  /** User tapped "Replace all missing items" — auto-pick a recommended
+   *  replacement at this chain for every still-missing item, in one batch. */
+  onBulkSubstitution?: (chain: ChainTotal, subs: ChainSubstitution[]) => void;
+  /** Forwarded to processSmartChat for chain-scoped bulk substitution search. */
+  city?: string;
+  /** Forwarded to processSmartChat for chain-scoped bulk substitution search. */
+  storeType?: string;
 }
 
 const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
   open, onClose, chains, totalItems, onPickChain,
+  chainSubs, onRequestSubstitution, onUndoSubstitution,
+  onBulkSubstitution, city, storeType,
 }) => {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, language } = useLanguage();
 
   // Per-card expand state — one card open at a time.
   // Resets naturally when modal unmounts (component re-mounts on next open).
@@ -84,6 +157,66 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
   const isExpanded = (chain: string) => expandedChain === chain;
   const toggleExpanded = (chain: string) =>
     setExpandedChain(prev => (prev === chain ? null : chain));
+
+  // While a bulk substitution batch is running for a chain, keep the chain
+  // code here so we can show a spinner and disable the button.
+  const [bulkRunningChain, setBulkRunningChain] = useState<string | null>(null);
+
+  // Augmented chain order: re-sort by (deliverable) total + user-chosen
+  // substitution cost so the cheapest-first order — and the green
+  // "מומלץ" badge at i === 0 — both reflect the post-substitution reality.
+  // We never mutate the original `chains` prop.
+  const augmentedChains = useMemo(() => {
+    return chains
+      .map(c => {
+        const subsForChain = chainSubs?.[c.chain] ?? [];
+        const subsTotal = subsForChain.reduce(
+          (sum, s) => sum + (s.replacement.min_price ?? 0) * s.quantity,
+          0,
+        );
+        const effective = (c.totalWithDelivery ?? c.total) + subsTotal;
+        return { chain: c, effective };
+      })
+      .sort((a, b) => a.effective - b.effective);
+  }, [chains, chainSubs]);
+
+  const handleBulkReplace = async (chain: ChainTotal, missingNames: string[]) => {
+    if (missingNames.length === 0) return;
+    setBulkRunningChain(chain.chain);
+    try {
+      const results = await Promise.all(
+        missingNames.map(async (name) => {
+          try {
+            const r = await processSmartChat(
+              name,
+              language,
+              [],
+              city,
+              storeType,
+              [chain.chain],
+            );
+            const group = r.itemGroups[0];
+            if (group?.status === 'matched' && group.recommended) {
+              return {
+                originalName: name,
+                replacement: group.recommended,
+                quantity: 1,
+              } as ChainSubstitution;
+            }
+          } catch {
+            // swallow — item simply stays missing
+          }
+          return null;
+        }),
+      );
+      const picked = results.filter((s): s is ChainSubstitution => s !== null);
+      if (picked.length > 0) {
+        onBulkSubstitution?.(chain, picked);
+      }
+    } finally {
+      setBulkRunningChain(null);
+    }
+  };
 
   // Lock body scroll + Esc-to-close while open.
   useEffect(() => {
@@ -158,15 +291,39 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
 
         {/* Card list */}
         <div className="overflow-y-auto flex-1 px-4 pb-4 space-y-2.5">
-          {chains.map((c, i) => {
+          {augmentedChains.map(({ chain: c }, i) => {
             const isBest = i === 0;
-            const totalToShow = c.totalWithDelivery ?? c.total;
+            const subsForChain = chainSubs?.[c.chain] ?? [];
+            const subsByName = new Map(subsForChain.map(s => [s.originalName, s]));
+            // Augment chain totals/counts to reflect user-chosen substitutions:
+            // a substituted item moves out of "missing" and into the priced
+            // total, so the chain card immediately shows the new state without
+            // waiting for a refetch.
+            const subsTotal = subsForChain.reduce(
+              (sum, s) => sum + (s.replacement.min_price ?? 0) * s.quantity,
+              0,
+            );
+            const effectiveMatched = c.matchedItems + subsForChain.length;
+            const baseTotal = c.total + subsTotal;
+            const baseTotalWithDelivery = c.totalWithDelivery != null
+              ? c.totalWithDelivery + subsTotal
+              : undefined;
+            const totalToShow = baseTotalWithDelivery ?? baseTotal;
             const whole = Math.floor(totalToShow);
             const decimals = (totalToShow - whole).toFixed(2).slice(1); // ".40"
-            const missing = Math.max(0, totalItems - c.matchedItems);
-            const hasMissing = c.unmatchedItems.length > 0;
-            const hasReceipt = c.itemPrices.length > 0 || hasMissing;
-            const receipt = hasReceipt ? buildReceipt(c.itemPrices, c.unmatchedItems) : [];
+            const missing = Math.max(0, totalItems - effectiveMatched);
+            const remainingMissing = c.unmatchedItems.filter(um => !subsByName.has(um.name));
+            const hasMissing = remainingMissing.length > 0;
+            const hasReceipt = c.itemPrices.length > 0 || hasMissing || subsForChain.length > 0;
+            const receipt = hasReceipt
+              ? buildReceipt(c.itemPrices, c.unmatchedItems, subsForChain)
+              : [];
+            // Recompute belowMinimum locally — the prop is stale once subs are
+            // applied. The minimum is checked against the subtotal (no delivery),
+            // so use baseTotal, NOT totalToShow.
+            const effectiveBelowMinimum =
+              c.minimumOrder != null && c.minimumOrder > 0 && baseTotal < c.minimumOrder;
+            const isBulkRunning = bulkRunningChain === c.chain;
 
             return (
               // Outer card: div role="button" to allow inner <button> elements (HTML spec
@@ -218,7 +375,7 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                     </div>
                     <div className="flex items-center flex-wrap gap-2 text-[10px]" style={{ color: 'var(--ink-muted)' }}>
                       <span>
-                        {c.matchedItems}/{totalItems}
+                        {effectiveMatched}/{totalItems}
                       </span>
                       {c.deliveryFee != null && c.deliveryFee > 0 && (
                         <span>
@@ -242,7 +399,7 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                           {t('productBrowse.buyEntryItemsMissing').replace('{n}', String(missing))}
                         </button>
                       )}
-                      {c.belowMinimum && (
+                      {effectiveBelowMinimum && (
                         <span
                           className="px-1.5 py-0.5 rounded-full font-bold"
                           style={{ background: 'rgba(245,158,11,0.12)', color: '#B45309' }}
@@ -301,6 +458,46 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                     <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--ink-muted)' }}>
                       {t('productBrowse.buyEntryReceiptHeading')}
                     </div>
+
+                    {/* Bulk "replace all missing" — visible only while there
+                        are still unsubstituted missing items at this chain.
+                        While running, swap to a disabled spinner state. */}
+                    {remainingMissing.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Re-filter against the freshest subsByName at click
+                          // time to dodge any race between rapid taps.
+                          const freshNames = c.unmatchedItems
+                            .filter(um => !subsByName.has(um.name))
+                            .map(um => um.name);
+                          handleBulkReplace(c, freshNames);
+                        }}
+                        disabled={isBulkRunning}
+                        className="w-full mb-3 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-70"
+                        style={{
+                          background: 'var(--save)',
+                          color: '#fff',
+                        }}
+                      >
+                        {isBulkRunning ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>
+                              {t('productBrowse.buyEntryReplaceAllRunning')
+                                .replace('{n}', String(remainingMissing.length))}
+                            </span>
+                          </>
+                        ) : (
+                          <span>
+                            {t('productBrowse.buyEntryReplaceAll')
+                              .replace('{n}', String(remainingMissing.length))}
+                          </span>
+                        )}
+                      </button>
+                    )}
+
                     <div style={{ maxHeight: 320, overflowY: 'auto' }}>
                       {receipt.map(group => (
                         <div key={group.category} style={{ marginBottom: 10 }}>
@@ -322,21 +519,153 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                           {group.lines.map((line, idx) => {
                             if (line.kind === 'missing') {
                               return (
-                                <div
+                                <button
                                   key={`m-${idx}-${line.name}`}
-                                  className="flex items-baseline gap-2"
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRequestSubstitution?.(c, line.name);
+                                  }}
+                                  className="w-full flex items-baseline gap-2 text-start"
                                   style={{
                                     color: 'var(--ink-muted)',
-                                    opacity: 0.7,
                                     marginBottom: 2,
+                                    background: 'transparent',
+                                    padding: 0,
+                                    border: 'none',
+                                    cursor: 'pointer',
                                   }}
+                                  aria-label={`${line.name} — ${t('productBrowse.buyEntryFindAlternative')}`}
                                 >
-                                  <span style={{ flex: 1, textDecoration: 'line-through' }}>
+                                  <span
+                                    style={{
+                                      flex: 1,
+                                      textDecoration: 'line-through',
+                                      opacity: 0.7,
+                                    }}
+                                  >
                                     {line.name}
                                   </span>
-                                  <span style={{ fontStyle: 'italic', fontSize: 10 }}>
-                                    {t('productBrowse.buyEntryUnavailable')}
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      color: 'var(--accent)',
+                                      background: 'rgba(215,53,45,0.10)',
+                                      padding: '1px 6px',
+                                      borderRadius: 999,
+                                    }}
+                                  >
+                                    {t('productBrowse.buyEntryFindAlternative')}
                                   </span>
+                                </button>
+                              );
+                            }
+                            if (line.kind === 'sub') {
+                              const repl = line.replacement;
+                              const unitPrice = repl.min_price ?? 0;
+                              const lineTotal = unitPrice * line.quantity;
+                              const qtySuffix = line.quantity !== 1
+                                ? ` × ${line.quantity}${repl.is_weighted ? 'kg' : ''}`
+                                : '';
+                              // Whole sub line is tappable — re-opens the
+                              // SubstitutionSheet for this originalName so the
+                              // user can pick a different replacement. The ✕
+                              // undo and the parent card-pick stay separate.
+                              return (
+                                <div
+                                  key={`s-${idx}-${repl.barcode}`}
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRequestSubstitution?.(c, line.originalName);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      onRequestSubstitution?.(c, line.originalName);
+                                    }
+                                  }}
+                                  style={{ marginBottom: 3, cursor: 'pointer' }}
+                                  aria-label={`${repl.name} — ${t('productBrowse.buyEntrySubChange')}`}
+                                >
+                                  <div className="flex items-baseline gap-2">
+                                    <span style={{ flex: 1, color: 'var(--ink)' }}>
+                                      <span
+                                        style={{
+                                          fontSize: 9,
+                                          fontWeight: 700,
+                                          color: 'var(--save)',
+                                          background: 'rgba(55,166,67,0.12)',
+                                          padding: '1px 5px',
+                                          borderRadius: 999,
+                                          marginInlineEnd: 4,
+                                        }}
+                                      >
+                                        {t('productBrowse.buyEntrySubAlternativeBadge')}
+                                      </span>
+                                      {repl.name}
+                                      <span
+                                        style={{
+                                          fontSize: 9,
+                                          fontWeight: 600,
+                                          color: 'var(--ink-muted)',
+                                          marginInlineStart: 6,
+                                          textDecoration: 'underline',
+                                          textUnderlineOffset: 2,
+                                        }}
+                                      >
+                                        {t('productBrowse.buyEntrySubChange')}
+                                      </span>
+                                    </span>
+                                    <span
+                                      className="flex items-baseline gap-1"
+                                      style={{ fontSize: 10, color: 'var(--ink-muted)' }}
+                                    >
+                                      <span>
+                                        ₪{unitPrice.toFixed(2)}{qtySuffix}
+                                      </span>
+                                    </span>
+                                    <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: 50, textAlign: 'end' }}>
+                                      ₪{lineTotal.toFixed(2)}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onUndoSubstitution?.(c, line.originalName);
+                                      }}
+                                      aria-label={t('productBrowse.buyEntrySubUndo')}
+                                      style={{
+                                        marginInlineStart: 2,
+                                        width: 16,
+                                        height: 16,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        borderRadius: 999,
+                                        color: 'var(--ink-muted)',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 9,
+                                      color: 'var(--ink-muted)',
+                                      marginTop: 1,
+                                      textDecoration: 'line-through',
+                                      opacity: 0.7,
+                                    }}
+                                  >
+                                    {line.originalName}
+                                  </div>
                                 </div>
                               );
                             }
@@ -418,7 +747,7 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                         style={{ fontWeight: 700, fontSize: 12, color: 'var(--ink)' }}
                       >
                         <span>{t('productBrowse.buyEntryGrandTotal')}</span>
-                        <span>₪{(c.totalWithDelivery ?? c.total).toFixed(2)}</span>
+                        <span>₪{totalToShow.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>

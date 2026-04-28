@@ -864,10 +864,13 @@ const App: React.FC = () => {
   };
   const cancelCloseAgent = () => setCloseConfirmOpen(false);
 
-  const handleShoppingOnline = (storeName?: string) => {
+  const handleShoppingOnline = (
+    storeName?: string,
+    substitutions?: { originalName: string; replacement: DbProduct; quantity: number }[],
+  ) => {
     if (shoppingProducts.length === 0) return;
 
-    // Build temporary groups from DB products for the agent
+    // Build temporary groups from DB products for the agent.
     const tempItems = shoppingProducts.map((p) => ({
       id: crypto.randomUUID(),
       name: p.name,
@@ -879,6 +882,30 @@ const App: React.FC = () => {
       manufacturer: p.manufacturer,
       dbPrice: p.min_price,
     }));
+
+    // Apply per-chain substitutions chosen by the user in BuyPhaseEntry: drop
+    // the original missing item (matched by exact name — defensive, non-strict)
+    // and append the replacement converted to a tempItem. If the original
+    // doesn't match (the unmatched name diverged from the basket name), we
+    // still ADD the replacement so the user's pick isn't lost — at worst the
+    // agent sees both, which is the OLD missing-item behaviour and harmless.
+    if (substitutions && substitutions.length > 0) {
+      for (const sub of substitutions) {
+        const idx = tempItems.findIndex(it => it.name === sub.originalName);
+        if (idx >= 0) tempItems.splice(idx, 1);
+        tempItems.push({
+          id: crypto.randomUUID(),
+          name: sub.replacement.name,
+          checked: false,
+          amount: sub.quantity,
+          unit: sub.replacement.is_weighted ? 'kg' : 'pcs',
+          barcode: sub.replacement.barcode,
+          dbProductId: sub.replacement.id,
+          manufacturer: sub.replacement.manufacturer,
+          dbPrice: sub.replacement.min_price,
+        });
+      }
+    }
 
     const tempGroups: CategoryGroup[] = [
       { id: crypto.randomUUID(), category: 'Shopping List', items: tempItems },

@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ShoppingProduct, Unit, DeliveryCheckResult } from '../types';
+import { ShoppingProduct, Unit, DeliveryCheckResult, DbProduct } from '../types';
 import ProductCatalogArea from './ProductCatalogArea';
 import SmartListPanel from '../agents_and_ai/product-discovery-assistant/SmartListPanel';
 import { useLiveComparison, ChainTotal } from '../hooks/useLiveComparison';
@@ -12,7 +12,11 @@ import LiveBasketPanel from './LiveBasketPanel';
 import StoresStripV2 from './StoresStripV2';
 import MobileBasketBar from './MobileBasketBar';
 import MobileBasketSheet from './MobileBasketSheet';
-import BuyPhaseEntry from './BuyPhaseEntry';
+import BuyPhaseEntry, { ChainSubstitution } from './BuyPhaseEntry';
+import SubstitutionSheet from './SubstitutionSheet';
+
+/** Public alias re-exported for the App-level handoff signature. */
+export type { ChainSubstitution } from './BuyPhaseEntry';
 
 const UNITS: Unit[] = ['pcs', 'g', 'kg', 'L', 'ml'];
 
@@ -36,8 +40,14 @@ interface ShoppingInputAreaProps {
   showSmartList?: boolean;
   onShowSmartListChange?: (v: boolean) => void;
   /** Called with the chain's display name (e.g. "רמי לוי") when the user
-   *  picks a chain in the Buy phase entry screen. Routes to the agent. */
-  onStartOnlineAgent: (storeDisplayName: string) => void;
+   *  picks a chain in the Buy phase entry screen. Routes to the agent.
+   *  The optional second arg carries any user-chosen substitutions for
+   *  missing items at the picked chain — App.handleShoppingOnline merges
+   *  these into the grocery list before opening PriceAgentChat. */
+  onStartOnlineAgent: (
+    storeDisplayName: string,
+    substitutions?: ChainSubstitution[],
+  ) => void;
   /** True while an agent run is in progress. List editing is disabled and a
    *  banner is shown to direct the user to close the order to make changes. */
   agentRunning?: boolean;
@@ -81,6 +91,15 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [buyPhaseOpen, setBuyPhaseOpen] = useState(false);
 
+  // Per-chain substitutions chosen by the user during BuyPhaseEntry. Keyed
+  // by canonical chain code (ChainTotal.chain). Resets when the cart is
+  // cleared so stale swaps don't leak across lists.
+  const [chainSubs, setChainSubs] = useState<Record<string, ChainSubstitution[]>>({});
+
+  // Pending substitution sheet target (chain + missing item name). Null when
+  // the sheet is closed.
+  const [subTarget, setSubTarget] = useState<{ chain: ChainTotal; name: string } | null>(null);
+
   const liveCmp = useLiveComparison({
     products,
     city,
@@ -112,7 +131,54 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
 
   const handlePickChain = (chain: ChainTotal) => {
     setBuyPhaseOpen(false);
-    onStartOnlineAgent(chain.displayName);
+    onStartOnlineAgent(chain.displayName, chainSubs[chain.chain] ?? []);
+  };
+
+  const handleRequestSubstitution = (chain: ChainTotal, missingItemName: string) => {
+    setSubTarget({ chain, name: missingItemName });
+  };
+
+  const handleAcceptSubstitution = (replacement: DbProduct, quantity: number) => {
+    if (!subTarget) return;
+    const { chain, name } = subTarget;
+    setChainSubs(prev => {
+      const existing = prev[chain.chain] ?? [];
+      // Replace any prior substitution for the same originalName so the user
+      // can iterate without duplicate entries.
+      const next = [
+        ...existing.filter(s => s.originalName !== name),
+        { originalName: name, replacement, quantity },
+      ];
+      return { ...prev, [chain.chain]: next };
+    });
+  };
+
+  const handleUndoSubstitution = (chain: ChainTotal, originalName: string) => {
+    setChainSubs(prev => {
+      const existing = prev[chain.chain] ?? [];
+      const next = existing.filter(s => s.originalName !== originalName);
+      if (next.length === 0) {
+        const copy = { ...prev };
+        delete copy[chain.chain];
+        return copy;
+      }
+      return { ...prev, [chain.chain]: next };
+    });
+  };
+
+  // Bulk substitution: merge a batch of replacements into the chain's
+  // sub list WITHOUT clobbering manual picks the user already accepted.
+  // For each new sub, if there's an existing sub for the same originalName
+  // we keep the existing one — the user already chose it explicitly.
+  const handleBulkSubstitution = (chain: ChainTotal, subs: ChainSubstitution[]) => {
+    if (subs.length === 0) return;
+    setChainSubs(prev => {
+      const existing = prev[chain.chain] ?? [];
+      const existingNames = new Set(existing.map(s => s.originalName));
+      const additions = subs.filter(s => !existingNames.has(s.originalName));
+      if (additions.length === 0) return prev;
+      return { ...prev, [chain.chain]: [...existing, ...additions] };
+    });
   };
 
   // Effective chains: use all available chains from the user's area
@@ -165,6 +231,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   const handleClear = () => {
     onProductsChange([]);
     setSelectedChainCode(null); // reset chain selection so next basket opens on cheapest
+    setChainSubs({});           // drop any pending per-chain substitutions
   };
 
   const handleSmartListConfirm = (newProducts: ShoppingProduct[]) => {
@@ -256,7 +323,26 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         chains={liveCmp.data?.chains ?? []}
         totalItems={liveCmp.data?.totalItems ?? products.length}
         onPickChain={handlePickChain}
+        chainSubs={chainSubs}
+        onRequestSubstitution={handleRequestSubstitution}
+        onUndoSubstitution={handleUndoSubstitution}
+        onBulkSubstitution={handleBulkSubstitution}
+        city={city}
+        storeType={storeType}
       />
+
+      {subTarget && (
+        <SubstitutionSheet
+          open={!!subTarget}
+          onClose={() => setSubTarget(null)}
+          chainCode={subTarget.chain.chain}
+          chainDisplayName={subTarget.chain.displayName}
+          itemName={subTarget.name}
+          city={city}
+          storeType={storeType}
+          onAccept={handleAcceptSubstitution}
+        />
+      )}
     </>
   );
 };

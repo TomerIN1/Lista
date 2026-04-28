@@ -4537,7 +4537,42 @@ The shopping `Header` was bumped from `z-20` → `z-40` so its sticky stacking c
 
 ---
 
+## Session 2026-04-28 (cont.) — Increment 4: chain-scoped substitution at chain-pick time
+
+Final v1 increment of the Plan/Buy phase separation. Spec §7.3 originally proposed mid-agent-run substitution cards in `PriceAgentChat`; this implements the user's redesign: substitution happens UPFRONT in the BuyPhaseEntry chain card, scoped to that chain's catalog, BEFORE PricePilot ever runs. Zero agent-touching changes.
+
+### What ships
+- Each missing-item line on a `BuyPhaseEntry` chain card is now a tappable button. Tapping it opens `SubstitutionSheet` for `(chain, missingItemName)`.
+- The sheet calls `processSmartChat(itemName, lang, [], city, storeType, [chainCode])` — the chain filter ensures results come ONLY from that chain's catalog. Renders the recommended product as a primary card + up to 3 alternatives as selectable rows. Weighted products get a kg stepper.
+- Pressing "החלף" stores the substitution per-chain in `ShoppingInputArea` state. The chain card re-renders synthetically: the missing line moves out of the missing group, a new priced line appears with a green "חלופה" badge + ✕ undo button, the missing count drops, and the chain total updates immediately (no refetch).
+- On chain pick, the substitutions for that chain flow through `onStartOnlineAgent → handleShoppingOnline(storeName, substitutions)` and are merged into `tempItems`: original missing item dropped (matched by exact name), replacement appended with the user's chosen quantity. PricePilot agent then runs with a pre-resolved list and OOS detection rarely fires.
+
+### Files changed
+- `components/SubstitutionSheet.tsx` — new. Single-item, single-chain bottom sheet (mobile) / centered modal (desktop). Loading + no-match states. RTL-aware. ~340 lines.
+- `components/BuyPhaseEntry.tsx` — `ReceiptLine` gains `'sub'` variant; `buildReceipt(priced, missing, subs)` signature change merges substitutions into the receipt under the original item's category and drops the matching missing line. Per-chain effective totals/match counts recomputed locally so substitutions reflect immediately. Missing line is now a `<button>` with a "+ חלופה" pill; sub line shows the replacement, kg suffix when weighted, original strikethrough on a sub-line, and an ✕ undo button. Grand total uses the substitution-augmented value.
+- `components/ShoppingInputArea.tsx` — new `chainSubs` state keyed by chain code; new `subTarget` state for the pending sheet; mounts `SubstitutionSheet`; passes `chainSubs` + `onRequestSubstitution` + `onUndoSubstitution` into `BuyPhaseEntry`; threads substitutions through `handlePickChain` to `onStartOnlineAgent(displayName, subs)`. `handleClear` resets `chainSubs`. `onStartOnlineAgent` prop signature gains an optional second arg.
+- `App.tsx` — `handleShoppingOnline(storeName, substitutions?)` merges substitutions into `tempItems`: drops original by exact-name match, appends replacement with `is_weighted ? 'kg' : 'pcs'`. Defensive: if exact-name match fails, replacement is still appended so the user's pick survives.
+- `constants/translations.ts` — 10 new keys × 2 locales under `productBrowse.*`.
+
+### Not changed
+- `pricepilot_agent_v4/`, `agent.py`, `components/PriceAgentChat.tsx`, `components/ChatMessage.tsx`, `services/agentService.ts` — untouched per the redesign. Substitution is fully resolved before the agent surface mounts.
+- `SmartListPanel.tsx`, `SmartResultsList.tsx` — reused `processSmartChat` and types only; the substitution sheet is a slim, dedicated component (no chat surface, no AI re-prompt).
+
+### Verified
+- `npm run build` — green.
+- Pre-existing TS errors in `ProductCatalogArea.tsx` and `RightRail.tsx` are unrelated.
+
+### Polish (same session)
+Three follow-ups on top of the v1 increment:
+1. **Effective match count.** The chain card badge (`{matched}/{total}`) used the raw count from `useLiveComparison` and ignored substitutions, so two subs on a 5-item list still rendered "3/5". Now uses the local `effectiveMatched = c.matchedItems + subsForChain.length`.
+2. **Re-sort by effective total.** The chains came in pre-sorted cheapest-first, but after subs the cheapest could change while the cards (and the green "מומלץ" badge at index 0) stayed put. `BuyPhaseEntry` now builds an `augmentedChains` memo that sorts by `(totalWithDelivery ?? total) + subsTotal`. The `belowMinimum` flag is also recomputed locally against `c.total + subsTotal` (subtotal, no delivery) since the prop is stale once subs are applied.
+3. **Bulk "replace all missing" + re-tappable sub lines.** New primary button at the top of the expanded receipt — visible when `remainingMissing.length > 0` — fans out `processSmartChat(name, lang, [], city, storeType, [chain.chain])` calls in parallel. Each successful pick (`itemGroups[0]?.recommended` with `status === 'matched'`) becomes a `ChainSubstitution` with `quantity = 1`. Results are merged via a new `onBulkSubstitution` callback that does NOT clobber any user-picked manual subs. Existing sub lines are now also tappable: clicking re-opens `SubstitutionSheet` for the same `originalName` (the existing accept handler already overrides). A small underlined "החלף"/"Change" affordance was added inline so users see the line is interactive.
+
+New translation keys: `buyEntryReplaceAll`, `buyEntryReplaceAllRunning`, `buyEntrySubChange`.
+
+---
+
 **Last Updated**: April 28, 2026
-**Version**: 6.1.2
+**Version**: 6.2.0
 **Status**: Production Ready
 
