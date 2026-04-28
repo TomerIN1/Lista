@@ -96,9 +96,13 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
   // cleared so stale swaps don't leak across lists.
   const [chainSubs, setChainSubs] = useState<Record<string, ChainSubstitution[]>>({});
 
-  // Pending substitution sheet target (chain + missing item name). Null when
-  // the sheet is closed.
-  const [subTarget, setSubTarget] = useState<{ chain: ChainTotal; name: string } | null>(null);
+  // Pending substitution sheet target (chain + missing item name + category).
+  // The category is the basket-side Lista taxonomy bucket, forwarded to
+  // processSmartChat as `forcedListaCategory` so cross-category swaps (walnuts
+  // → chocolate "אגוזי") can't happen. Null when the sheet is closed.
+  const [subTarget, setSubTarget] = useState<
+    { chain: ChainTotal; name: string; category?: string } | null
+  >(null);
 
   const liveCmp = useLiveComparison({
     products,
@@ -134,8 +138,12 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
     onStartOnlineAgent(chain.displayName, chainSubs[chain.chain] ?? []);
   };
 
-  const handleRequestSubstitution = (chain: ChainTotal, missingItemName: string) => {
-    setSubTarget({ chain, name: missingItemName });
+  const handleRequestSubstitution = (
+    chain: ChainTotal,
+    missingItemName: string,
+    category?: string,
+  ) => {
+    setSubTarget({ chain, name: missingItemName, category });
   };
 
   const handleAcceptSubstitution = (replacement: DbProduct, quantity: number) => {
@@ -329,6 +337,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
         onBulkSubstitution={handleBulkSubstitution}
         city={city}
         storeType={storeType}
+        shoppingProducts={products}
       />
 
       {subTarget && (
@@ -340,6 +349,7 @@ const ShoppingInputArea: React.FC<ShoppingInputAreaProps> = ({
           itemName={subTarget.name}
           city={city}
           storeType={storeType}
+          category={subTarget.category}
           onAccept={handleAcceptSubstitution}
         />
       )}

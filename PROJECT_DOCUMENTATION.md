@@ -4570,6 +4570,14 @@ Three follow-ups on top of the v1 increment:
 
 New translation keys: `buyEntryReplaceAll`, `buyEntryReplaceAllRunning`, `buyEntrySubChange`.
 
+### Follow-ups (same session)
+Three more sharpenings on top of the polish above:
+1. **Inspect product from receipt.** Priced and substituted receipt lines are now tappable — they open the existing `ProductDetailModal` (or `GroupDetailModal` for weighted product-group items, mirroring the routing in `ProductCatalogArea.tsx`) so the user can see image, manufacturer, price-per-unit, and the cross-store comparison without leaving the buy-entry sheet. Priced lines look up the source `DbProduct` via a basket-side `Map<itemName, ShoppingProduct>` (`ip.itemName` mirrors `ShoppingProduct.name`); sub lines use `line.replacement` directly. The inline "Change" pill on a sub line was promoted to a real `<button>` so it stays separate from the new outer-line tap target. The Add CTA inside the modals is a no-op here (`isAdded` always true) — the user is mid-buy and the items are already in the basket. Missing lines keep their existing "find alternative" behavior.
+2. **Explicit "Shop with PricePilot" CTA.** The chain card body no longer auto-launches PricePilot on tap — the previous behavior was discoverable only by accident and made the card commit-on-touch. Tapping the card body or chevron now only expand-collapses the receipt. A new full-width primary button (with `ShoppingCart` icon) sits below the meta row and is the sole launch trigger via the unchanged `onPickChain(c)` callback. New translation key `buyEntryShopWithPricepilot` ("קנה עם PricePilot" / "Shop with PricePilot"). The button stays enabled below-min — the existing red pill is the warning channel.
+3. **Category-strict substitution search.** `processSmartChat` gains an optional `forcedListaCategory` arg that overrides the AI's per-search `listaCategory` tag. The substitution flow knows the missing item's basket-side category from `useLiveComparison.UnmatchedItem.category`, so it forces that category through `SubstitutionSheet` (new `category?: string` prop) and through the bulk "replace all missing" loop (each `UnmatchedItem` carries its own category). Fixes the failure mode where "אגוזי מלך" (walnuts) was matched to "אגוזי" chocolate — the AI re-tagged the search as snacks and the alignment filter let the wrong category through. Existing `SmartListPanel` chat callers don't pass the new arg and behave unchanged.
+
+Files changed: `components/BuyPhaseEntry.tsx`, `components/ShoppingInputArea.tsx`, `components/SubstitutionSheet.tsx`, `agents_and_ai/product-discovery-assistant/smartListService.ts`, `constants/translations.ts`, `PROJECT_DOCUMENTATION.md`. Build green; pre-existing TS errors in `ProductCatalogArea.tsx` / `RightRail.tsx` remain.
+
 ---
 
 **Last Updated**: April 28, 2026

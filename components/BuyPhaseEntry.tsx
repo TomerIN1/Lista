@@ -1,13 +1,15 @@
 // components/BuyPhaseEntry.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronDown, Loader2 } from 'lucide-react';
+import { X, ChevronDown, Loader2, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ChainTotal, UnmatchedItem, PricedItem } from '../hooks/useLiveComparison';
 import { chainBadgeColor, chainAbbrev } from '../utils/chainBranding';
 import { LISTA_CATEGORIES, DEFAULT_CATEGORY } from '../agents_and_ai/product-discovery-assistant/listaCategories';
 import { processSmartChat } from '../agents_and_ai/product-discovery-assistant/smartListService';
-import { DbProduct } from '../types';
+import { DbProduct, DbProductEnhanced, ShoppingProduct } from '../types';
+import ProductDetailModal from './ProductDetailModal';
+import GroupDetailModal from './GroupDetailModal';
 
 /** Per-chain substitution: user picked a replacement DB product for a
  *  missing item name. Stored locally in ShoppingInputArea, applied at
@@ -131,8 +133,14 @@ interface BuyPhaseEntryProps {
    *  code. Powers the synthetic priced lines and the augmented chain
    *  totals/missing counts. */
   chainSubs?: Record<string, ChainSubstitution[]>;
-  /** User tapped a missing-item line — open the substitution sheet. */
-  onRequestSubstitution?: (chain: ChainTotal, missingItemName: string) => void;
+  /** User tapped a missing-item line — open the substitution sheet. The
+   *  third arg carries the missing item's Lista-taxonomy category so the
+   *  substitution search can lock results to that category. */
+  onRequestSubstitution?: (
+    chain: ChainTotal,
+    missingItemName: string,
+    category: string | undefined,
+  ) => void;
   /** User tapped the small ✕ on a substituted line to revert the swap. */
   onUndoSubstitution?: (chain: ChainTotal, originalName: string) => void;
   /** User tapped "Replace all missing items" — auto-pick a recommended
@@ -142,14 +150,34 @@ interface BuyPhaseEntryProps {
   city?: string;
   /** Forwarded to processSmartChat for chain-scoped bulk substitution search. */
   storeType?: string;
+  /** Source basket products. Used to look up the underlying DbProduct for a
+   *  priced receipt line (so tapping a line opens the ProductDetailModal). */
+  shoppingProducts?: ShoppingProduct[];
 }
 
 const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
   open, onClose, chains, totalItems, onPickChain,
   chainSubs, onRequestSubstitution, onUndoSubstitution,
-  onBulkSubstitution, city, storeType,
+  onBulkSubstitution, city, storeType, shoppingProducts,
 }) => {
   const { t, isRTL, language } = useLanguage();
+
+  // Lookup table from the basket: itemName → ShoppingProduct. Built once per
+  // mount of the modal (the basket rarely changes while the sheet is open).
+  // `ItemPriceDetail.itemName` mirrors `ShoppingProduct.name` directly — no
+  // normalization needed.
+  const productByName = useMemo(() => {
+    const m = new Map<string, ShoppingProduct>();
+    for (const p of shoppingProducts ?? []) {
+      if (p.name) m.set(p.name, p);
+    }
+    return m;
+  }, [shoppingProducts]);
+
+  // Detail modal target for the per-line product inspector. Holds the full
+  // DbProduct so we can route to GroupDetailModal vs ProductDetailModal using
+  // the same logic as ProductCatalogArea (weighted + product_group_id).
+  const [detailProduct, setDetailProduct] = useState<DbProduct | null>(null);
 
   // Per-card expand state — one card open at a time.
   // Resets naturally when modal unmounts (component re-mounts on next open).
@@ -180,25 +208,29 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
       .sort((a, b) => a.effective - b.effective);
   }, [chains, chainSubs]);
 
-  const handleBulkReplace = async (chain: ChainTotal, missingNames: string[]) => {
-    if (missingNames.length === 0) return;
+  const handleBulkReplace = async (chain: ChainTotal, items: UnmatchedItem[]) => {
+    if (items.length === 0) return;
     setBulkRunningChain(chain.chain);
     try {
       const results = await Promise.all(
-        missingNames.map(async (name) => {
+        items.map(async (item) => {
           try {
             const r = await processSmartChat(
-              name,
+              item.name,
               language,
               [],
               city,
               storeType,
               [chain.chain],
+              // Forced category — same fix as the per-item sheet path. Without
+              // this the AI can re-tag (e.g. "אגוזי מלך" → snacks) and pull a
+              // wrong-category replacement past the alignment filter.
+              item.category,
             );
             const group = r.itemGroups[0];
             if (group?.status === 'matched' && group.recommended) {
               return {
-                originalName: name,
+                originalName: item.name,
                 replacement: group.recommended,
                 quantity: 1,
               } as ChainSubstitution;
@@ -326,27 +358,35 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
             const isBulkRunning = bulkRunningChain === c.chain;
 
             return (
-              // Outer card: div role="button" to allow inner <button> elements (HTML spec
-              // forbids nesting interactive content inside <button>).
+              // Outer card. Card body is NO LONGER a click target for picking
+              // the chain — that action moved to an explicit
+              // "Shop with PricePilot" button below the meta row. The card
+              // body / chevron only expand-collapse the receipt.
               <div
                 key={c.chain}
-                role="button"
-                tabIndex={0}
-                onClick={() => onPickChain(c)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onPickChain(c);
-                  }
-                }}
-                className="w-full p-3 rounded-xl text-start transition-all cursor-pointer"
+                className="w-full p-3 rounded-xl text-start transition-all"
                 style={{
                   background: 'var(--paper-surface-alt)',
                   border: isBest ? '2px solid var(--save)' : '1px solid var(--line)',
                 }}
               >
-                {/* Main row: badge + meta + price + chevron */}
-                <div className="flex items-center gap-3">
+                {/* Main row: badge + meta + price + chevron. Tapping anywhere
+                    in the main row toggles expand. Inner interactive elements
+                    (missing-count pill, chevron) keep their own handlers and
+                    use stopPropagation to avoid double-toggling. */}
+                <div
+                  className={hasReceipt ? 'flex items-center gap-3 cursor-pointer' : 'flex items-center gap-3'}
+                  onClick={hasReceipt ? () => toggleExpanded(c.chain) : undefined}
+                  role={hasReceipt ? 'button' : undefined}
+                  tabIndex={hasReceipt ? 0 : undefined}
+                  onKeyDown={hasReceipt ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleExpanded(c.chain);
+                    }
+                  } : undefined}
+                  aria-expanded={hasReceipt ? isExpanded(c.chain) : undefined}
+                >
                   {/* Brand badge */}
                   <div
                     className="w-[42px] h-[42px] rounded-[9px] flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0"
@@ -442,6 +482,24 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                   )}
                 </div>
 
+                {/* Explicit "Shop with PricePilot" CTA. Replaces the previous
+                    invisible card-body click target. Always full-width below
+                    the meta row so the action is unambiguous on both mobile
+                    and desktop. Stays enabled below-min (the warning pill
+                    above already flags it). */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onPickChain(c); }}
+                  className="w-full mt-3 px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2"
+                  style={{
+                    background: 'var(--save)',
+                    color: '#fff',
+                  }}
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  <span>{t('productBrowse.buyEntryShopWithPricepilot')}</span>
+                </button>
+
                 {/* Expanded receipt — items grouped by category, per-category subtotal,
                     delivery + grand total at the bottom. Read-only; tapping anywhere
                     inside still bubbles up to the card body and picks the chain. */}
@@ -468,11 +526,13 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           // Re-filter against the freshest subsByName at click
-                          // time to dodge any race between rapid taps.
-                          const freshNames = c.unmatchedItems
-                            .filter(um => !subsByName.has(um.name))
-                            .map(um => um.name);
-                          handleBulkReplace(c, freshNames);
+                          // time to dodge any race between rapid taps. Carry
+                          // each item's category so the bulk search uses the
+                          // basket-side category as the substitution filter.
+                          const freshItems = c.unmatchedItems.filter(
+                            um => !subsByName.has(um.name),
+                          );
+                          handleBulkReplace(c, freshItems);
                         }}
                         disabled={isBulkRunning}
                         className="w-full mb-3 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-70"
@@ -518,13 +578,14 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                           {/* Lines */}
                           {group.lines.map((line, idx) => {
                             if (line.kind === 'missing') {
+                              const um = c.unmatchedItems.find(u => u.name === line.name);
                               return (
                                 <button
                                   key={`m-${idx}-${line.name}`}
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onRequestSubstitution?.(c, line.name);
+                                    onRequestSubstitution?.(c, line.name, um?.category);
                                   }}
                                   className="w-full flex items-baseline gap-2 text-start"
                                   style={{
@@ -568,10 +629,13 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                               const qtySuffix = line.quantity !== 1
                                 ? ` × ${line.quantity}${repl.is_weighted ? 'kg' : ''}`
                                 : '';
-                              // Whole sub line is tappable — re-opens the
-                              // SubstitutionSheet for this originalName so the
-                              // user can pick a different replacement. The ✕
-                              // undo and the parent card-pick stay separate.
+                              // Outer click on the sub line opens the
+                              // ProductDetailModal for the replacement so the
+                              // user can inspect image / cross-store prices.
+                              // The inline "Change" pill (separate <button>)
+                              // re-opens the substitution sheet, and the ✕
+                              // undoes the swap. Both stop propagation.
+                              const um = c.unmatchedItems.find(u => u.name === line.originalName);
                               return (
                                 <div
                                   key={`s-${idx}-${repl.barcode}`}
@@ -579,17 +643,17 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                                   tabIndex={0}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onRequestSubstitution?.(c, line.originalName);
+                                    setDetailProduct(repl);
                                   }}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter' || e.key === ' ') {
                                       e.preventDefault();
                                       e.stopPropagation();
-                                      onRequestSubstitution?.(c, line.originalName);
+                                      setDetailProduct(repl);
                                     }
                                   }}
                                   style={{ marginBottom: 3, cursor: 'pointer' }}
-                                  aria-label={`${repl.name} — ${t('productBrowse.buyEntrySubChange')}`}
+                                  aria-label={repl.name}
                                 >
                                   <div className="flex items-baseline gap-2">
                                     <span style={{ flex: 1, color: 'var(--ink)' }}>
@@ -607,7 +671,12 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                                         {t('productBrowse.buyEntrySubAlternativeBadge')}
                                       </span>
                                       {repl.name}
-                                      <span
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onRequestSubstitution?.(c, line.originalName, um?.category);
+                                        }}
                                         style={{
                                           fontSize: 9,
                                           fontWeight: 600,
@@ -615,10 +684,14 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                                           marginInlineStart: 6,
                                           textDecoration: 'underline',
                                           textUnderlineOffset: 2,
+                                          background: 'transparent',
+                                          border: 'none',
+                                          padding: 0,
+                                          cursor: 'pointer',
                                         }}
                                       >
                                         {t('productBrowse.buyEntrySubChange')}
-                                      </span>
+                                      </button>
                                     </span>
                                     <span
                                       className="flex items-baseline gap-1"
@@ -675,8 +748,31 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
                             const hasPromo = origUnitPrice != null && origUnitPrice > unitPrice;
                             const unitLabel = ip.displayUnit ? ` / ${ip.displayUnit}` : '';
                             const qtySuffix = ip.amount > 1 ? ` × ${ip.amount}` : '';
+                            // Look up the underlying basket product by name —
+                            // the compare API echoes itemName verbatim from
+                            // the basket. If it's there, the priced line
+                            // becomes tappable to open the ProductDetailModal.
+                            const sourceProduct = productByName.get(ip.itemName) ?? null;
+                            const isTappable = sourceProduct != null;
                             return (
-                              <div key={`p-${idx}-${ip.itemName}`} style={{ marginBottom: 3 }}>
+                              <div
+                                key={`p-${idx}-${ip.itemName}`}
+                                role={isTappable ? 'button' : undefined}
+                                tabIndex={isTappable ? 0 : undefined}
+                                onClick={isTappable ? (e) => {
+                                  e.stopPropagation();
+                                  setDetailProduct(sourceProduct!);
+                                } : undefined}
+                                onKeyDown={isTappable ? (e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setDetailProduct(sourceProduct!);
+                                  }
+                                } : undefined}
+                                style={{ marginBottom: 3, cursor: isTappable ? 'pointer' : 'default' }}
+                                aria-label={isTappable ? ip.itemName : undefined}
+                              >
                                 <div className="flex items-baseline gap-2">
                                   <span style={{ flex: 1, color: 'var(--ink)' }}>
                                     {ip.itemName}
@@ -757,6 +853,32 @@ const BuyPhaseEntry: React.FC<BuyPhaseEntryProps> = ({
           })}
         </div>
       </div>
+
+      {/* Per-line product inspector — opened from a priced or substituted
+          receipt line. Mirrors the routing in ProductCatalogArea: weighted
+          fresh-produce items with a product_group_id go to GroupDetailModal,
+          everything else to ProductDetailModal. The Add CTA is intentionally
+          a no-op here — the user is mid-buy and already has these items in
+          the basket; we only want the inspector view. */}
+      {detailProduct && detailProduct.product_group_id != null && detailProduct.is_weighted === true && (
+        <GroupDetailModal
+          groupId={detailProduct.product_group_id}
+          fallbackProduct={detailProduct as DbProductEnhanced}
+          onClose={() => setDetailProduct(null)}
+          isAdded
+        />
+      )}
+      {detailProduct && !(detailProduct.product_group_id != null && detailProduct.is_weighted === true) && (
+        <ProductDetailModal
+          barcode={detailProduct.barcode}
+          fallbackImageUrl={detailProduct.image_url}
+          fallbackProduct={detailProduct as DbProductEnhanced}
+          onClose={() => setDetailProduct(null)}
+          onAdd={() => setDetailProduct(null)}
+          isAdded
+          storeType={storeType}
+        />
+      )}
     </div>,
     document.body
   );

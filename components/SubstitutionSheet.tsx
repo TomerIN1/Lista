@@ -32,6 +32,11 @@ interface SubstitutionSheetProps {
   itemName: string;
   city?: string;
   storeType?: string;
+  /** Lista-taxonomy category of the missing item. Forwarded as
+   *  `forcedListaCategory` so the substitution search filter uses the
+   *  basket-side category instead of whatever the AI tags the search with —
+   *  prevents cross-category swaps (e.g. walnuts → chocolate "אגוזי"). */
+  category?: string;
   /** User picked a substitute. Replacement + chosen quantity. */
   onAccept: (replacement: DbProduct, quantity: number) => void;
 }
@@ -95,7 +100,7 @@ const ProductRow: React.FC<ProductRowProps> = ({ product, selected, isHe, onSele
 };
 
 const SubstitutionSheet: React.FC<SubstitutionSheetProps> = ({
-  open, onClose, chainCode, chainDisplayName, itemName, city, storeType, onAccept,
+  open, onClose, chainCode, chainDisplayName, itemName, city, storeType, category, onAccept,
 }) => {
   const { t, language, isRTL } = useLanguage();
   const isHe = language === 'he';
@@ -138,6 +143,7 @@ const SubstitutionSheet: React.FC<SubstitutionSheetProps> = ({
           city,
           storeType,
           [chainCode],
+          category,
         );
         if (cancelled) return;
         const group = result.itemGroups[0] ?? null;
@@ -156,7 +162,7 @@ const SubstitutionSheet: React.FC<SubstitutionSheetProps> = ({
     })();
 
     return () => { cancelled = true; };
-  }, [open, itemName, chainCode, city, storeType, language]);
+  }, [open, itemName, chainCode, city, storeType, language, category]);
 
   // Build the visible product list: recommended + up to 3 alternatives.
   const products: DbProduct[] = useMemo(() => {

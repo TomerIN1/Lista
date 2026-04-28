@@ -353,7 +353,13 @@ export async function processSmartChat(
   conversationHistory: { role: 'user' | 'assistant'; content: string }[],
   city?: string,
   storeType?: string,
-  selectedChains?: string[]
+  selectedChains?: string[],
+  /** When provided AND a valid Lista taxonomy category, overrides the AI's
+   *  per-search `listaCategory` tag. Used by the substitution flow where the
+   *  caller already knows the correct category from the user's basket and
+   *  doesn't want the AI re-tagging to drag the result into a different
+   *  bucket (e.g. "אגוזי מלך" → snacks "אגוזי" chocolate). */
+  forcedListaCategory?: string,
 ): Promise<{
   message: string;
   products: DbProduct[];
@@ -401,8 +407,13 @@ export async function processSmartChat(
           selectedChains
         );
 
+        // Caller-forced category wins over AI's per-search tag. Used by the
+        // substitution flow where the basket-side category is authoritative
+        // and the AI's re-tagging is the source of cross-category mismatches.
         const category =
-          isValidCategory(search.listaCategory) ? search.listaCategory! : DEFAULT_CATEGORY;
+          forcedListaCategory && isValidCategory(forcedListaCategory)
+            ? forcedListaCategory
+            : (isValidCategory(search.listaCategory) ? search.listaCategory! : DEFAULT_CATEGORY);
         const preferFresh =
           search.preferFresh === true || FRESH_CATEGORIES.has(category);
 
